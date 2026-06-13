@@ -1,0 +1,122 @@
+:root {
+  --bg: #0f1020;
+  --bg-soft: #1a1c33;
+  --card: #20233f;
+  --card-hover: #2a2e52;
+  --text: #e7e8f5;
+  --muted: #9a9cc0;
+  --accent: #7c83ff;
+  --accent-2: #ff7ce0;
+  --radius: 14px;
+  --maxw: 960px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(124, 131, 255, 0.18), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Header */
+.site-header {
+  padding: 64px 0 40px;
+  text-align: center;
+}
+
+.logo {
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  margin: 0 0 12px;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+/* Main */
+main { flex: 1; padding-bottom: 64px; }
+
+.section-title {
+  font-size: 1.3rem;
+  margin: 24px 0 20px;
+  color: var(--text);
+}
+
+.game-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.game-card:hover {
+  transform: translateY(-3px);
+  background: var(--card-hover);
+  border-color: rgba(124, 131, 255, 0.5);
+}
+
+.game-card .icon { font-size: 2rem; }
+.game-card .title { font-weight: 600; font-size: 1.1rem; }
+.game-card .desc { color: var(--muted); font-size: 0.92rem; margin: 0; }
+
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  background: var(--bg-soft);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+  padding: 48px 20px;
+  font-size: 1.05rem;
+}
+
+/* Footer */
+.site-footer {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.site-footer a { color: var(--accent); }
