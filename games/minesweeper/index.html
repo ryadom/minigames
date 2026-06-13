@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>∞ Minesweeper — Minigames</title>
+  <meta name="description" content="Infinite Minesweeper — an endless, pannable, zoomable board. Play in your browser, no installs." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💣</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #0a0c0f;
+      --panel: #101419;
+      --line: #1c2530;
+      --tile: #00e6c8;
+      --txt: #c7d0d9;
+      --dim: #5e6b78;
+      --err: #ff4757;
+      --accent: #ffb43d;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    header {
+      flex: 0 0 auto;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #11161c, #0c1015);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      font-weight: 700;
+      letter-spacing: 1px;
+      font-size: 15px;
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+
+    .brand b { color: var(--tile); }
+
+    .brand a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .stats {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 5px 10px;
+      line-height: 1.1;
+      display: flex;
+      flex-direction: column;
+      min-width: 74px;
+    }
+
+    .stat .k {
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      color: var(--dim);
+      text-transform: uppercase;
+    }
+
+    .stat .v {
+      font-size: 18px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat.errors .v {
+      color: var(--err);
+      text-shadow: 0 0 14px rgba(255, 71, 87, 0.55);
+    }
+
+    .stat.errors { border-color: rgba(255, 71, 87, 0.35); }
+
+    .stat .v.flash { animation: flash 0.4s ease; }
+
+    @keyframes flash {
+      0% { transform: scale(1.5); }
+      100% { transform: scale(1); }
+    }
+
+    .btns {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    button, select#lang {
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--txt);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.12s;
+    }
+
+    select#lang { padding: 7px 8px; }
+
+    button:hover, select#lang:hover {
+      border-color: var(--tile);
+      color: #fff;
+    }
+
+    button:active { transform: translateY(1px); }
+
+    #wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    footer {
+      flex: 0 0 auto;
+      border-top: 1px solid var(--line);
+      background: #0c1015;
+      padding: 7px 14px;
+      font-size: 11px;
+      color: var(--dim);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    footer b { color: var(--accent); }
+    footer .sep { color: var(--line); }
+
+    @media (max-width: 560px) {
+      .brand { font-size: 13px; }
+      footer .hide { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand" id="brand"><a href="../../">∞ <b>MINESWEEPER</b></a></div>
+    <div class="stats">
+      <div class="stat errors"><span class="k" id="lbl-err">Errors</span><span class="v" id="s-err">0</span></div>
+      <div class="stat"><span class="k" id="lbl-rev">Opened</span><span class="v" id="s-rev">0</span></div>
+      <div class="stat"><span class="k" id="lbl-flag">Flags</span><span class="v" id="s-flag">0</span></div>
+      <div class="stat"><span class="k" id="lbl-pos">Position</span><span class="v" id="s-pos" style="font-size:13px">0, 0</span></div>
+      <div class="stat"><span class="k" id="lbl-seed">Seed</span><span class="v" id="s-seed" style="font-size:13px">0</span></div>
+    </div>
+    <div class="btns">
+      <select id="lang" aria-label="Language">
+        <option value="en">EN</option>
+        <option value="ru">RU</option>
+        <option value="es">ES</option>
+      </select>
+      <button id="b-center" aria-label="Center">⌖</button>
+      <button id="b-new" aria-label="New game">↻</button>
+    </div>
+  </header>
+
+  <div id="wrap"><canvas id="game"></canvas></div>
+
+  <footer id="hints"></footer>
+
+  <script>
+  (function () {
+    "use strict";
+
+    /* ============================ i18n ============================ */
+    var I18N = {
+      en: {
+        title: "MINESWEEPER", errors: "Errors", opened: "Opened", flags: "Flags", position: "Position", seed: "Seed",
+        center: "⌖ Center", neu: "↻ New",
+        hints: [
+          "LMB — open",
+          "double click / tap — clear neighbors · auto-flag",
+          "RMB / long press — flag",
+          "drag — pan",
+          "wheel — zoom",
+          "grid 16×16 — chunk guides"
+        ]
+      },
+      ru: {
+        title: "САПЁР", errors: "Ошибки", opened: "Открыто", flags: "Флаги", position: "Позиция", seed: "Seed",
+        center: "⌖ В центр", neu: "↻ Новая",
+        hints: [
+          "ЛКМ — открыть",
+          "2× клик / тап — раскрыть соседей · авто-флаг",
+          "ПКМ / долгий тап — флаг",
+          "тащить — двигать",
+          "колесо — зум",
+          "сетка 16×16 — разметка чанков"
+        ]
+      },
+      es: {
+        title: "BUSCAMINAS", errors: "Errores", opened: "Abiertas", flags: "Banderas", position: "Posición", seed: "Semilla",
+        center: "⌖ Centrar", neu: "↻ Nueva",
+        hints: [
+          "Clic izq. — abrir",
+          "doble clic / toque — abrir vecinas · auto-bandera",
+          "Clic der. / mantener — bandera",
+          "arrastrar — mover",
+          "rueda — zoom",
+          "rejilla 16×16 — guías de chunk"
+        ]
+      }
+    };
+
+    function detectLang() {
+      var l = (navigator.language || "en").slice(0, 2).toLowerCase();
+      return I18N[l] ? l : "en";
+    }
+
+    var lang = detectLang();
+    var $ = function (id) { return document.getElementById(id); };
+
+    function applyLang() {
+      var t = I18N[lang];
+      document.documentElement.lang = lang;
+      document.title = "∞ " + t.title + " — Minigames";
+      $("brand").innerHTML = '<a href="../../">∞ <b>' + t.title + "</b></a>";
+      $("lbl-err").textContent = t.errors;
+      $("lbl-rev").textContent = t.opened;
+      $("lbl-flag").textContent = t.flags;
+      $("lbl-pos").textContent = t.position;
+      $("lbl-seed").textContent = t.seed;
+      $("b-center").textContent = t.center;
+      $("b-new").textContent = t.neu;
+
+      var html = "";
+      t.hints.forEach(function (h, i) {
+        var hide = i >= 4 ? " hide" : "";
+        if (i > 0) html += '<span class="sep' + hide + '">·</span>';
+        html += '<span class="seg' + hide + '">' + h + "</span>";
+      });
+      $("hints").innerHTML = html;
+      $("lang").value = lang;
+    }
+
+    /* ============================ game ============================ */
+    var canvas = $("game"), ctx = canvas.getContext("2d"), wrap = $("wrap");
+    var TILE = 16, MINE_DENSITY = 0.16;
+    var NUM_COLORS = [null, "#4aa3ff", "#46c46a", "#ff5d5d", "#b888ff", "#ff9d3d", "#2fd9c5", "#e6e6e6", "#9aa6b0"];
+
+    var seed = (Math.random() * 1e9) | 0;
+    var cellSize = 30, offsetX = 0, offsetY = 0;
+    var dpr = 1, W = 0, H = 0;
+    var errors = 0, firstMove = true;
+
+    var revealed = new Set(), flagged = new Set(), hitMines = new Set(), safe = new Set();
+    var k = function (x, y) { return x + "," + y; };
+    var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+
+    // Deterministic generation; cells in `safe` are forced mine-free (safe first move).
+    function rand(x, y) {
+      var h = (seed ^ 0x9e3779b9) >>> 0;
+      h = Math.imul(h ^ (x | 0), 0x85ebca6b);
+      h = Math.imul(h ^ (y | 0), 0xc2b2ae35);
+      h ^= h >>> 13;
+      h = Math.imul(h, 0x5bd1e995);
+      h ^= h >>> 15;
+      return (h >>> 0) / 4294967296;
+    }
+
+    function isMine(x, y) {
+      return !safe.has(k(x, y)) && rand(x, y) < MINE_DENSITY;
+    }
+
+    function adj(x, y) {
+      var c = 0;
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          if (isMine(x + dx, y + dy)) c++;
+        }
+      }
+      return c;
+    }
+
+    // The first click of a new game is guaranteed to land on a "0" cell,
+    // which opens up the surrounding area.
+    function reveal(x, y) {
+      var key = k(x, y);
+      if (revealed.has(key) || flagged.has(key)) return;
+
+      if (firstMove) {
+        firstMove = false;
+        for (var sx = -1; sx <= 1; sx++) {
+          for (var sy = -1; sy <= 1; sy++) safe.add(k(x + sx, y + sy));
+        }
+      }
+
+      // Clicking a mine directly counts as an error; the game does not end.
+      if (isMine(x, y)) {
+        revealed.add(key);
+        hitMines.add(key);
+        errors++;
+        flashErr();
+        updateHud();
+        draw();
+        scheduleSave();
+        return;
+      }
+
+      // Flood fill freely spills into neighbouring chunks.
+      var stack = [[x, y]], guard = 0;
+      while (stack.length) {
+        var cell = stack.pop(), cx = cell[0], cy = cell[1], ck = k(cx, cy);
+        if (revealed.has(ck) || flagged.has(ck) || isMine(cx, cy)) continue;
+        revealed.add(ck);
+        if (adj(cx, cy) === 0 && guard++ < 200000) {
+          for (var dx = -1; dx <= 1; dx++) {
+            for (var dy = -1; dy <= 1; dy++) {
+              if (dx === 0 && dy === 0) continue;
+              stack.push([cx + dx, cy + dy]);
+            }
+          }
+        }
+      }
+      updateHud();
+      draw();
+      scheduleSave();
+    }
+
+    function toggleFlag(x, y) {
+      var key = k(x, y);
+      if (revealed.has(key)) return;
+      if (flagged.has(key)) flagged.delete(key);
+      else flagged.add(key);
+      updateHud();
+      draw();
+      scheduleSave();
+    }
+
+    // Double click: reveal neighbours (when the mine count is satisfied) or
+    // auto-flag (when every closed neighbour must be a mine).
+    function chord(x, y) {
+      var key = k(x, y);
+      if (!revealed.has(key) || hitMines.has(key)) return;
+      var n = adj(x, y);
+      var known = 0, closed = [];
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          var nx = x + dx, ny = y + dy, nk = k(nx, ny);
+          if (flagged.has(nk)) known++;
+          else if (hitMines.has(nk)) known++;
+          else if (!revealed.has(nk)) closed.push([nx, ny]);
+        }
+      }
+      var remaining = n - known;
+      if (remaining > 0 && remaining === closed.length) {
+        for (var i = 0; i < closed.length; i++) flagged.add(k(closed[i][0], closed[i][1]));
+        updateHud();
+        draw();
+        scheduleSave();
+        return;
+      }
+      if (known === n) {
+        for (var j = 0; j < closed.length; j++) reveal(closed[j][0], closed[j][1]);
+      }
+    }
+
+    /* ============================ localStorage ============================ */
+    var KEY = "inf-mines-v2";
+    var saveTimer = null;
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveState, 400);
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({
+          v: 2, lang: lang, seed: seed, errors: errors,
+          cellSize: cellSize, offsetX: offsetX, offsetY: offsetY, firstMove: firstMove,
+          revealed: Array.from(revealed),
+          flagged: Array.from(flagged),
+          hitMines: Array.from(hitMines),
+          safe: Array.from(safe)
+        }));
+      } catch (e) {
+        // Private mode / sandbox — keep playing without persistence.
+      }
+    }
+
+    function loadState() {
+      try {
+        var raw = localStorage.getItem(KEY);
+        if (!raw) return false;
+        var st = JSON.parse(raw);
+        if (!st || st.v !== 2) return false;
+        seed = st.seed;
+        errors = st.errors || 0;
+        cellSize = st.cellSize || 30;
+        offsetX = st.offsetX;
+        offsetY = st.offsetY;
+        firstMove = !!st.firstMove;
+        revealed.clear(); (st.revealed || []).forEach(function (x) { revealed.add(x); });
+        flagged.clear(); (st.flagged || []).forEach(function (x) { flagged.add(x); });
+        hitMines.clear(); (st.hitMines || []).forEach(function (x) { hitMines.add(x); });
+        safe.clear(); (st.safe || []).forEach(function (x) { safe.add(x); });
+        if (st.lang && I18N[st.lang]) lang = st.lang;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    /* ============================ rendering ============================ */
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = wrap.clientWidth;
+      H = wrap.clientHeight;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0a0c0f";
+      ctx.fillRect(0, 0, W, H);
+
+      var c0 = Math.floor(-offsetX / cellSize), r0 = Math.floor(-offsetY / cellSize);
+      var cols = Math.ceil(W / cellSize) + 1, rows = Math.ceil(H / cellSize) + 1, s = cellSize;
+      var showText = s >= 14, fontPx = Math.floor(s * 0.58);
+      if (showText) {
+        ctx.font = "600 " + fontPx + 'px "IBM Plex Mono", monospace';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+      }
+
+      for (var i = 0; i < cols; i++) {
+        for (var j = 0; j < rows; j++) {
+          var cx = c0 + i, cy = r0 + j;
+          var px = offsetX + cx * s, py = offsetY + cy * s;
+          var key = k(cx, cy), checker = (cx ^ cy) & 1;
+          if (revealed.has(key)) {
+            if (hitMines.has(key)) {
+              ctx.fillStyle = "#3a1418";
+              ctx.fillRect(px, py, s, s);
+              ctx.fillStyle = "#ff4757";
+              ctx.beginPath();
+              ctx.arc(px + s / 2, py + s / 2, s * 0.24, 0, 7);
+              ctx.fill();
+            } else {
+              ctx.fillStyle = checker ? "#0e1318" : "#10151b";
+              ctx.fillRect(px, py, s, s);
+              if (showText) {
+                var n = adj(cx, cy);
+                if (n > 0) {
+                  ctx.fillStyle = NUM_COLORS[n];
+                  ctx.fillText(n, px + s / 2, py + s / 2 + 1);
+                }
+              }
+            }
+          } else {
+            ctx.fillStyle = checker ? "#1b212a" : "#1f2630";
+            ctx.fillRect(px, py, s, s);
+            if (flagged.has(key) && showText) {
+              ctx.fillStyle = "#ffb43d";
+              ctx.fillRect(px + s * 0.46, py + s * 0.24, Math.max(1.5, s * 0.05), s * 0.5);
+              ctx.beginPath();
+              ctx.moveTo(px + s * 0.46, py + s * 0.24);
+              ctx.lineTo(px + s * 0.74, py + s * 0.34);
+              ctx.lineTo(px + s * 0.46, py + s * 0.44);
+              ctx.closePath();
+              ctx.fillStyle = "#ff5d5d";
+              ctx.fill();
+            }
+          }
+          if (s >= 10) {
+            ctx.strokeStyle = "rgba(255,255,255,0.035)";
+            ctx.strokeRect(px + 0.5, py + 0.5, s, s);
+          }
+        }
+      }
+
+      // Chunk guides every TILE cells.
+      ctx.strokeStyle = "rgba(0,230,200,0.22)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var gi = 0; gi <= cols; gi++) {
+        var gcx = c0 + gi;
+        if ((((gcx % TILE) + TILE) % TILE) === 0) {
+          var gpx = Math.round(offsetX + gcx * s) + 0.5;
+          ctx.moveTo(gpx, 0);
+          ctx.lineTo(gpx, H);
+        }
+      }
+      for (var gj = 0; gj <= rows; gj++) {
+        var gcy = r0 + gj;
+        if ((((gcy % TILE) + TILE) % TILE) === 0) {
+          var gpy = Math.round(offsetY + gcy * s) + 0.5;
+          ctx.moveTo(0, gpy);
+          ctx.lineTo(W, gpy);
+        }
+      }
+      ctx.stroke();
+
+      // Highlight the origin cell when it's on screen.
+      var ox = offsetX, oy = offsetY;
+      if (ox > -s && ox < W + s && oy > -s && oy < H + s) {
+        ctx.strokeStyle = "rgba(255,180,61,0.7)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ox + 1, oy + 1, s - 2, s - 2);
+      }
+    }
+
+    /* ============================ HUD ============================ */
+    function updateHud() {
+      $("s-err").textContent = errors;
+      $("s-rev").textContent = revealed.size - hitMines.size;
+      $("s-flag").textContent = flagged.size;
+      $("s-seed").textContent = (seed >>> 0).toString(36);
+      var cx = Math.floor((W / 2 - offsetX) / cellSize), cy = Math.floor((H / 2 - offsetY) / cellSize);
+      $("s-pos").textContent = cx + ", " + cy;
+    }
+
+    function flashErr() {
+      var e = $("s-err");
+      e.classList.remove("flash");
+      void e.offsetWidth;
+      e.classList.add("flash");
+    }
+
+    /* ============================ input ============================ */
+    var down = false, moved = false, sx = 0, sy = 0, lx = 0, ly = 0, btn = 0, lpTimer = null;
+    var lastTap = 0, lastTapKey = "", DRAG = 5;
+
+    function cellAt(cxp, cyp) {
+      var r = canvas.getBoundingClientRect();
+      return [Math.floor((cxp - r.left - offsetX) / cellSize), Math.floor((cyp - r.top - offsetY) / cellSize)];
+    }
+
+    canvas.addEventListener("pointerdown", function (e) {
+      canvas.setPointerCapture(e.pointerId);
+      down = true;
+      moved = false;
+      btn = e.button;
+      sx = lx = e.clientX;
+      sy = ly = e.clientY;
+      if (e.pointerType === "touch") {
+        lpTimer = setTimeout(function () {
+          if (down && !moved) {
+            var c = cellAt(sx, sy);
+            toggleFlag(c[0], c[1]);
+            moved = true;
+          }
+        }, 420);
+      }
+    });
+
+    canvas.addEventListener("pointermove", function (e) {
+      if (!down) return;
+      var dx = e.clientX - lx, dy = e.clientY - ly;
+      if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) > DRAG) {
+        moved = true;
+        clearTimeout(lpTimer);
+      }
+      if (moved) {
+        offsetX += dx;
+        offsetY += dy;
+        lx = e.clientX;
+        ly = e.clientY;
+        draw();
+        updateHud();
+      }
+    });
+
+    canvas.addEventListener("pointerup", function (e) {
+      clearTimeout(lpTimer);
+      if (down && !moved) {
+        var c = cellAt(e.clientX, e.clientY), x = c[0], y = c[1];
+        if (btn === 2) {
+          toggleFlag(x, y);
+        } else {
+          var now = performance.now(), tk = k(x, y);
+          if (now - lastTap < 320 && tk === lastTapKey && revealed.has(tk)) {
+            chord(x, y);
+            lastTap = 0;
+            lastTapKey = "";
+          } else {
+            reveal(x, y);
+            lastTap = now;
+            lastTapKey = tk;
+          }
+        }
+      } else if (moved) {
+        scheduleSave();
+      }
+      down = false;
+    });
+
+    canvas.addEventListener("pointercancel", function () {
+      clearTimeout(lpTimer);
+      down = false;
+    });
+
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+    canvas.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      var r = canvas.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      var wx = (mx - offsetX) / cellSize, wy = (my - offsetY) / cellSize;
+      cellSize = clamp(cellSize * (e.deltaY < 0 ? 1.12 : 1 / 1.12), 7, 70);
+      offsetX = mx - wx * cellSize;
+      offsetY = my - wy * cellSize;
+      draw();
+      updateHud();
+      scheduleSave();
+    }, { passive: false });
+
+    /* ============================ controls ============================ */
+    function center() {
+      offsetX = W / 2 - cellSize / 2;
+      offsetY = H / 2 - cellSize / 2;
+      draw();
+      updateHud();
+      scheduleSave();
+    }
+
+    $("b-center").onclick = center;
+
+    $("b-new").onclick = function () {
+      seed = (Math.random() * 1e9) | 0;
+      revealed.clear();
+      flagged.clear();
+      hitMines.clear();
+      safe.clear();
+      errors = 0;
+      firstMove = true;
+      cellSize = 30;
+      center();
+      saveState();
+    };
+
+    $("lang").onchange = function (e) {
+      lang = e.target.value;
+      applyLang();
+      saveState();
+    };
+
+    /* ============================ start ============================ */
+    window.addEventListener("resize", resize);
+    window.addEventListener("pagehide", saveState);
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) saveState();
+    });
+
+    var restored = loadState();
+    applyLang();
+    resize();
+    if (restored) {
+      draw();
+      updateHud();
+    } else {
+      center();
+    }
+  })();
+  </script>
+</body>
+</html>
