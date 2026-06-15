@@ -4,8 +4,11 @@ A collection of free browser minigames. No installs, no sign-ups — just play.
 
 **Live site:** https://minigames.ryadom.me
 
-> No games yet — this is the starting template. New games get added to the
-> registry and show up on the home page automatically.
+> New games get added to the registry and show up on the home page
+> automatically.
+>
+> **Games:** 💣 [Minesweeper](./games/minesweeper/) — infinite, pannable,
+> zoomable Minesweeper.
 
 ## How it works
 

@@ -14,5 +14,10 @@
  * The list on the home page is generated automatically from this array.
  */
 window.GAMES = [
-  // No games yet — add entries here.
+  {
+    title: "Minesweeper",
+    description: "Infinite, pannable, zoomable Minesweeper — clear an endless field.",
+    icon: "💣",
+    url: "./games/minesweeper/",
+  },
 ];
