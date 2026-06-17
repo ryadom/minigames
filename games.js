@@ -73,6 +73,16 @@ window.GAMES = [
     },
   },
   {
+    title: "Killer Sudoku",
+    icon: "🗡️",
+    url: "./games/killer-sudoku/",
+    description: {
+      en: "Killer Sudoku — no givens, just dashed cages with target sums to add up. Pick easy to expert.",
+      ru: "Киллер-судоку — без подсказок, только пунктирные клетки с суммами. Уровни от лёгкого до эксперта.",
+      es: "Killer Sudoku — sin pistas, solo jaulas punteadas con sumas objetivo. Elige de fácil a experto.",
+    },
+  },
+  {
     title: "Farm",
     icon: "🚜",
     url: "./games/farm/",
