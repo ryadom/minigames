@@ -52,4 +52,14 @@ window.GAMES = [
       es: "Muévete y deja que tus armas disparen solas — sobrevive a la horda, junta XP y sube de nivel.",
     },
   },
+  {
+    title: "Match Three",
+    icon: "💎",
+    url: "./games/match-three/",
+    description: {
+      en: "Swap gems to line up 3+ — forge rockets, bombs and rainbow blasts to clear the board.",
+      ru: "Меняй камни местами и собирай 3+ в ряд — создавай ракеты, бомбы и радужные взрывы.",
+      es: "Intercambia gemas para alinear 3+ — crea cohetes, bombas y explosiones arcoíris.",
+    },
+  },
 ];
