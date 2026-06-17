@@ -277,8 +277,11 @@
       }
     }
 
-    /* ============================ localStorage ============================ */
-    var KEY = "inf-mines-v2";
+    /* ===================== save (versioned, shared store) ===================== */
+    // Persisted through MG.storage (shared/mg.js) so the whole site shares one
+    // save mechanism. The envelope carries the version, so the payload below is
+    // just the board state; bump the version + add a migration to evolve it.
+    var store = MG.storage("minesweeper", { version: 2 });
     var saveTimer = null;
 
     function scheduleSave() {
@@ -287,26 +290,20 @@
     }
 
     function saveState() {
-      try {
-        localStorage.setItem(KEY, JSON.stringify({
-          v: 2, seed: seed, errors: errors,
-          cellSize: cellSize, offsetX: offsetX, offsetY: offsetY, firstMove: firstMove,
-          revealed: Array.from(revealed),
-          flagged: Array.from(flagged),
-          hitMines: Array.from(hitMines),
-          safe: Array.from(safe)
-        }));
-      } catch (e) {
-        // Private mode / sandbox — keep playing without persistence.
-      }
+      store.save({
+        seed: seed, errors: errors,
+        cellSize: cellSize, offsetX: offsetX, offsetY: offsetY, firstMove: firstMove,
+        revealed: Array.from(revealed),
+        flagged: Array.from(flagged),
+        hitMines: Array.from(hitMines),
+        safe: Array.from(safe)
+      });
     }
 
     function loadState() {
+      var st = store.load();
       try {
-        var raw = localStorage.getItem(KEY);
-        if (!raw) return false;
-        var st = JSON.parse(raw);
-        if (!st || st.v !== 2) return false;
+        if (!st) return false;
         seed = st.seed;
         errors = st.errors || 0;
         cellSize = st.cellSize || 30;

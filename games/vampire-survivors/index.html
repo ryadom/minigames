@@ -383,7 +383,9 @@
 
       var player, enemies, projectiles, gems, particles, hazards;
       var elapsed, kills, spawnTimer, lastTime, camX, camY, slowMo;
-      var best = Number(localStorage.getItem("vsurv_best") || 0);
+      // Shared versioned save store (see MG.storage in shared/mg.js).
+      var store = MG.storage("vampire-survivors", { version: 1 });
+      var best = (store.load() || { best: 0 }).best;
 
       // --- Player + weapon/upgrade model ---
       // Weapons & passive upgrades share a "level" so a single roster covers
@@ -639,7 +641,7 @@
         state = STATE_DEAD;
         if (elapsed > best) {
           best = Math.floor(elapsed);
-          localStorage.setItem("vsurv_best", String(best));
+          store.save({ best: best });
         }
         showOverlay();
       }

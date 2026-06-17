@@ -86,6 +86,40 @@ The page must use the shared layout classes: `<body class="mg-app">` plus a
 `<div class="mg-game-area">…</div>` to host the canvas/stage. The header is
 prepended above it.
 
+### `MG.storage(name, opts)` — versioned save store
+
+The one save mechanism every game shares. Each store owns a single namespaced
+`localStorage` key (`mg.save.<name>`) and wraps the payload in an envelope —
+`{ v, t, data }` — so saves can be **migrated** as a game evolves rather than
+silently discarded. Pass `version` (a number) and an optional `migrations` map
+keyed by target version; on load, steps run in order from the stored version up
+to the current one, then the upgraded copy is re-saved. Everything degrades
+gracefully: if `localStorage` is unavailable (private mode / quota), the value
+is kept in memory so the game still works for the session.
+
+```js
+var store = MG.storage("flappy-bird", {
+  version: 2,
+  migrations: {
+    1: function (d) { return { best: d.high || 0 }; },        // 0 → 1 (legacy)
+    2: function (d) { d.runs = d.runs || 0; return d; },       // 1 → 2
+  },
+});
+
+var data = store.load() || { best: 0 };   // null when nothing is saved yet
+store.save(data);                          // persist at the current version
+store.update(function (d) {                // load → mutate → save
+  d = d || { best: 0 };
+  if (score > d.best) d.best = score;
+  return d;
+});
+store.clear();                             // wipe this game's save
+```
+
+Use a distinct `name` per game (the game's folder name is the convention).
+A save written by a *newer* build than the current one is returned as-is rather
+than downgraded.
+
 ## Adding a game
 
 1. Create `games/<name>/index.html`. In `<head>`, load the shared runtime:

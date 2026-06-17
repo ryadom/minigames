@@ -215,10 +215,121 @@
     };
   }
 
+  /* ---------------------------------------------------------------- save -- */
+  /*
+   * MG.storage(name, opts) — a small, versioned save store shared by every
+   * game. Each store owns one namespaced localStorage key and wraps the saved
+   * payload in an envelope so the data can be migrated as a game evolves:
+   *
+   *     { "v": <version>, "t": <savedAt ms>, "data": <your data> }
+   *
+   * Usage:
+   *
+   *     var store = MG.storage("flappy-bird", {
+   *       version: 2,
+   *       migrations: {
+   *         // Run when loading a save whose version is below the key.
+   *         // Each step upgrades the previous version's data in place.
+   *         1: function (data) { return { best: data.high || 0 }; },     // 0 → 1
+   *         2: function (data) { data.runs = data.runs || 0; return data; } // 1 → 2
+   *       }
+   *     });
+   *
+   *     var data = store.load() || { best: 0 };   // null when nothing is saved
+   *     store.save(data);                          // persist at the current version
+   *     store.update(function (d) {                // load → mutate → save
+   *       d = d || { best: 0 };
+   *       if (score > d.best) d.best = score;
+   *       return d;
+   *     });
+   *     store.clear();                             // wipe this game's save
+   *
+   * Migrations run stepwise from the stored version up to `version`, so a save
+   * written long ago is brought current the next time it loads (and re-saved).
+   * Everything degrades gracefully: in private mode / when localStorage throws,
+   * the store keeps the value in memory so the game still works for the session.
+   */
+  var SAVE_PREFIX = "mg.save.";
+
+  function storage(name, opts) {
+    opts = opts || {};
+    var version = opts.version || 1;
+    var migrations = opts.migrations || {};
+    var key = SAVE_PREFIX + name;
+    var mem = null;        // last value we wrote — the in-memory fallback
+    var memOnly = false;   // true once localStorage proves unavailable
+
+    function read() {
+      if (memOnly) return mem;
+      try {
+        var raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return mem;        // corrupt JSON or no access — fall back to memory
+      }
+    }
+
+    function write(env) {
+      mem = env;
+      if (memOnly) return;
+      try {
+        localStorage.setItem(key, JSON.stringify(env));
+      } catch (e) {
+        memOnly = true;    // private mode / quota — keep going in memory only
+      }
+    }
+
+    // Upgrade `data` from `from` up to the current version, one step at a time.
+    function migrate(data, from) {
+      for (var v = from + 1; v <= version; v++) {
+        var step = migrations[v];
+        if (typeof step === "function") {
+          try { data = step(data, v); } catch (e) { /* skip a broken step */ }
+        }
+      }
+      return data;
+    }
+
+    function save(data) {
+      write({ v: version, t: Date.now(), data: data });
+      return data;
+    }
+
+    function load() {
+      var env = read();
+      if (!env || typeof env !== "object") return null;
+      var from = typeof env.v === "number" ? env.v : 0;
+      // Saved by a newer build, or already current — hand the data back as-is.
+      if (from >= version) return env.data;
+      // Older save — migrate and persist the upgraded copy.
+      return save(migrate(env.data, from));
+    }
+
+    function update(fn) {
+      return save(fn(load()));
+    }
+
+    function clear() {
+      mem = null;
+      if (memOnly) return;
+      try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+    }
+
+    return {
+      key: key,
+      version: version,
+      load: load,
+      save: save,
+      update: update,
+      clear: clear
+    };
+  }
+
   /* --------------------------------------------------------------- expose -- */
   var MG = global.MG || {};
   MG.i18n = i18n;
   MG.mountHeader = mountHeader;
+  MG.storage = storage;
   MG.el = el;
   global.MG = MG;
 })(window);

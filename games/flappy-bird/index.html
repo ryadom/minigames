@@ -214,7 +214,9 @@
 
       var bird, pipes, score, best, frame, groundX, deadTimer;
 
-      best = Number(localStorage.getItem("flappy_best") || 0);
+      // Shared versioned save store (see MG.storage in shared/mg.js).
+      var store = MG.storage("flappy-bird", { version: 1 });
+      best = (store.load() || { best: 0 }).best;
       ui.setStat("best", best);
 
       function reset() {
@@ -270,7 +272,7 @@
         deadTimer = 0;
         if (score > best) {
           best = score;
-          localStorage.setItem("flappy_best", String(best));
+          store.save({ best: best });
           ui.setStat("best", best);
         }
       }
