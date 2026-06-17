@@ -102,4 +102,14 @@ window.GAMES = [
       es: "Desliza las fichas, une los números iguales y llega a 2048 — flechas o desliza.",
     },
   },
+  {
+    title: "Racing",
+    icon: "🏎️",
+    url: "./games/racing/",
+    description: {
+      en: "3D racing — steer through curves and hills, dodge the traffic and chase your best distance.",
+      ru: "3D-гонки — рули по поворотам и холмам, уворачивайся от трафика и побей свой рекорд дистанции.",
+      es: "Carreras en 3D — gira por curvas y colinas, esquiva el tráfico y supera tu mejor distancia.",
+    },
+  },
 ];
