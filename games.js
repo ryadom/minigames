@@ -42,4 +42,14 @@ window.GAMES = [
       es: "Toca, clic o espacio para aletear entre las tuberías — no choques.",
     },
   },
+  {
+    title: "Night Survivors",
+    icon: "🧛",
+    url: "./games/vampire-survivors/",
+    description: {
+      en: "Move and let your weapons auto-fire — survive the endless horde, grab XP and level up.",
+      ru: "Двигайся, а оружие стреляет само — переживи бесконечную орду, собирай опыт и качайся.",
+      es: "Muévete y deja que tus armas disparen solas — sobrevive a la horda, junta XP y sube de nivel.",
+    },
+  },
 ];
