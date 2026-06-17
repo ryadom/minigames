@@ -225,6 +225,33 @@
     .card-lvl.is-new { background: #1aa996; color: #06120f; }
     .card-desc { font-size: 0.85rem; opacity: 0.82; margin-top: 3px; }
 
+    /* Wiki / survival guide. */
+    .panel.panel-wiki {
+      max-width: 540px;
+      text-align: left;
+    }
+    .wiki-scroll {
+      max-height: 62vh;
+      overflow-y: auto;
+      margin: 6px -6px 4px;
+      padding: 0 6px;
+    }
+    .wiki-sec {
+      font-weight: 800;
+      font-size: 0.8rem;
+      color: #9fb0c0;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin: 16px 2px 8px;
+    }
+    .wiki-sec:first-child { margin-top: 4px; }
+    .wiki-card { cursor: default; }
+    .wiki-card:hover {
+      border-color: #2c2e4a;
+      background: #181a2c;
+      transform: none;
+    }
+
     /* On-screen joystick (touch only). */
     .stick {
       position: absolute;
@@ -290,16 +317,37 @@
           levelup: "Level Up!", choose: "Choose an upgrade",
           paused: "Paused", resume: "▶ Resume",
           newBadge: "NEW", lvlBadge: "Lv {n}", maxBadge: "MAX",
+          // header actions + wiki
+          pauseBtn: "Pause", wiki: "Guide",
+          wikiTitle: "Survival Guide",
+          secWeapons: "Weapons", secPassives: "Power-ups", secEnemies: "Bestiary",
+          close: "✕ Close", unlockAt: "from {t}",
           // weapons + upgrades
           w_knife: "Dagger", w_knife_d: "Throws a dagger toward the nearest foe.",
           w_aura: "Garlic Aura", w_aura_d: "A holy ring that burns nearby enemies.",
           w_bolt: "Magic Bolt", w_bolt_d: "Homing bolts seek out enemies.",
           w_whip: "Whip", w_whip_d: "Slashes a wide arc to your sides.",
+          w_lightning: "Lightning", w_lightning_d: "Smites random enemies with bolts from the sky.",
+          w_fire: "Firebomb", w_fire_d: "Lobs a bomb that explodes in a fiery blast.",
+          w_frost: "Frost Shard", w_frost_d: "Pierces enemies and chills them, slowing them down.",
+          w_orb: "Spirit Orbs", w_orb_d: "Orbiting orbs that shield you and strike foes.",
+          w_axe: "War Axe", w_axe_d: "Hurls heavy, piercing axes in a high arc.",
           u_speed: "Swift Boots", u_speed_d: "+12% move speed.",
           u_health: "Vitality", u_health_d: "+20 max HP and heal up.",
           u_magnet: "Magnet", u_magnet_d: "+40% pickup range.",
           u_regen: "Regeneration", u_regen_d: "Slowly recover HP over time.",
-          u_power: "Might", u_power_d: "+15% all weapon damage."
+          u_power: "Might", u_power_d: "+15% all weapon damage.",
+          // enemies (bestiary)
+          e_bat: "Bat", e_bat_d: "A weak flier that swarms in numbers.",
+          e_zombie: "Zombie", e_zombie_d: "Slow but sturdy and hits hard.",
+          e_ghost: "Ghost", e_ghost_d: "Quick and flighty — hard to pin down.",
+          e_skull: "Skull", e_skull_d: "Tough bonehead with a nasty bite.",
+          e_demon: "Demon", e_demon_d: "Brutal hulk with heaps of health.",
+          e_spider: "Spider", e_spider_d: "Tiny and very fast — comes in droves.",
+          e_imp: "Imp", e_imp_d: "Erratic darter that closes in fast.",
+          e_werewolf: "Werewolf", e_werewolf_d: "Fast bruiser that rushes you down.",
+          e_troll: "Troll", e_troll_d: "A slow wall of health and heavy hits.",
+          e_dragon: "Dragon", e_dragon_d: "Late-game terror — immense health and damage."
         },
         ru: {
           title: "Ночные выживальщики",
@@ -312,15 +360,34 @@
           levelup: "Новый уровень!", choose: "Выберите улучшение",
           paused: "Пауза", resume: "▶ Продолжить",
           newBadge: "НОВОЕ", lvlBadge: "Ур {n}", maxBadge: "МАКС",
+          pauseBtn: "Пауза", wiki: "Гид",
+          wikiTitle: "Гид по выживанию",
+          secWeapons: "Оружие", secPassives: "Усиления", secEnemies: "Бестиарий",
+          close: "✕ Закрыть", unlockAt: "с {t}",
           w_knife: "Кинжал", w_knife_d: "Бросает кинжал в ближайшего врага.",
           w_aura: "Аура чеснока", w_aura_d: "Святое кольцо жжёт врагов рядом.",
           w_bolt: "Магострела", w_bolt_d: "Самонаводящиеся снаряды ищут врагов.",
           w_whip: "Кнут", w_whip_d: "Рассекает широкой дугой по бокам.",
+          w_lightning: "Молния", w_lightning_d: "Бьёт случайных врагов молниями с неба.",
+          w_fire: "Огнебомба", w_fire_d: "Бросает бомбу, взрывающуюся огнём.",
+          w_frost: "Ледяной осколок", w_frost_d: "Пробивает врагов и замораживает, замедляя их.",
+          w_orb: "Духовные сферы", w_orb_d: "Сферы вращаются вокруг, защищая и раня врагов.",
+          w_axe: "Боевой топор", w_axe_d: "Метает тяжёлые пробивающие топоры по дуге.",
           u_speed: "Быстрые сапоги", u_speed_d: "+12% к скорости.",
           u_health: "Живучесть", u_health_d: "+20 к макс. HP и лечение.",
           u_magnet: "Магнит", u_magnet_d: "+40% к радиусу подбора.",
           u_regen: "Регенерация", u_regen_d: "Медленно восстанавливает HP.",
-          u_power: "Мощь", u_power_d: "+15% к урону всего оружия."
+          u_power: "Мощь", u_power_d: "+15% к урону всего оружия.",
+          e_bat: "Летучая мышь", e_bat_d: "Слабая летунья, нападает стаями.",
+          e_zombie: "Зомби", e_zombie_d: "Медленный, но крепкий и больно бьёт.",
+          e_ghost: "Призрак", e_ghost_d: "Быстрый и юркий — трудно поймать.",
+          e_skull: "Череп", e_skull_d: "Крепкий костяк с злым укусом.",
+          e_demon: "Демон", e_demon_d: "Громила с огромным запасом HP.",
+          e_spider: "Паук", e_spider_d: "Маленький и очень быстрый — лезет ордой.",
+          e_imp: "Бес", e_imp_d: "Дёрганый шустрик, быстро сближается.",
+          e_werewolf: "Оборотень", e_werewolf_d: "Быстрый громила, бросается в атаку.",
+          e_troll: "Тролль", e_troll_d: "Медленная стена HP и тяжёлых ударов.",
+          e_dragon: "Дракон", e_dragon_d: "Кошмар поздней игры — огромные HP и урон."
         },
         es: {
           title: "Sobrevivientes Nocturnos",
@@ -333,15 +400,34 @@
           levelup: "¡Subiste de nivel!", choose: "Elige una mejora",
           paused: "Pausa", resume: "▶ Continuar",
           newBadge: "NUEVO", lvlBadge: "Nv {n}", maxBadge: "MÁX",
+          pauseBtn: "Pausa", wiki: "Guía",
+          wikiTitle: "Guía de supervivencia",
+          secWeapons: "Armas", secPassives: "Mejoras", secEnemies: "Bestiario",
+          close: "✕ Cerrar", unlockAt: "desde {t}",
           w_knife: "Daga", w_knife_d: "Lanza una daga al enemigo más cercano.",
           w_aura: "Aura de Ajo", w_aura_d: "Un anillo sagrado quema a los cercanos.",
           w_bolt: "Rayo Mágico", w_bolt_d: "Rayos teledirigidos buscan enemigos.",
           w_whip: "Látigo", w_whip_d: "Corta un arco amplio a tus lados.",
+          w_lightning: "Rayo", w_lightning_d: "Fulmina a enemigos al azar con rayos del cielo.",
+          w_fire: "Bomba de Fuego", w_fire_d: "Lanza una bomba que estalla en llamas.",
+          w_frost: "Esquirla Helada", w_frost_d: "Atraviesa y congela a los enemigos, ralentizándolos.",
+          w_orb: "Orbes Espirituales", w_orb_d: "Orbes que giran a tu alrededor y golpean.",
+          w_axe: "Hacha de Guerra", w_axe_d: "Lanza hachas pesadas y perforantes en un arco.",
           u_speed: "Botas Veloces", u_speed_d: "+12% de velocidad.",
           u_health: "Vitalidad", u_health_d: "+20 HP máx. y curación.",
           u_magnet: "Imán", u_magnet_d: "+40% de rango de recogida.",
           u_regen: "Regeneración", u_regen_d: "Recupera HP lentamente.",
-          u_power: "Poder", u_power_d: "+15% de daño de todas las armas."
+          u_power: "Poder", u_power_d: "+15% de daño de todas las armas.",
+          e_bat: "Murciélago", e_bat_d: "Volador débil que ataca en enjambre.",
+          e_zombie: "Zombi", e_zombie_d: "Lento pero resistente y pega fuerte.",
+          e_ghost: "Fantasma", e_ghost_d: "Rápido y escurridizo — difícil de fijar.",
+          e_skull: "Calavera", e_skull_d: "Hueso duro con una mordida fea.",
+          e_demon: "Demonio", e_demon_d: "Mole brutal con montones de vida.",
+          e_spider: "Araña", e_spider_d: "Diminuta y velocísima — llega en masa.",
+          e_imp: "Diablillo", e_imp_d: "Errático y veloz, se acerca rápido.",
+          e_werewolf: "Hombre Lobo", e_werewolf_d: "Bruto veloz que se lanza sobre ti.",
+          e_troll: "Trol", e_troll_d: "Un muro lento de vida y golpes pesados.",
+          e_dragon: "Dragón", e_dragon_d: "Terror del final — vida y daño inmensos."
         }
       });
       var T = MG.i18n.t;
@@ -362,6 +448,10 @@
           { key: "time", labelKey: "time", variant: "sm", value: "0:00" },
           { key: "lvl", labelKey: "level", value: "1" },
           { key: "hp", labelKey: "kills", variant: "alert", value: "0" }
+        ],
+        actions: [
+          { key: "wiki", labelKey: "wiki", onClick: function () { toggleWiki(); } },
+          { key: "pause", labelKey: "pauseBtn", onClick: function () { togglePause(); } }
         ]
       });
       // Repurpose the third chip as a kills counter with an alert look.
@@ -378,8 +468,9 @@
       }
 
       /* ============================ state ============================ */
-      var STATE_READY = 0, STATE_PLAY = 1, STATE_LEVELUP = 2, STATE_DEAD = 3, STATE_PAUSE = 4;
+      var STATE_READY = 0, STATE_PLAY = 1, STATE_LEVELUP = 2, STATE_DEAD = 3, STATE_PAUSE = 4, STATE_WIKI = 5;
       var state = STATE_READY;
+      var wikiReturn = STATE_READY;   // state to restore when the wiki closes
 
       var player, enemies, projectiles, gems, particles, hazards;
       var elapsed, kills, spawnTimer, lastTime, camX, camY, slowMo;
@@ -469,6 +560,90 @@
             }
             spawnRing(p.x, p.y, radius, "#c8ff9b");
           }
+        },
+        lightning: {
+          icon: "⚡", nameKey: "w_lightning", descKey: "w_lightning_d", max: 6,
+          cooldown: function (lv) { return Math.max(0.7, 1.9 - lv * 0.2); },
+          fire: function (p) {
+            var lvl = l(p, "lightning");
+            var n = 1 + Math.floor((lvl + 1) / 2);          // strikes per cast
+            var dmg = (16 + lvl * 6) * p.power;
+            // Prefer enemies on-screen so the player sees the smites.
+            var pool = nearestEnemies(p.x, p.y, n * 4);
+            for (var i = 0; i < n && pool.length; i++) {
+              var t = pool[Math.floor(Math.random() * pool.length)];
+              hitEnemy(t, dmg, 0, -1, 30);
+              spawnZap(t.x, t.y);
+            }
+          }
+        },
+        fire: {
+          icon: "🔥", nameKey: "w_fire", descKey: "w_fire_d", max: 6,
+          cooldown: function (lv) { return Math.max(0.85, 2.1 - lv * 0.18); },
+          fire: function (p) {
+            var lvl = l(p, "fire");
+            var t = nearestEnemies(p.x, p.y, 1)[0];
+            var ang = t ? Math.atan2(t.y - p.y, t.x - p.x)
+                        : Math.atan2(p.dir.y, p.dir.x);
+            var pr = mkProj(p.x, p.y, ang, 230, 0, 9, "#ff8a3c", 0.9, false);
+            pr.emoji = "💣"; pr.spin = 8; pr.gravity = 260; pr.vy -= 120;
+            pr.explode = { radius: 64 + lvl * 10, dmg: (20 + lvl * 7) * p.power };
+            projectiles.push(pr);
+          }
+        },
+        frost: {
+          icon: "❄️", nameKey: "w_frost", descKey: "w_frost_d", max: 6,
+          cooldown: function (lv) { return Math.max(0.5, 1.2 - lv * 0.1); },
+          fire: function (p) {
+            var lvl = l(p, "frost");
+            var n = 1 + Math.floor(lvl / 3);
+            var targets = nearestEnemies(p.x, p.y, n);
+            var dmg = (9 + lvl * 3) * p.power;
+            for (var i = 0; i < n; i++) {
+              var t = targets[i];
+              var ang = t ? Math.atan2(t.y - p.y, t.x - p.x)
+                          : Math.atan2(p.dir.y, p.dir.x) + (i - n / 2) * 0.3;
+              var pr = mkProj(p.x, p.y, ang, 300, dmg, 6, "#9be9ff", 1.3, false);
+              pr.pierce = 2 + lvl;
+              pr.slow = { dur: 1.6 + lvl * 0.2, factor: 0.5 };
+              projectiles.push(pr);
+            }
+          }
+        },
+        orb: {
+          icon: "🔮", nameKey: "w_orb", descKey: "w_orb_d", max: 6,
+          cooldown: function () { return 2.0; }, // orbs persist between casts
+          fire: function (p) {
+            var lvl = l(p, "orb");
+            var n = 2 + lvl;
+            var radius = 70 + lvl * 6;
+            var dmg = (8 + lvl * 3) * p.power;
+            for (var i = 0; i < n; i++) {
+              var pr = mkProj(p.x, p.y, 0, 0, dmg, 9, "#c79bff", 2.0, true);
+              pr.orbit = { angle: (i / n) * 6.2832, radius: radius, speed: 3.2 };
+              pr.rehit = 0.45; pr.rehitTimer = 0;
+              projectiles.push(pr);
+            }
+          }
+        },
+        axe: {
+          icon: "🪓", nameKey: "w_axe", descKey: "w_axe_d", max: 6,
+          cooldown: function (lv) { return Math.max(0.55, 1.4 - lv * 0.12); },
+          fire: function (p) {
+            var lvl = l(p, "axe");
+            var n = 1 + Math.floor((lvl + 1) / 2);
+            var dmg = (18 + lvl * 6) * p.power;
+            var face = p.dir.x >= 0 ? 1 : -1;
+            for (var i = 0; i < n; i++) {
+              var pr = mkProj(p.x, p.y, 0, 0, dmg, 10, "#dfe6ef", 1.4, false);
+              pr.vx = face * (90 + Math.random() * 90);
+              pr.vy = -(360 + Math.random() * 120);
+              pr.gravity = 620;
+              pr.pierce = 2 + lvl;
+              pr.emoji = "🪓"; pr.spin = 16;
+              projectiles.push(pr);
+            }
+          }
         }
       };
 
@@ -518,6 +693,36 @@
           life: 0.4, max: 0.4 });
       }
 
+      function spawnZap(x, y) {
+        // A quick lightning flash: a jagged bolt dropping onto the target.
+        var segs = [];
+        var sx = x + (Math.random() - 0.5) * 30;
+        for (var i = 0; i <= 6; i++) {
+          segs.push({ x: x + (sx - x) * (1 - i / 6) + (Math.random() - 0.5) * 18,
+                      y: y - i * 42 });
+        }
+        particles.push({ kind: "zap", x: x, y: y, segs: segs, life: 0.22, max: 0.22 });
+        spawnHit(x, y, "#bfe3ff");
+      }
+
+      function explodeProj(pr) {
+        // Fiery AoE when an explosive projectile dies (timeout or impact).
+        if (!pr.explode) return;
+        var ex = pr.explode, r2 = ex.radius * ex.radius;
+        for (var i = enemies.length - 1; i >= 0; i--) {
+          var e = enemies[i];
+          var dx = e.x - pr.x, dy = e.y - pr.y;
+          if (dx * dx + dy * dy < r2) hitEnemy(e, ex.dmg, dx, dy, 120);
+        }
+        spawnRing(pr.x, pr.y, ex.radius, "#ff8a3c");
+        for (var s = 0; s < 10; s++) {
+          var a = Math.random() * 6.28, sp = 60 + Math.random() * 130;
+          particles.push({ kind: "spark", x: pr.x, y: pr.y,
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            color: "#ffb35c", life: 0.4, max: 0.4 });
+        }
+      }
+
       function spawnGem(x, y, value) {
         gems.push({ x: x, y: y, value: value, r: 5, vx: 0, vy: 0, born: elapsed });
       }
@@ -544,11 +749,16 @@
       /* ============================ enemies ========================== */
       // Enemy archetypes unlock as the run progresses (difficulty curve).
       var ENEMY_TYPES = [
-        { id: "bat",   emoji: "🦇", r: 11, hp: 10,  speed: 56, dmg: 6,  xp: 1, color: "#7b6cff", from: 0 },
-        { id: "zombie",emoji: "🧟", r: 14, hp: 26,  speed: 42, dmg: 10, xp: 2, color: "#6fae5f", from: 45 },
-        { id: "ghost", emoji: "👻", r: 12, hp: 18,  speed: 74, dmg: 8,  xp: 2, color: "#cfe6ff", from: 90 },
-        { id: "skull", emoji: "💀", r: 13, hp: 44,  speed: 50, dmg: 14, xp: 4, color: "#e8e2c8", from: 150 },
-        { id: "demon", emoji: "👹", r: 17, hp: 90,  speed: 46, dmg: 20, xp: 7, color: "#ff6b6b", from: 240 }
+        { id: "bat",     emoji: "🦇", r: 11, hp: 10,  speed: 56, dmg: 6,  xp: 1,  color: "#7b6cff", from: 0 },
+        { id: "spider",  emoji: "🕷️", r: 9,  hp: 7,   speed: 78, dmg: 5,  xp: 1,  color: "#a890ff", from: 25 },
+        { id: "zombie",  emoji: "🧟", r: 14, hp: 26,  speed: 42, dmg: 10, xp: 2,  color: "#6fae5f", from: 45 },
+        { id: "imp",     emoji: "👾", r: 11, hp: 22,  speed: 92, dmg: 9,  xp: 3,  color: "#ff7bd0", from: 75 },
+        { id: "ghost",   emoji: "👻", r: 12, hp: 18,  speed: 74, dmg: 8,  xp: 2,  color: "#cfe6ff", from: 90 },
+        { id: "skull",   emoji: "💀", r: 13, hp: 44,  speed: 50, dmg: 14, xp: 4,  color: "#e8e2c8", from: 150 },
+        { id: "werewolf",emoji: "🐺", r: 16, hp: 70,  speed: 66, dmg: 18, xp: 5,  color: "#9aa0b5", from: 130 },
+        { id: "troll",   emoji: "🧌", r: 20, hp: 170, speed: 34, dmg: 26, xp: 9,  color: "#7fae8c", from: 210 },
+        { id: "demon",   emoji: "👹", r: 17, hp: 90,  speed: 46, dmg: 20, xp: 7,  color: "#ff6b6b", from: 240 },
+        { id: "dragon",  emoji: "🐲", r: 26, hp: 360, speed: 40, dmg: 34, xp: 20, color: "#62d08a", from: 320 }
       ];
 
       function spawnEnemy() {
@@ -575,6 +785,7 @@
           color: type.color,
           emoji: type.emoji,
           flash: 0,
+          slow: 0,                 // seconds of remaining chill (frost)
           knock: { x: 0, y: 0 }
         };
         enemies.push(e);
@@ -714,6 +925,7 @@
         }
         html += '</div>';
         panel.innerHTML = html;
+        panel.classList.remove("panel-wiki");
         overlay.classList.remove("hidden");
 
         var cards = panel.querySelectorAll(".card");
@@ -763,6 +975,7 @@
                  '<button class="play-pill" id="ov-act">' + T("resume") + '</button>';
         }
         panel.innerHTML = html;
+        panel.classList.remove("panel-wiki");
         overlay.classList.remove("hidden");
         var btn = $("ov-act");
         if (btn) btn.addEventListener("click", onAction);
@@ -773,10 +986,74 @@
         else if (state === STATE_PAUSE) { state = STATE_PLAY; overlay.classList.add("hidden"); lastTime = performance.now(); }
       }
 
+      /* ============================ wiki ============================ */
+      function wikiCard(icon, name, desc, meta) {
+        return '<div class="card wiki-card">' +
+          '<div class="card-icon">' + icon + '</div>' +
+          '<div class="card-body">' +
+            '<div class="card-name">' + name +
+              (meta ? '<span class="card-lvl">' + meta + '</span>' : '') + '</div>' +
+            '<div class="card-desc">' + desc + '</div>' +
+          '</div></div>';
+      }
+
+      function showWiki() {
+        var html = '<div class="levelup-title">📖 ' + T("wikiTitle") + '</div>' +
+                   '<div class="wiki-scroll">';
+        var id, i;
+        // Weapons
+        html += '<div class="wiki-sec">' + T("secWeapons") + '</div><div class="cards">';
+        for (id in WEAPONS) {
+          html += wikiCard(WEAPONS[id].icon, T(WEAPONS[id].nameKey), T(WEAPONS[id].descKey), null);
+        }
+        html += '</div>';
+        // Power-ups (passives)
+        html += '<div class="wiki-sec">' + T("secPassives") + '</div><div class="cards">';
+        for (id in PASSIVES) {
+          html += wikiCard(PASSIVES[id].icon, T(PASSIVES[id].nameKey), T(PASSIVES[id].descKey), null);
+        }
+        html += '</div>';
+        // Bestiary
+        html += '<div class="wiki-sec">' + T("secEnemies") + '</div><div class="cards">';
+        for (i = 0; i < ENEMY_TYPES.length; i++) {
+          var en = ENEMY_TYPES[i];
+          var meta = en.from > 0 ? T("unlockAt").replace("{t}", fmtTime(en.from)) : null;
+          html += wikiCard(en.emoji, T("e_" + en.id), T("e_" + en.id + "_d"), meta);
+        }
+        html += '</div>';
+        html += '</div>'; // .wiki-scroll
+        html += '<button class="play-pill" id="wiki-close">' + T("close") + '</button>';
+        panel.innerHTML = html;
+        panel.classList.add("panel-wiki");
+        overlay.classList.remove("hidden");
+        var btn = $("wiki-close");
+        if (btn) btn.addEventListener("click", toggleWiki);
+      }
+
+      function toggleWiki() {
+        if (state === STATE_WIKI) {
+          // Restore whatever we interrupted.
+          state = wikiReturn;
+          panel.classList.remove("panel-wiki");
+          if (state === STATE_PLAY) {
+            overlay.classList.add("hidden");
+            lastTime = performance.now();
+          } else {
+            showOverlay();
+          }
+          return;
+        }
+        if (state === STATE_LEVELUP) return; // don't interrupt a choice
+        wikiReturn = state;
+        state = STATE_WIKI;
+        showWiki();
+      }
+
       // Re-render any open text overlay live on language change.
       MG.i18n.onChange(function () {
         if (state === STATE_READY || state === STATE_DEAD || state === STATE_PAUSE) showOverlay();
         else if (state === STATE_LEVELUP) openLevelUp();
+        else if (state === STATE_WIKI) showWiki();
       });
 
       /* ============================ input ============================ */
@@ -901,16 +1178,18 @@
         for (var i = enemies.length - 1; i >= 0; i--) {
           var e = enemies[i];
           if (e.flash > 0) e.flash -= dt;
+          if (e.slow > 0) e.slow -= dt;
           // knockback decays
           e.x += e.knock.x * dt;
           e.y += e.knock.y * dt;
           e.knock.x *= Math.pow(0.001, dt);
           e.knock.y *= Math.pow(0.001, dt);
-          // chase player
+          // chase player (chilled enemies crawl at half pace)
           var dx = p.x - e.x, dy = p.y - e.y;
           var d = Math.sqrt(dx * dx + dy * dy) || 1;
-          e.x += (dx / d) * e.speed * dt;
-          e.y += (dy / d) * e.speed * dt;
+          var spd = e.slow > 0 ? e.speed * 0.5 : e.speed;
+          e.x += (dx / d) * spd * dt;
+          e.y += (dy / d) * spd * dt;
           // separation so they don't perfectly stack (cheap, neighbor sample)
           // touch player?
           if (d < e.r + p.r) {
@@ -945,18 +1224,32 @@
         for (var j = projectiles.length - 1; j >= 0; j--) {
           var pr = projectiles[j];
           pr.life -= dt;
-          if (pr.life <= 0) { projectiles.splice(j, 1); continue; }
-          if (pr.homing) {
-            var tgt = nearestEnemies(pr.x, pr.y, 1)[0];
-            if (tgt) {
-              var ta = Math.atan2(tgt.y - pr.y, tgt.x - pr.x);
-              var spd = Math.sqrt(pr.vx * pr.vx + pr.vy * pr.vy);
-              var ca = Math.atan2(pr.vy, pr.vx);
-              var na = ca + Math.atan2(Math.sin(ta - ca), Math.cos(ta - ca)) * Math.min(1, dt * 6);
-              pr.vx = Math.cos(na) * spd; pr.vy = Math.sin(na) * spd;
+          if (pr.life <= 0) { explodeProj(pr); projectiles.splice(j, 1); continue; }
+          if (pr.spin) pr.angle = (pr.angle || 0) + pr.spin * dt;
+          if (pr.orbit) {
+            // Orbits the player rather than flying free.
+            pr.orbit.angle += pr.orbit.speed * dt;
+            pr.x = p.x + Math.cos(pr.orbit.angle) * pr.orbit.radius;
+            pr.y = p.y + Math.sin(pr.orbit.angle) * pr.orbit.radius;
+          } else {
+            if (pr.homing) {
+              var tgt = nearestEnemies(pr.x, pr.y, 1)[0];
+              if (tgt) {
+                var ta = Math.atan2(tgt.y - pr.y, tgt.x - pr.x);
+                var spd = Math.sqrt(pr.vx * pr.vx + pr.vy * pr.vy);
+                var ca = Math.atan2(pr.vy, pr.vx);
+                var na = ca + Math.atan2(Math.sin(ta - ca), Math.cos(ta - ca)) * Math.min(1, dt * 6);
+                pr.vx = Math.cos(na) * spd; pr.vy = Math.sin(na) * spd;
+              }
             }
+            if (pr.gravity) pr.vy += pr.gravity * dt;
+            pr.x += pr.vx * dt; pr.y += pr.vy * dt;
           }
-          pr.x += pr.vx * dt; pr.y += pr.vy * dt;
+          // Rehit projectiles (orbs) periodically forget who they've struck.
+          if (pr.rehit != null) {
+            pr.rehitTimer -= dt;
+            if (pr.rehitTimer <= 0) { pr.hitSet = null; pr.rehitTimer = pr.rehit; }
+          }
           // collide with enemies
           for (var k = enemies.length - 1; k >= 0; k--) {
             var en = enemies[k];
@@ -967,8 +1260,12 @@
               if (pr.hitSet.indexOf(en) !== -1) continue;
               pr.hitSet.push(en);
               hitEnemy(en, pr.dmg, en.x - pr.x, en.y - pr.y, 60);
-              pr.pierce--;
-              if (pr.pierce <= 0) { projectiles.splice(j, 1); break; }
+              if (pr.slow) en.slow = Math.max(en.slow, pr.slow.dur);
+              // Orbiting / rehit projectiles persist; only timed-life ends them.
+              if (pr.rehit == null) {
+                pr.pierce--;
+                if (pr.pierce <= 0) { explodeProj(pr); projectiles.splice(j, 1); break; }
+              }
             }
           }
         }
@@ -1054,6 +1351,20 @@
             ctx.beginPath();
             ctx.arc(pt.x + ox, pt.y + oy, pt.reach * 0.7, pt.base - pt.arc, pt.base + pt.arc);
             ctx.stroke();
+          } else if (pt.kind === "zap") {
+            ctx.globalAlpha = a;
+            ctx.strokeStyle = "#dff0ff";
+            ctx.shadowColor = "#9be7ff";
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (var zi = 0; zi < pt.segs.length; zi++) {
+              var sg = pt.segs[zi];
+              if (zi === 0) ctx.moveTo(sg.x + ox, sg.y + oy);
+              else ctx.lineTo(sg.x + ox, sg.y + oy);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
           }
         }
         ctx.globalAlpha = 1;
@@ -1066,7 +1377,7 @@
           // body
           ctx.beginPath();
           ctx.arc(ex, ey, e.r, 0, 6.2832);
-          ctx.fillStyle = e.flash > 0 ? "#ffffff" : e.color;
+          ctx.fillStyle = e.flash > 0 ? "#ffffff" : (e.slow > 0 ? "#86c8e8" : e.color);
           ctx.fill();
           // emoji face
           ctx.font = (e.r * 1.7) + "px serif";
@@ -1085,11 +1396,24 @@
         // projectiles
         for (var j = 0; j < projectiles.length; j++) {
           var pr = projectiles[j];
+          var px = pr.x + ox, py = pr.y + oy;
+          if (pr.emoji) {
+            // Emoji projectiles (axe, firebomb) spin as they fly.
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(pr.angle || 0);
+            ctx.font = (pr.r * 2.4) + "px serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(pr.emoji, 0, 0);
+            ctx.restore();
+            continue;
+          }
           ctx.fillStyle = pr.color;
           ctx.shadowColor = pr.color;
           ctx.shadowBlur = 10;
           ctx.beginPath();
-          ctx.arc(pr.x + ox, pr.y + oy, pr.r, 0, 6.2832);
+          ctx.arc(px, py, pr.r, 0, 6.2832);
           ctx.fill();
         }
         ctx.shadowBlur = 0;
