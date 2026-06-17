@@ -104,8 +104,8 @@ window.GAMES = [
   },
   {
     title: "Top Racer",
-    icon: "🏎️",
-    url: "./games/racing/",
+    icon: "🏁",
+    url: "./games/top-racer/",
     description: {
       en: "Top-down racing — steer your car around the circuit, hit the racing line and chase your best lap.",
       ru: "Гонки сверху — рули по трассе, держи идеальную траекторию и побей свой лучший круг.",

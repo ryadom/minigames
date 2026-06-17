@@ -403,7 +403,7 @@
       var STATE_READY = 0, STATE_COUNT = 1, STATE_PLAY = 2;
       var countUntil = 0;
 
-      var store = MG.storage("racing", { version: 1 });
+      var store = MG.storage("top-racer", { version: 1 });
       best = (store.load() || { best: 0 }).best || 0;
       ui.setStat("best", best ? fmt(best) : "—");
 
