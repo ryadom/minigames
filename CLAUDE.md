@@ -147,6 +147,14 @@ No install step is required; both scripts use only Node's standard library
   style; no transpilation is assumed.
 - Game-specific look stays inside the game; shared chrome stays in `shared/`.
 - Keep games dependency-free and openable directly from the filesystem.
+- **Games must work on mobile devices.** Phones are a first-class target, so:
+  - Build for touch, not just mouse/keyboard — every control must be reachable
+    by tap. Don't hide actions behind `:hover` (there is no hover on touch) and
+    keep tap targets comfortably large (~44px).
+  - Make the layout responsive: the playfield should fit small, portrait screens
+    without horizontal scroll, and the shared header is kept slim on phones (see
+    the mobile rules in `shared/mg.css`) so it doesn't crowd out the game.
+  - Test at narrow widths (e.g. ~360px) before committing.
 
 ## Deployment
 

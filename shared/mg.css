@@ -146,6 +146,48 @@
 
 .mg-btn:active { transform: translateY(1px); }
 
+/* On phones the header must stay slim so it doesn't eat the playfield: tighter
+   padding, smaller chrome and more compact stat chips, all on a single row. */
 @media (max-width: 560px) {
-  .mg-brand { font-size: 13px; }
+  .mg-header {
+    padding: 6px 8px;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .mg-brand {
+    font-size: 13px;
+    margin-right: 2px;
+  }
+
+  /* Hide the brand label, keep the icon — it still links home. */
+  .mg-brand-title { display: none; }
+  .mg-brand-icon { font-size: 18px; }
+
+  /* Let the stats scroll sideways instead of wrapping into extra rows. */
+  .mg-slot {
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mg-slot::-webkit-scrollbar { display: none; }
+
+  .mg-stat {
+    padding: 3px 8px;
+    min-width: 0;
+  }
+  .mg-stat-k { font-size: 8px; letter-spacing: 1px; }
+  .mg-stat-v { font-size: 14px; }
+  .mg-stat--sm .mg-stat-v { font-size: 11px; }
+
+  .mg-actions { gap: 4px; }
+
+  .mg-btn,
+  .mg-lang {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+  .mg-lang { padding: 6px 6px; }
 }

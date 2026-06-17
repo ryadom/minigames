@@ -165,15 +165,7 @@ main { flex: 1; padding-bottom: 64px; }
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-/* Reveal the trigger on hover/focus, or whenever its menu is open. */
-.game-card-wrap:hover .card-menu-btn,
-.game-card-wrap:focus-within .card-menu-btn,
-.card-menu-btn[aria-expanded="true"] {
-  opacity: 1;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .card-menu-btn:hover,
@@ -181,11 +173,6 @@ main { flex: 1; padding-bottom: 64px; }
   color: var(--text);
   border-color: var(--accent);
   background: var(--card-hover);
-}
-
-/* Touch devices can't hover, so keep the trigger visible there. */
-@media (hover: none) {
-  .card-menu-btn { opacity: 1; }
 }
 
 .card-menu {
