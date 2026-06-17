@@ -799,7 +799,7 @@
       // Enemy archetypes unlock as the run progresses (difficulty curve).
       var ENEMY_TYPES = [
         { id: "bat",     emoji: "🦇", r: 11, hp: 10,  speed: 56, dmg: 6,  xp: 1,  color: "#7b6cff", from: 0 },
-        { id: "spider",  emoji: "🕷️", r: 9,  hp: 7,   speed: 78, dmg: 5,  xp: 1,  color: "#a890ff", from: 25 },
+        { id: "spider",  emoji: "🕷️", r: 9,  hp: 7,   speed: 78, dmg: 5,  xp: 1,  color: "#a890ff", from: 25, escale: 1.2 },
         { id: "zombie",  emoji: "🧟", r: 14, hp: 26,  speed: 42, dmg: 10, xp: 2,  color: "#6fae5f", from: 45 },
         { id: "imp",     emoji: "👾", r: 11, hp: 22,  speed: 92, dmg: 9,  xp: 3,  color: "#ff7bd0", from: 75 },
         { id: "ghost",   emoji: "👻", r: 12, hp: 18,  speed: 74, dmg: 8,  xp: 2,  color: "#cfe6ff", from: 90 },
@@ -833,6 +833,7 @@
           xp: type.xp,
           color: type.color,
           emoji: type.emoji,
+          escale: type.escale || 1.7,   // emoji font size relative to radius
           flash: 0,
           slow: 0,                 // seconds of remaining chill (frost)
           knock: { x: 0, y: 0 }
@@ -1521,7 +1522,7 @@
           ctx.fillStyle = e.flash > 0 ? "#ffffff" : (e.slow > 0 ? "#86c8e8" : e.color);
           ctx.fill();
           // emoji face
-          ctx.font = (e.r * 1.7) + "px serif";
+          ctx.font = (e.r * e.escale) + "px serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(e.emoji, ex, ey + 1);
