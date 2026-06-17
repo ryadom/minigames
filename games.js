@@ -6,24 +6,40 @@
  *
  *   {
  *     title: "Snake",
- *     description: "Eat, grow, don't bite yourself.",
  *     icon: "🐍",
  *     url: "./games/snake/",
+ *     // `description` may be a plain string or a { en, ru, es } map.
+ *     description: {
+ *       en: "Eat, grow, don't bite yourself.",
+ *       ru: "Ешь, расти, не кусай себя.",
+ *       es: "Come, crece, no te muerdas.",
+ *     },
  *   }
+ *
+ * Descriptions are resolved to the active language by app.js (via MG.i18n);
+ * a plain string is shown as-is in every language.
  *
  * The list on the home page is generated automatically from this array.
  */
 window.GAMES = [
   {
     title: "Minesweeper",
-    description: "Infinite, pannable, zoomable Minesweeper — clear an endless field.",
     icon: "💣",
     url: "./games/minesweeper/",
+    description: {
+      en: "Infinite, pannable, zoomable Minesweeper — clear an endless field.",
+      ru: "Бесконечный сапёр — двигай и масштабируй бескрайнее поле.",
+      es: "Buscaminas infinito — despeja un campo sin fin que puedes mover y ampliar.",
+    },
   },
   {
     title: "Flappy Bird",
-    description: "Tap, click or press space to flap through the pipes — don't crash.",
     icon: "🐤",
     url: "./games/flappy-bird/",
+    description: {
+      en: "Tap, click or press space to flap through the pipes — don't crash.",
+      ru: "Тап, клик или пробел — взмахни и пролетай сквозь трубы, не разбейся.",
+      es: "Toca, clic o espacio para aletear entre las tuberías — no choques.",
+    },
   },
 ];

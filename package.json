@@ -1,0 +1,15 @@
+{
+  "name": "minigames",
+  "version": "1.0.0",
+  "description": "A collection of free, zero-build browser minigames.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "node scripts/validate.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

@@ -14,30 +14,30 @@
 
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>" />
   <link rel="stylesheet" href="./styles.css" />
+  <script src="./shared/mg.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
+      <select id="lang" class="lang-switch" aria-label="Language"></select>
       <h1 class="logo">🎮 Minigames</h1>
-      <p class="tagline">A collection of free browser minigames. No installs, no sign-ups — just play.</p>
+      <p id="tagline" class="tagline"></p>
     </div>
   </header>
 
   <main class="wrap">
     <section aria-labelledby="games-heading">
-      <h2 id="games-heading" class="section-title">Games</h2>
+      <h2 id="games-heading" class="section-title"></h2>
       <ul id="game-list" class="game-grid"></ul>
-      <p id="empty-state" class="empty-state" hidden>
-        No games yet — check back soon! 🚧
-      </p>
+      <p id="empty-state" class="empty-state" hidden></p>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="wrap">
       <p>
-        Made for fun ·
-        <a href="https://github.com/ryadom/minigames">Source on GitHub</a>
+        <span id="footer-made"></span> ·
+        <a href="https://github.com/ryadom/minigames" id="footer-source"></a>
       </p>
     </div>
   </footer>

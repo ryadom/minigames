@@ -11,18 +11,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <style>
-    :root {
-      --bg: #0a0c0f;
-      --panel: #101419;
-      --line: #1c2530;
-      --tile: #00e6c8;
-      --txt: #c7d0d9;
-      --dim: #5e6b78;
-      --err: #ff4757;
-      --accent: #ffb43d;
-    }
+  <!-- Shared chrome: header bar + language control. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <script src="../../shared/mg.js"></script>
 
+  <style>
     * {
       box-sizing: border-box;
       margin: 0;
@@ -36,119 +29,11 @@
     }
 
     body {
-      background: var(--bg);
-      color: var(--txt);
+      background: var(--mg-bg);
+      color: var(--mg-txt);
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      display: flex;
-      flex-direction: column;
       user-select: none;
       -webkit-user-select: none;
-    }
-
-    header {
-      flex: 0 0 auto;
-      border-bottom: 1px solid var(--line);
-      background: linear-gradient(180deg, #11161c, #0c1015);
-      padding: 10px 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .brand {
-      font-weight: 700;
-      letter-spacing: 1px;
-      font-size: 15px;
-      margin-right: 6px;
-      white-space: nowrap;
-    }
-
-    .brand b { color: var(--tile); }
-
-    .brand a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .stats {
-      display: flex;
-      gap: 8px;
-      flex: 1;
-      flex-wrap: wrap;
-    }
-
-    .stat {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-      padding: 5px 10px;
-      line-height: 1.1;
-      display: flex;
-      flex-direction: column;
-      min-width: 74px;
-    }
-
-    .stat .k {
-      font-size: 9px;
-      letter-spacing: 1.5px;
-      color: var(--dim);
-      text-transform: uppercase;
-    }
-
-    .stat .v {
-      font-size: 18px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .stat.errors .v {
-      color: var(--err);
-      text-shadow: 0 0 14px rgba(255, 71, 87, 0.55);
-    }
-
-    .stat.errors { border-color: rgba(255, 71, 87, 0.35); }
-
-    .stat .v.flash { animation: flash 0.4s ease; }
-
-    @keyframes flash {
-      0% { transform: scale(1.5); }
-      100% { transform: scale(1); }
-    }
-
-    .btns {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-
-    button, select#lang {
-      font-family: inherit;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      color: var(--txt);
-      background: var(--panel);
-      border: 1px solid var(--line);
-      padding: 7px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: 0.12s;
-    }
-
-    select#lang { padding: 7px 8px; }
-
-    button:hover, select#lang:hover {
-      border-color: var(--tile);
-      color: #fff;
-    }
-
-    button:active { transform: translateY(1px); }
-
-    #wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
     }
 
     canvas {
@@ -161,60 +46,44 @@
 
     footer {
       flex: 0 0 auto;
-      border-top: 1px solid var(--line);
+      border-top: 1px solid var(--mg-line);
       background: #0c1015;
       padding: 7px 14px;
       font-size: 11px;
-      color: var(--dim);
+      color: var(--mg-dim);
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       align-items: center;
     }
 
-    footer b { color: var(--accent); }
-    footer .sep { color: var(--line); }
+    footer b { color: var(--mg-warn); }
+    footer .sep { color: var(--mg-line); }
 
     @media (max-width: 560px) {
-      .brand { font-size: 13px; }
       footer .hide { display: none; }
     }
   </style>
 </head>
-<body>
-  <header>
-    <div class="brand" id="brand"><a href="../../">∞ <b>MINESWEEPER</b></a></div>
-    <div class="stats">
-      <div class="stat errors"><span class="k" id="lbl-err">Errors</span><span class="v" id="s-err">0</span></div>
-      <div class="stat"><span class="k" id="lbl-rev">Opened</span><span class="v" id="s-rev">0</span></div>
-      <div class="stat"><span class="k" id="lbl-flag">Flags</span><span class="v" id="s-flag">0</span></div>
-      <div class="stat"><span class="k" id="lbl-pos">Position</span><span class="v" id="s-pos" style="font-size:13px">0, 0</span></div>
-      <div class="stat"><span class="k" id="lbl-seed">Seed</span><span class="v" id="s-seed" style="font-size:13px">0</span></div>
-    </div>
-    <div class="btns">
-      <select id="lang" aria-label="Language">
-        <option value="en">EN</option>
-        <option value="ru">RU</option>
-        <option value="es">ES</option>
-      </select>
-      <button id="b-center" aria-label="Center">⌖</button>
-      <button id="b-new" aria-label="New game">↻</button>
-    </div>
-  </header>
-
-  <div id="wrap"><canvas id="game"></canvas></div>
-
+<body class="mg-app">
+  <!-- Header is mounted by the shared runtime (see MG.mountHeader below). -->
+  <div id="wrap" class="mg-game-area"><canvas id="game"></canvas></div>
   <footer id="hints"></footer>
 
   <script>
   (function () {
     "use strict";
 
+    var $ = function (id) { return document.getElementById(id); };
+
     /* ============================ i18n ============================ */
-    var I18N = {
+    // Translations live in the shared registry; the header + footer below
+    // re-render automatically whenever the language changes.
+    MG.i18n.register({
       en: {
-        title: "MINESWEEPER", errors: "Errors", opened: "Opened", flags: "Flags", position: "Position", seed: "Seed",
-        center: "⌖ Center", neu: "↻ New",
+        title: "MINESWEEPER",
+        errors: "Errors", opened: "Opened", flags: "Flags", position: "Position", seed: "Seed",
+        center: "⌖ Center", new: "↻ New",
         hints: [
           "LMB — open",
           "double click / tap — clear neighbors · auto-flag",
@@ -225,8 +94,9 @@
         ]
       },
       ru: {
-        title: "САПЁР", errors: "Ошибки", opened: "Открыто", flags: "Флаги", position: "Позиция", seed: "Seed",
-        center: "⌖ В центр", neu: "↻ Новая",
+        title: "САПЁР",
+        errors: "Ошибки", opened: "Открыто", flags: "Флаги", position: "Позиция", seed: "Seed",
+        center: "⌖ В центр", new: "↻ Новая",
         hints: [
           "ЛКМ — открыть",
           "2× клик / тап — раскрыть соседей · авто-флаг",
@@ -237,8 +107,9 @@
         ]
       },
       es: {
-        title: "BUSCAMINAS", errors: "Errores", opened: "Abiertas", flags: "Banderas", position: "Posición", seed: "Semilla",
-        center: "⌖ Centrar", neu: "↻ Nueva",
+        title: "BUSCAMINAS",
+        errors: "Errores", opened: "Abiertas", flags: "Banderas", position: "Posición", seed: "Semilla",
+        center: "⌖ Centrar", new: "↻ Nueva",
         hints: [
           "Clic izq. — abrir",
           "doble clic / toque — abrir vecinas · auto-bandera",
@@ -248,38 +119,39 @@
           "rejilla 16×16 — guías de chunk"
         ]
       }
-    };
+    });
 
-    function detectLang() {
-      var l = (navigator.language || "en").slice(0, 2).toLowerCase();
-      return I18N[l] ? l : "en";
-    }
+    // Mount the shared header: brand (∞ + title), live stats, language
+    // selector and the Center / New buttons.
+    var ui = MG.mountHeader({
+      icon: "∞",
+      titleKey: "title",
+      stats: [
+        { key: "err", labelKey: "errors", variant: "alert" },
+        { key: "rev", labelKey: "opened" },
+        { key: "flag", labelKey: "flags" },
+        { key: "pos", labelKey: "position", variant: "sm", value: "0, 0" },
+        { key: "seed", labelKey: "seed", variant: "sm", value: "0" }
+      ],
+      actions: [
+        { key: "center", labelKey: "center", onClick: function () { center(); } },
+        { key: "new", labelKey: "new", onClick: function () { newGame(); } }
+      ]
+    });
 
-    var lang = detectLang();
-    var $ = function (id) { return document.getElementById(id); };
-
-    function applyLang() {
-      var t = I18N[lang];
-      document.documentElement.lang = lang;
-      document.title = "∞ " + t.title + " — Minigames";
-      $("brand").innerHTML = '<a href="../../">∞ <b>' + t.title + "</b></a>";
-      $("lbl-err").textContent = t.errors;
-      $("lbl-rev").textContent = t.opened;
-      $("lbl-flag").textContent = t.flags;
-      $("lbl-pos").textContent = t.position;
-      $("lbl-seed").textContent = t.seed;
-      $("b-center").textContent = t.center;
-      $("b-new").textContent = t.neu;
-
+    // Footer hints (an array translation) — rebuilt on every language change.
+    function renderHints() {
+      var hints = MG.i18n.t("hints");
       var html = "";
-      t.hints.forEach(function (h, i) {
+      hints.forEach(function (h, i) {
         var hide = i >= 4 ? " hide" : "";
         if (i > 0) html += '<span class="sep' + hide + '">·</span>';
         html += '<span class="seg' + hide + '">' + h + "</span>";
       });
       $("hints").innerHTML = html;
-      $("lang").value = lang;
     }
+    MG.i18n.onChange(renderHints);
+    renderHints();
 
     /* ============================ game ============================ */
     var canvas = $("game"), ctx = canvas.getContext("2d"), wrap = $("wrap");
@@ -417,7 +289,7 @@
     function saveState() {
       try {
         localStorage.setItem(KEY, JSON.stringify({
-          v: 2, lang: lang, seed: seed, errors: errors,
+          v: 2, seed: seed, errors: errors,
           cellSize: cellSize, offsetX: offsetX, offsetY: offsetY, firstMove: firstMove,
           revealed: Array.from(revealed),
           flagged: Array.from(flagged),
@@ -445,7 +317,6 @@
         flagged.clear(); (st.flagged || []).forEach(function (x) { flagged.add(x); });
         hitMines.clear(); (st.hitMines || []).forEach(function (x) { hitMines.add(x); });
         safe.clear(); (st.safe || []).forEach(function (x) { safe.add(x); });
-        if (st.lang && I18N[st.lang]) lang = st.lang;
         return true;
       } catch (e) {
         return false;
@@ -556,19 +427,20 @@
 
     /* ============================ HUD ============================ */
     function updateHud() {
-      $("s-err").textContent = errors;
-      $("s-rev").textContent = revealed.size - hitMines.size;
-      $("s-flag").textContent = flagged.size;
-      $("s-seed").textContent = (seed >>> 0).toString(36);
+      ui.setStat("err", errors);
+      ui.setStat("rev", revealed.size - hitMines.size);
+      ui.setStat("flag", flagged.size);
+      ui.setStat("seed", (seed >>> 0).toString(36));
       var cx = Math.floor((W / 2 - offsetX) / cellSize), cy = Math.floor((H / 2 - offsetY) / cellSize);
-      $("s-pos").textContent = cx + ", " + cy;
+      ui.setStat("pos", cx + ", " + cy);
     }
 
     function flashErr() {
-      var e = $("s-err");
-      e.classList.remove("flash");
+      var e = ui.stat("err");
+      if (!e) return;
+      e.classList.remove("mg-flash");
       void e.offsetWidth;
-      e.classList.add("flash");
+      e.classList.add("mg-flash");
     }
 
     /* ============================ input ============================ */
@@ -667,9 +539,7 @@
       scheduleSave();
     }
 
-    $("b-center").onclick = center;
-
-    $("b-new").onclick = function () {
+    function newGame() {
       seed = (Math.random() * 1e9) | 0;
       revealed.clear();
       flagged.clear();
@@ -680,13 +550,7 @@
       cellSize = 30;
       center();
       saveState();
-    };
-
-    $("lang").onchange = function (e) {
-      lang = e.target.value;
-      applyLang();
-      saveState();
-    };
+    }
 
     /* ============================ start ============================ */
     window.addEventListener("resize", resize);
@@ -696,7 +560,6 @@
     });
 
     var restored = loadState();
-    applyLang();
     resize();
     if (restored) {
       draw();

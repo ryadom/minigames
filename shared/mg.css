@@ -1,0 +1,151 @@
+/* ==========================================================================
+   Minigames — shared chrome
+   --------------------------------------------------------------------------
+   A small, framework-free stylesheet that gives every game a consistent
+   top header bar. The bar styling is intentionally neutral and dark so it
+   reads as site chrome that sits *above* each game's own themed playfield.
+
+   Games keep their own look below the header; they only need to provide a
+   ".mg-game-area" element (flex child) to host their canvas / stage.
+   ========================================================================== */
+
+:root {
+  --mg-bg: #0a0c0f;
+  --mg-panel: #101419;
+  --mg-line: #1c2530;
+  --mg-accent: #00e6c8;
+  --mg-txt: #c7d0d9;
+  --mg-dim: #5e6b78;
+  --mg-err: #ff4757;
+  --mg-warn: #ffb43d;
+}
+
+/* Layout helper: a game page is a vertical stack of header + game area. */
+.mg-app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.mg-game-area {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0; /* allow the area to shrink so the header is never pushed off */
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- Header -- */
+.mg-header {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--mg-line);
+  background: linear-gradient(180deg, #11161c, #0c1015);
+  color: var(--mg-txt);
+  font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mg-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 15px;
+  margin-right: 6px;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mg-brand:hover { color: #fff; }
+.mg-brand-title { color: var(--mg-accent); }
+.mg-brand-icon { font-size: 16px; }
+
+/* Stats slot — grows to fill the bar between brand and actions. */
+.mg-slot {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.mg-stat {
+  border: 1px solid var(--mg-line);
+  background: var(--mg-panel);
+  border-radius: 8px;
+  padding: 5px 10px;
+  line-height: 1.1;
+  display: flex;
+  flex-direction: column;
+  min-width: 74px;
+}
+
+.mg-stat-k {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--mg-dim);
+  text-transform: uppercase;
+}
+
+.mg-stat-v {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Smaller value (e.g. coordinates / seeds that need more characters). */
+.mg-stat--sm .mg-stat-v { font-size: 13px; }
+
+/* Alert variant (e.g. an error / lives counter). */
+.mg-stat--alert { border-color: rgba(255, 71, 87, 0.35); }
+.mg-stat--alert .mg-stat-v {
+  color: var(--mg-err);
+  text-shadow: 0 0 14px rgba(255, 71, 87, 0.55);
+}
+
+.mg-stat-v.mg-flash { animation: mg-flash 0.4s ease; }
+
+@keyframes mg-flash {
+  0% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+/* Actions: language selector + game buttons. */
+.mg-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mg-btn,
+.mg-lang {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--mg-txt);
+  background: var(--mg-panel);
+  border: 1px solid var(--mg-line);
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.12s;
+}
+
+.mg-lang { padding: 7px 8px; }
+
+.mg-btn:hover,
+.mg-lang:hover {
+  border-color: var(--mg-accent);
+  color: #fff;
+}
+
+.mg-btn:active { transform: translateY(1px); }
+
+@media (max-width: 560px) {
+  .mg-brand { font-size: 13px; }
+}
