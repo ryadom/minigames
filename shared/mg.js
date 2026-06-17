@@ -325,6 +325,48 @@
     };
   }
 
+  /*
+   * Static helpers for managing every game's save from one place (e.g. the home
+   * page's save manager). These work directly on localStorage — the durable
+   * store — so they can discover and wipe saves without instantiating a store
+   * for each game. In private mode (no localStorage) there is nothing durable
+   * to manage, so list() returns an empty array.
+   */
+
+  // Enumerate all persisted saves. Returns an array of envelope summaries:
+  //   { name, key, version, savedAt }  (savedAt is a ms timestamp, or null)
+  // sorted most-recently-saved first.
+  storage.list = function () {
+    var out = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(SAVE_PREFIX) !== 0) continue;
+        var env = null;
+        try { env = JSON.parse(localStorage.getItem(k)); } catch (e) { env = null; }
+        if (!env || typeof env !== "object") continue;
+        out.push({
+          name: k.slice(SAVE_PREFIX.length),
+          key: k,
+          version: typeof env.v === "number" ? env.v : 0,
+          savedAt: typeof env.t === "number" ? env.t : null
+        });
+      }
+    } catch (e) { /* no localStorage — nothing to list */ }
+    out.sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
+    return out;
+  };
+
+  // Remove a single save by its name (the same name passed to MG.storage(name)).
+  storage.remove = function (name) {
+    try { localStorage.removeItem(SAVE_PREFIX + name); } catch (e) { /* ignore */ }
+  };
+
+  // Wipe every game's save in one shot.
+  storage.clearAll = function () {
+    storage.list().forEach(function (s) { storage.remove(s.name); });
+  };
+
   /* --------------------------------------------------------------- expose -- */
   var MG = global.MG || {};
   MG.i18n = i18n;
