@@ -8,7 +8,8 @@ A collection of free browser minigames. No installs, no sign-ups — just play.
 > automatically.
 >
 > **Games:** 💣 [Minesweeper](./games/minesweeper/) — infinite, pannable,
-> zoomable Minesweeper.
+> zoomable Minesweeper · 🐤 [Flappy Bird](./games/flappy-bird/) — flap
+> through the pipes.
 
 ## How it works
 

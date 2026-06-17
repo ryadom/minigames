@@ -20,4 +20,10 @@ window.GAMES = [
     icon: "💣",
     url: "./games/minesweeper/",
   },
+  {
+    title: "Flappy Bird",
+    description: "Tap, click or press space to flap through the pipes — don't crash.",
+    icon: "🐤",
+    url: "./games/flappy-bird/",
+  },
 ];
