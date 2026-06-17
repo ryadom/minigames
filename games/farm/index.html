@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🚜 Farm — Minigames</title>
+  <meta name="description" content="Tend a little farm — buy seeds, plant, water and harvest crops for coins. Play in your browser, no installs." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚜</text></svg>" />
+
+  <!-- Shared chrome: header bar + language control. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <script src="../../shared/mg.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      background: #8ec96b;
+      color: #2e3b22;
+      font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    /* The game area hosts the field above the toolbar below the shared header. */
+    .mg-game-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 14px;
+      padding: 16px 12px 12px;
+      background:
+        radial-gradient(circle at 20% 0%, #a6dd82 0%, transparent 45%),
+        radial-gradient(circle at 90% 10%, #a6dd82 0%, transparent 40%),
+        linear-gradient(180deg, #8ec96b 0%, #79b557 100%);
+      overflow-y: auto;
+    }
+
+    /* ---- Field grid ---- */
+    .field {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 460px;
+      padding: 12px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #7a4a26 0%, #683d1f 100%);
+      box-shadow: inset 0 0 0 4px #5a3318, 0 12px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .plot {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border: none;
+      border-radius: 12px;
+      background:
+        repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0 6px, transparent 6px 12px),
+        linear-gradient(180deg, #9c6a3e 0%, #8a5a30 100%);
+      box-shadow: inset 0 3px 6px rgba(255,255,255,0.18), inset 0 -4px 8px rgba(0,0,0,0.25);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.6rem, 9vw, 2.6rem);
+      line-height: 1;
+      transition: transform 0.08s ease, box-shadow 0.15s ease;
+      color: transparent;
+    }
+    .plot:active { transform: scale(0.95); }
+
+    /* Watered soil reads darker / damp. */
+    .plot.watered {
+      background:
+        repeating-linear-gradient(45deg, rgba(0,0,0,0.08) 0 6px, transparent 6px 12px),
+        linear-gradient(180deg, #6f4427 0%, #5d3a20 100%);
+      box-shadow: inset 0 3px 8px rgba(80,140,255,0.25), inset 0 -4px 8px rgba(0,0,0,0.35);
+    }
+
+    .plot .sprite {
+      display: block;
+      transform-origin: 50% 90%;
+      filter: drop-shadow(0 2px 1px rgba(0,0,0,0.3));
+    }
+    .plot.ready .sprite { animation: ripe 1.3s ease-in-out infinite; }
+    .plot.ready { box-shadow: inset 0 0 0 3px #ffd23f, inset 0 -4px 8px rgba(0,0,0,0.25); }
+
+    @keyframes ripe {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-4px) scale(1.06); }
+    }
+
+    /* Tiny growth progress bar at the bottom of a growing plot. */
+    .plot .bar {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      bottom: 6px;
+      height: 4px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .plot .bar > i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #b6f36a, #6fc92b);
+      transition: width 0.25s linear;
+    }
+    .plot.ready .bar, .plot.empty .bar { display: none; }
+
+    /* Floating "+N" coin popup when harvesting. */
+    .pop {
+      position: absolute;
+      left: 50%;
+      top: 40%;
+      transform: translate(-50%, -50%);
+      font-weight: 800;
+      font-size: 1rem;
+      color: #ffd23f;
+      text-shadow: 0 2px 0 rgba(0,0,0,0.4);
+      pointer-events: none;
+      animation: floatUp 0.9s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); }
+      25% { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -160%) scale(1.1); }
+    }
+
+    /* ---- Toolbar ---- */
+    .toolbar {
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 2px 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tool {
+      flex: 0 0 auto;
+      min-width: 72px;
+      border: 2px solid transparent;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.9);
+      color: #2e3b22;
+      padding: 8px 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.18);
+      transition: transform 0.08s ease, border-color 0.12s ease;
+    }
+    .tool:active { transform: translateY(2px); }
+    .tool.selected {
+      border-color: #ffd23f;
+      box-shadow: 0 4px 0 #c79a00, 0 0 0 3px rgba(255,210,63,0.4);
+    }
+    .tool.locked { opacity: 0.45; }
+
+    .tool .ico { font-size: 1.7rem; line-height: 1; }
+    .tool .name { font-size: 0.72rem; font-weight: 700; }
+    .tool .cost {
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #7a5a00;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .hint {
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #2e3b22;
+      opacity: 0.85;
+      min-height: 1.1em;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="mg-app">
+  <!-- Header is mounted by the shared runtime (see MG.mountHeader below). -->
+  <div class="mg-game-area">
+    <div class="field" id="field"></div>
+    <div class="hint" id="hint"></div>
+    <div class="toolbar" id="toolbar"></div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var $ = function (id) { return document.getElementById(id); };
+
+      /* ============================ Crops ============================
+       * Each crop: emoji sprite, seed cost, sell price, grow time (ms).
+       * Growth is time-based (timestamps) so it advances across sessions.
+       */
+      var CROPS = [
+        { id: "wheat",      ico: "🌾", cost: 3,  sell: 6,  grow: 20000 },
+        { id: "carrot",     ico: "🥕", cost: 5,  sell: 12, grow: 40000 },
+        { id: "strawberry", ico: "🍓", cost: 10, sell: 26, grow: 75000 },
+        { id: "corn",       ico: "🌽", cost: 12, sell: 32, grow: 95000 },
+        { id: "tomato",     ico: "🍅", cost: 8,  sell: 20, grow: 60000 },
+        { id: "pumpkin",    ico: "🎃", cost: 18, sell: 52, grow: 140000 }
+      ];
+      var CROP_BY_ID = {};
+      CROPS.forEach(function (c) { CROP_BY_ID[c.id] = c; });
+
+      // Sprites shown as a crop grows (seed → sprout → the ripe crop).
+      var SEED_SPRITE = "🌰";
+      var SPROUT_SPRITE = "🌱";
+      var LEAF_SPRITE = "🌿";
+
+      var GRID_COLS = 4;
+      var GRID_ROWS = 4;
+      var PLOT_COUNT = GRID_COLS * GRID_ROWS;
+      var WATER_BOOST = 2;        // growth multiplier while a plot is watered
+      var WATER_MS = 12000;       // how long one watering lasts (game-time)
+
+      /* ============================ i18n ============================ */
+      MG.i18n.register({
+        en: {
+          title: "Farm", coins: "Coins",
+          water: "Water", clear: "Clear",
+          newFarm: "New farm",
+          confirmReset: "Reset your farm? All crops and coins will be lost.",
+          hintPlant: "Pick a seed, then tap soil to plant.",
+          hintWater: "Tap a growing plot to water it — wet crops grow faster.",
+          hintClear: "Tap a plot to clear it.",
+          hintReady: "Crops with a golden glow are ready — tap to harvest!",
+          needCoins: "Not enough coins for that seed.",
+          harvested: "Harvested!",
+          crops: {
+            wheat: "Wheat", carrot: "Carrot", strawberry: "Strawberry",
+            corn: "Corn", tomato: "Tomato", pumpkin: "Pumpkin"
+          }
+        },
+        ru: {
+          title: "Ферма", coins: "Монеты",
+          water: "Полив", clear: "Убрать",
+          newFarm: "Новая ферма",
+          confirmReset: "Сбросить ферму? Все посевы и монеты пропадут.",
+          hintPlant: "Выбери семя и нажми на грядку, чтобы посадить.",
+          hintWater: "Нажми на растущую грядку, чтобы полить — мокрые растут быстрее.",
+          hintClear: "Нажми на грядку, чтобы её очистить.",
+          hintReady: "Грядки с золотым свечением созрели — нажми, чтобы собрать!",
+          needCoins: "Не хватает монет на это семя.",
+          harvested: "Собрано!",
+          crops: {
+            wheat: "Пшеница", carrot: "Морковь", strawberry: "Клубника",
+            corn: "Кукуруза", tomato: "Помидор", pumpkin: "Тыква"
+          }
+        },
+        es: {
+          title: "Granja", coins: "Monedas",
+          water: "Regar", clear: "Quitar",
+          newFarm: "Nueva granja",
+          confirmReset: "¿Reiniciar tu granja? Perderás todos los cultivos y monedas.",
+          hintPlant: "Elige una semilla y toca la tierra para plantar.",
+          hintWater: "Toca una parcela en crecimiento para regarla — mojadas crecen más rápido.",
+          hintClear: "Toca una parcela para vaciarla.",
+          hintReady: "Los cultivos con brillo dorado están listos — ¡tócalos para cosechar!",
+          needCoins: "No tienes monedas suficientes para esa semilla.",
+          harvested: "¡Cosechado!",
+          crops: {
+            wheat: "Trigo", carrot: "Zanahoria", strawberry: "Fresa",
+            corn: "Maíz", tomato: "Tomate", pumpkin: "Calabaza"
+          }
+        }
+      });
+
+      function cropName(id) {
+        var names = MG.i18n.t("crops");
+        return (names && names[id]) || id;
+      }
+
+      /* ============================ Save ============================
+       * v1 payload: { coins, sel, lastSeen, plots: [{crop, plantedAt, water}] }
+       * Growth/timestamps are stored in game-time milliseconds (see tick()).
+       */
+      var store = MG.storage("farm", { version: 1 });
+
+      var state;
+      function freshState() {
+        var plots = [];
+        for (var i = 0; i < PLOT_COUNT; i++) plots.push({ crop: null, grown: 0, water: 0 });
+        return { coins: 12, sel: "wheat", plots: plots };
+      }
+
+      function load() {
+        var d = store.load();
+        if (!d || !Array.isArray(d.plots)) { state = freshState(); return; }
+        state = d;
+        // Defensive: ensure exactly PLOT_COUNT plots with valid shape.
+        var plots = [];
+        for (var i = 0; i < PLOT_COUNT; i++) {
+          var p = d.plots[i] || {};
+          var crop = CROP_BY_ID[p.crop] ? p.crop : null;
+          plots.push({
+            crop: crop,
+            grown: crop ? Math.max(0, +p.grown || 0) : 0,
+            water: crop ? Math.max(0, +p.water || 0) : 0
+          });
+        }
+        state.plots = plots;
+        if (typeof state.coins !== "number" || state.coins < 0) state.coins = 0;
+        if (!CROP_BY_ID[state.sel] && state.sel !== "water" && state.sel !== "clear") {
+          state.sel = "wheat";
+        }
+        // Advance crops by the real time elapsed while away (no water bonus offline).
+        var away = Date.now() - (+d.lastSeen || Date.now());
+        if (away > 0) {
+          for (var j = 0; j < plots.length; j++) {
+            var pl = plots[j];
+            if (pl.crop) {
+              var g = CROP_BY_ID[pl.crop].grow;
+              pl.grown = Math.min(g, pl.grown + away);
+            }
+          }
+        }
+      }
+
+      function save() {
+        var d = {
+          coins: state.coins,
+          sel: state.sel,
+          lastSeen: Date.now(),
+          plots: state.plots.map(function (p) {
+            return { crop: p.crop, grown: Math.round(p.grown), water: Math.round(p.water) };
+          })
+        };
+        store.save(d);
+      }
+
+      /* ============================ DOM ============================ */
+      var field = $("field");
+      var toolbar = $("toolbar");
+      var hintEl = $("hint");
+
+      var ui = MG.mountHeader({
+        icon: "🚜",
+        titleKey: "title",
+        stats: [{ key: "coins", labelKey: "coins", value: 0 }],
+        actions: [
+          {
+            key: "new", labelKey: "newFarm", onClick: function () {
+              if (window.confirm(MG.i18n.t("confirmReset"))) {
+                state = freshState();
+                save();
+                buildToolbar();
+                renderAll();
+              }
+            }
+          }
+        ]
+      });
+
+      // Build the field once; cells are reused and updated each frame.
+      var cells = [];
+      (function buildField() {
+        for (var i = 0; i < PLOT_COUNT; i++) {
+          var btn = document.createElement("button");
+          btn.className = "plot empty";
+          btn.setAttribute("aria-label", "plot " + (i + 1));
+          var sprite = document.createElement("span");
+          sprite.className = "sprite";
+          var bar = document.createElement("span");
+          bar.className = "bar";
+          var fill = document.createElement("i");
+          bar.appendChild(fill);
+          btn.appendChild(sprite);
+          btn.appendChild(bar);
+          (function (idx) {
+            btn.addEventListener("click", function () { onPlot(idx); });
+          })(i);
+          field.appendChild(btn);
+          cells.push({ btn: btn, sprite: sprite, fill: fill });
+        }
+      })();
+
+      // Toolbar: one card per crop (with cost), plus Water and Clear tools.
+      function buildToolbar() {
+        toolbar.innerHTML = "";
+        CROPS.forEach(function (c) {
+          var t = document.createElement("button");
+          t.className = "tool";
+          t.dataset.sel = c.id;
+          t.innerHTML =
+            '<span class="ico">' + c.ico + '</span>' +
+            '<span class="name"></span>' +
+            '<span class="cost">🪙 ' + c.cost + '</span>';
+          t.addEventListener("click", function () { selectTool(c.id); });
+          toolbar.appendChild(t);
+        });
+        // Water tool.
+        var w = document.createElement("button");
+        w.className = "tool";
+        w.dataset.sel = "water";
+        w.innerHTML = '<span class="ico">💧</span><span class="name"></span><span class="cost">·</span>';
+        w.addEventListener("click", function () { selectTool("water"); });
+        toolbar.appendChild(w);
+        // Clear tool.
+        var cl = document.createElement("button");
+        cl.className = "tool";
+        cl.dataset.sel = "clear";
+        cl.innerHTML = '<span class="ico">🧺</span><span class="name"></span><span class="cost">·</span>';
+        cl.addEventListener("click", function () { selectTool("clear"); });
+        toolbar.appendChild(cl);
+
+        applyToolbarText();
+      }
+
+      function applyToolbarText() {
+        var tools = toolbar.querySelectorAll(".tool");
+        for (var i = 0; i < tools.length; i++) {
+          var sel = tools[i].dataset.sel;
+          var nameEl = tools[i].querySelector(".name");
+          if (sel === "water") nameEl.textContent = MG.i18n.t("water");
+          else if (sel === "clear") nameEl.textContent = MG.i18n.t("clear");
+          else nameEl.textContent = cropName(sel);
+        }
+        refreshToolbarState();
+      }
+
+      // Reflect selection + affordability on the toolbar.
+      function refreshToolbarState() {
+        var tools = toolbar.querySelectorAll(".tool");
+        for (var i = 0; i < tools.length; i++) {
+          var sel = tools[i].dataset.sel;
+          var selected = sel === state.sel;
+          tools[i].classList.toggle("selected", selected);
+          var crop = CROP_BY_ID[sel];
+          var locked = crop ? state.coins < crop.cost : false;
+          tools[i].classList.toggle("locked", locked);
+        }
+      }
+
+      function selectTool(sel) {
+        state.sel = sel;
+        refreshToolbarState();
+        updateHint();
+        save();
+      }
+
+      function updateHint() {
+        if (state.sel === "water") hintEl.textContent = MG.i18n.t("hintWater");
+        else if (state.sel === "clear") hintEl.textContent = MG.i18n.t("hintClear");
+        else hintEl.textContent = MG.i18n.t("hintPlant");
+      }
+
+      /* ============================ Actions ============================ */
+      function isReady(p) { return p.crop && p.grown >= CROP_BY_ID[p.crop].grow; }
+
+      function onPlot(i) {
+        var p = state.plots[i];
+
+        // A ripe crop always harvests on tap, whatever tool is held.
+        if (isReady(p)) {
+          var c = CROP_BY_ID[p.crop];
+          state.coins += c.sell;
+          ui.setStat("coins", state.coins);
+          popCoins(i, c.sell);
+          p.crop = null; p.grown = 0; p.water = 0;
+          refreshToolbarState();
+          renderPlot(i);
+          save();
+          return;
+        }
+
+        if (state.sel === "clear") {
+          if (p.crop) { p.crop = null; p.grown = 0; p.water = 0; renderPlot(i); save(); }
+          return;
+        }
+
+        if (state.sel === "water") {
+          if (p.crop) { p.water = WATER_MS; renderPlot(i); save(); }
+          return;
+        }
+
+        // Otherwise the selection is a seed — plant on empty soil.
+        if (!p.crop) {
+          var crop = CROP_BY_ID[state.sel];
+          if (!crop) return;
+          if (state.coins < crop.cost) { flashHint(MG.i18n.t("needCoins")); return; }
+          state.coins -= crop.cost;
+          ui.setStat("coins", state.coins);
+          p.crop = crop.id; p.grown = 0; p.water = 0;
+          refreshToolbarState();
+          renderPlot(i);
+          save();
+        }
+      }
+
+      var hintTimer = null;
+      function flashHint(msg) {
+        hintEl.textContent = msg;
+        if (hintTimer) clearTimeout(hintTimer);
+        hintTimer = setTimeout(function () { updateHint(); hintTimer = null; }, 1600);
+      }
+
+      function popCoins(i, amount) {
+        var pop = document.createElement("span");
+        pop.className = "pop";
+        pop.textContent = "+" + amount + " 🪙";
+        cells[i].btn.appendChild(pop);
+        setTimeout(function () { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 950);
+      }
+
+      /* ============================ Render ============================ */
+      function spriteFor(p) {
+        var c = CROP_BY_ID[p.crop];
+        var f = p.grown / c.grow;
+        if (f >= 1) return c.ico;
+        if (f < 0.33) return SEED_SPRITE;
+        if (f < 0.66) return SPROUT_SPRITE;
+        return LEAF_SPRITE;
+      }
+
+      function renderPlot(i) {
+        var p = state.plots[i];
+        var cell = cells[i];
+        if (!p.crop) {
+          cell.btn.className = "plot empty";
+          cell.sprite.textContent = "";
+          cell.fill.style.width = "0%";
+          return;
+        }
+        var c = CROP_BY_ID[p.crop];
+        var ready = p.grown >= c.grow;
+        cell.btn.className = "plot" + (ready ? " ready" : "") + (p.water > 0 && !ready ? " watered" : "");
+        cell.sprite.textContent = spriteFor(p);
+        cell.fill.style.width = Math.min(100, (p.grown / c.grow) * 100).toFixed(1) + "%";
+      }
+
+      function renderAll() {
+        ui.setStat("coins", state.coins);
+        for (var i = 0; i < PLOT_COUNT; i++) renderPlot(i);
+        refreshToolbarState();
+        updateHint();
+      }
+
+      /* ============================ Loop ============================
+       * Advances growth in real time. Watered plots grow WATER_BOOST× until
+       * their water timer drains. A dirty flag keeps saves to ~once a second.
+       */
+      var last = performance.now();
+      var saveAccum = 0;
+      var dirty = false;
+
+      function tick(now) {
+        var dt = now - last;
+        last = now;
+        if (dt > 2000) dt = 2000; // clamp after tab was backgrounded
+
+        for (var i = 0; i < PLOT_COUNT; i++) {
+          var p = state.plots[i];
+          if (!p.crop) continue;
+          var c = CROP_BY_ID[p.crop];
+          if (p.grown >= c.grow) continue;
+          var speed = 1;
+          if (p.water > 0) {
+            speed = WATER_BOOST;
+            p.water = Math.max(0, p.water - dt);
+            if (p.water === 0) dirty = true; // dried out — persist the change
+          }
+          var before = p.grown;
+          p.grown = Math.min(c.grow, p.grown + dt * speed);
+          renderPlot(i);
+          if (before < c.grow && p.grown >= c.grow) { refreshToolbarState(); dirty = true; }
+        }
+
+        saveAccum += dt;
+        if (dirty && saveAccum > 1000) { save(); dirty = false; saveAccum = 0; }
+
+        requestAnimationFrame(tick);
+      }
+
+      // Persist on leave so growth/coins survive a refresh cleanly.
+      window.addEventListener("pagehide", save);
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "hidden") save();
+      });
+
+      // Re-localize live when the language changes.
+      MG.i18n.onChange(function () {
+        applyToolbarText();
+        if (!hintTimer) updateHint();
+      });
+
+      /* ============================ Boot ============================ */
+      load();
+      buildToolbar();
+      renderAll();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
