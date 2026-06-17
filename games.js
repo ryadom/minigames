@@ -103,6 +103,16 @@ window.GAMES = [
     },
   },
   {
+    title: "Racing",
+    icon: "🏎️",
+    url: "./games/racing/",
+    description: {
+      en: "3D racing — steer through curves and hills, dodge the traffic and chase your best distance.",
+      ru: "3D-гонки — рули по поворотам и холмам, уворачивайся от трафика и побей свой рекорд дистанции.",
+      es: "Carreras en 3D — gira por curvas y colinas, esquiva el tráfico y supera tu mejor distancia.",
+    },
+  },
+  {
     title: "Top Racer",
     icon: "🏁",
     url: "./games/top-racer/",
