@@ -185,11 +185,10 @@
       MG.i18n.register({
         en: {
           title: "Match Three",
-          score: "Score", moves: "Moves", best: "Best", level: "Level", goal: "Goal",
+          score: "Score", best: "Best", level: "Level", goal: "Goal",
           hint: "Swap two neighbouring gems to line up 3 or more of a colour. Match bigger to forge power-ups!",
-          gameover: "Out of moves!", finalScore: "Score", bestLabel: "Best", reached: "Level reached",
-          play: "▶ Play", playAgain: "▶ Play again",
-          levelUp: "Level {n}! +{m} moves",
+          play: "▶ Play",
+          levelUp: "Level {n}!",
           legRocket: "Match 4 → Rocket: clears a whole line",
           legBomb: "Match in an L / T → Bomb: blasts 3×3",
           legRainbow: "Match 5 → Rainbow: clears one colour",
@@ -198,11 +197,10 @@
         },
         ru: {
           title: "Три в ряд",
-          score: "Очки", moves: "Ходы", best: "Рекорд", level: "Уровень", goal: "Цель",
+          score: "Очки", best: "Рекорд", level: "Уровень", goal: "Цель",
           hint: "Меняй местами соседние камни, чтобы собрать 3+ одного цвета. Большие комбо дают бонусы!",
-          gameover: "Ходы закончились!", finalScore: "Очки", bestLabel: "Рекорд", reached: "Достигнут уровень",
-          play: "▶ Играть", playAgain: "▶ Ещё раз",
-          levelUp: "Уровень {n}! +{m} ходов",
+          play: "▶ Играть",
+          levelUp: "Уровень {n}!",
           legRocket: "Ряд из 4 → Ракета: чистит линию",
           legBomb: "Сбор в форме Г / Т → Бомба: взрыв 3×3",
           legRainbow: "Ряд из 5 → Радуга: убирает один цвет",
@@ -211,11 +209,10 @@
         },
         es: {
           title: "Tres en línea",
-          score: "Puntos", moves: "Jugadas", best: "Mejor", level: "Nivel", goal: "Meta",
+          score: "Puntos", best: "Mejor", level: "Nivel", goal: "Meta",
           hint: "Intercambia gemas vecinas para alinear 3 o más del mismo color. ¡Combos grandes dan poderes!",
-          gameover: "¡Sin jugadas!", finalScore: "Puntos", bestLabel: "Mejor", reached: "Nivel alcanzado",
-          play: "▶ Jugar", playAgain: "▶ Jugar otra vez",
-          levelUp: "¡Nivel {n}! +{m} jugadas",
+          play: "▶ Jugar",
+          levelUp: "¡Nivel {n}!",
           legRocket: "4 en línea → Cohete: limpia una línea",
           legBomb: "Forma de L / T → Bomba: estalla 3×3",
           legRainbow: "5 en línea → Arcoíris: limpia un color",
@@ -242,7 +239,6 @@
         stats: [
           { key: "score", labelKey: "score", value: "0" },
           { key: "goal", labelKey: "goal", variant: "sm", value: "0" },
-          { key: "moves", labelKey: "moves", value: "0" },
           { key: "level", labelKey: "level", value: "1" },
           { key: "best", labelKey: "best", value: "0" }
         ]
@@ -254,7 +250,6 @@
       var LERP = 0.30;                 // tween factor toward target
       var SETTLE = 0.6;                // px threshold for "settled"
       var CLEAR_FRAMES = 13;           // duration of a clear animation
-      var START_MOVES = 25;
 
       // Gem palette: { base, light, dark, shape }
       var GEMS = [
@@ -271,8 +266,14 @@
       var geom = { x: 0, y: 0, size: 40 };
       var W = 0, H = 0, dpr = 1;
 
-      var STATE_READY = 0, STATE_PLAY = 1, STATE_OVER = 2;
+      var STATE_READY = 0, STATE_PLAY = 1;
       var state = STATE_READY;
+
+      // The board accepts a new swap while idle and also mid-fall, so a clear's
+      // drop animation never blocks the next move.
+      function canInteract() {
+        return state === STATE_PLAY && (phase === "idle" || phase === "falling");
+      }
 
       // animation phases while a move resolves
       var phase = "idle";              // idle | swap | swapback | clearing | falling | resolving
@@ -281,7 +282,7 @@
       var cascade = 0;                 // multiplier for chained clears
       var lastSwap = null;             // { a:{r,c}, b:{r,c} } — for special placement
 
-      var score, movesLeft, level, goal, best;
+      var score, level, goal, best;
       var floaters = [];               // floating score popups
       var selected = null;             // currently selected cell
       var press = null;                // pointer-down cell for drag detection
@@ -335,7 +336,6 @@
       /* ============================ Board setup ============================ */
       function newGame() {
         score = 0;
-        movesLeft = START_MOVES;
         level = 1;
         goal = goalFor(level);
         cascade = 0;
@@ -546,7 +546,7 @@
       }
 
       function requestSwap(a, b) {
-        if (phase !== "idle" || state !== STATE_PLAY) return;
+        if (!canInteract()) return;
         if (!a || !b || !adjacent(a, b) || !board[a.r][a.c] || !board[b.r][b.c]) return;
         lastSwap = { a: { r: a.r, c: a.c }, b: { r: b.r, c: b.c } };
         swapCells(a, b);
@@ -577,7 +577,6 @@
           var seeds = comboSeeds(ta, a, tb, b, specialA, specialB);
           var clearSet = gatherClear(seeds);
           if (Object.keys(clearSet).length) {
-            consumeMove();
             cascade = 1;
             beginClear(clearSet);
             return;
@@ -585,7 +584,6 @@
         } else {
           var res = computeMatches();
           if (Object.keys(res.cells).length || res.specials.length) {
-            consumeMove();
             cascade = 1;
             applySpecials(res.specials);
             beginClear(res.cells);
@@ -734,8 +732,8 @@
 
         if (score >= goal) levelUp();
 
-        if (movesLeft <= 0) { gameOver(); return; }
-
+        // Endless play: when the board has no possible match, reshuffle in place
+        // rather than ending the game.
         if (!anyMove()) {
           showToast(t("shuffle"));
           shuffleBoard(false);
@@ -743,23 +741,15 @@
       }
 
       function levelUp() {
-        var bonus = 6 + level;
         level++;
         goal = goalFor(level);
-        movesLeft += bonus;
         syncStats();
-        showToast(t("levelUp").replace("{n}", level).replace("{m}", bonus));
-      }
-
-      function consumeMove() {
-        movesLeft = Math.max(0, movesLeft - 1);
-        syncStats();
+        showToast(t("levelUp").replace("{n}", level));
       }
 
       function syncStats() {
         ui.setStat("score", score);
         ui.setStat("goal", goal);
-        ui.setStat("moves", movesLeft);
         ui.setStat("level", level);
       }
 
@@ -839,7 +829,9 @@
 
         switch (phase) {
           case "swap":     if (settled()) afterSwap(); break;
-          case "swapback": if (settled()) phase = "idle"; break;
+          // A revert can settle on top of matches left by an interrupted fall, so
+          // run the resolver instead of dropping straight to idle.
+          case "swapback": if (settled()) { cascade = 0; phase = "resolving"; } break;
           case "clearing":
             phaseT++;
             if (phaseT >= CLEAR_FRAMES) finishClear();
@@ -1062,7 +1054,7 @@
       }
 
       function drawSelection() {
-        if (!selected || phase !== "idle" || state !== STATE_PLAY) return;
+        if (!selected || !canInteract()) return;
         var s = geom.size;
         ctx.strokeStyle = "#ffd83d";
         ctx.lineWidth = 3;
@@ -1111,7 +1103,7 @@
       }
 
       function onDown(e) {
-        if (state !== STATE_PLAY || phase !== "idle") return;
+        if (!canInteract()) return;
         var pt = pointer(e);
         var cell = cellAt(pt.x, pt.y);
         if (!cell) return;
@@ -1126,7 +1118,7 @@
       }
 
       function onMove(e) {
-        if (!press || phase !== "idle") return;
+        if (!press || !canInteract()) return;
         var pt = pointer(e);
         var dx = pt.x - press.x, dy = pt.y - press.y;
         var thresh = geom.size * 0.45;
@@ -1165,41 +1157,25 @@
         overlay.classList.add("hidden");
       }
 
-      function gameOver() {
-        state = STATE_OVER;
-        if (score > best) { best = score; store.save({ best: best }); ui.setStat("best", best); }
-        renderOverlay();
-        overlay.classList.remove("hidden");
-      }
-
+      // The board reshuffles itself when it runs dry, so play is endless: the
+      // overlay only ever shows the intro screen.
       function renderOverlay() {
-        if (state === STATE_OVER) {
-          overlayTitle.textContent = "💎 " + t("title");
-          overlayHint.textContent = t("gameover");
-          overlayLegend.innerHTML = "";
-          overlayScore.hidden = false;
-          overlayScore.innerHTML =
-            t("finalScore") + " <b>" + score + "</b><br>" +
-            t("reached") + " " + level + " · " + t("bestLabel") + " " + best;
-          overlayAction.textContent = t("playAgain");
-        } else {
-          overlayTitle.textContent = "💎 " + t("title");
-          overlayHint.textContent = t("hint");
-          overlayLegend.innerHTML =
-            row("🚀", t("legRocket")) +
-            row("💣", t("legBomb")) +
-            row("🌈", t("legRainbow")) +
-            row("✨", t("legCombo"));
-          overlayScore.hidden = true;
-          overlayAction.textContent = t("play");
-        }
+        overlayTitle.textContent = "💎 " + t("title");
+        overlayHint.textContent = t("hint");
+        overlayLegend.innerHTML =
+          row("🚀", t("legRocket")) +
+          row("💣", t("legBomb")) +
+          row("🌈", t("legRainbow")) +
+          row("✨", t("legCombo"));
+        overlayScore.hidden = true;
+        overlayAction.textContent = t("play");
       }
       function row(icon, text) {
         return '<div class="gi">' + icon + '</div><div>' + text + '</div>';
       }
 
       function onAction() {
-        if (state === STATE_READY || state === STATE_OVER) startGame();
+        if (state === STATE_READY) startGame();
       }
       overlayAction.addEventListener("click", onAction);
       overlayAction.addEventListener("touchstart", function (e) { e.preventDefault(); onAction(); }, { passive: false });
