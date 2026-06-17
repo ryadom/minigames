@@ -43,6 +43,31 @@ body {
   text-align: center;
 }
 
+.site-header .wrap { position: relative; }
+
+/* Language selector, pinned to the top-right of the header. */
+.lang-switch {
+  position: absolute;
+  top: 0;
+  right: 20px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.lang-switch:hover {
+  border-color: var(--accent);
+  background: var(--card-hover);
+}
+
 .logo {
   font-size: clamp(2.2rem, 6vw, 3.4rem);
   margin: 0 0 12px;

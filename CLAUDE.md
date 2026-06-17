@@ -1,0 +1,120 @@
+# CLAUDE.md
+
+Guidance for working in this repository.
+
+## What this is
+
+A collection of small, self-contained browser minigames, served as a **static
+site** at https://minigames.ryadom.me. The home page lists the games; each game
+is its own page under `games/<name>/`.
+
+## Architecture (read this before changing structure)
+
+This is a **zero-build static site**. There is intentionally **no bundler and no
+framework** (no React/Vite/webpack). The repository root *is* the deployed site:
+GitHub Pages uploads it as-is and serves the files directly. This keeps games
+trivially portable (a game is one `index.html` you can open from disk) and the
+deploy pipeline dependency-free.
+
+Node is used **only for local tooling** (a dev server and a validation script).
+It is never part of the deploy — do not introduce a build step that the site
+depends on to run.
+
+```
+.
+├── index.html              # Home page shell
+├── styles.css              # Home page styles
+├── games.js                # Registry: window.GAMES (title, icon, url, description)
+├── app.js                  # Renders the game list + home language control
+├── shared/
+│   ├── mg.js               # Shared runtime: window.MG (i18n + header)
+│   └── mg.css              # Shared chrome styles (header bar, theme tokens)
+├── games/
+│   ├── minesweeper/index.html
+│   └── flappy-bird/index.html
+├── scripts/
+│   ├── serve.mjs           # `npm run dev` — zero-dep static server
+│   └── validate.mjs        # `npm run check` — structure validation
+└── .github/workflows/deploy.yml
+```
+
+## The shared runtime (`shared/mg.js` → `window.MG`)
+
+Every game and the home page load `shared/mg.css` + `shared/mg.js` and use the
+common chrome instead of re-implementing it. Two pieces:
+
+### `MG.i18n` — language control
+
+- Supported languages: `en`, `ru`, `es` (`MG.i18n.SUPPORTED`).
+- The chosen language is **shared site-wide** via one `localStorage` key
+  (`mg.lang`), so it follows the player between the home page and every game.
+  Falls back to the browser language, then English.
+- API:
+  - `MG.i18n.register({ en: {...}, ru: {...}, es: {...} })` — merge string tables.
+  - `MG.i18n.t(key)` — translate (falls back to `en`, then the key itself).
+    Values can be any type, including arrays.
+  - `MG.i18n.set(lang)` / `MG.i18n.lang` — change / read the current language.
+  - `MG.i18n.onChange(fn)` — subscribe to language changes; returns an
+    unsubscribe function. Use it to re-render localized text live.
+
+### `MG.mountHeader(opts)` — common header bar
+
+Renders a consistent dark header bar (brand link back to the games home, optional
+stat chips, a language selector and action buttons). Labels and the document
+title re-localize automatically on language change.
+
+```js
+var ui = MG.mountHeader({
+  icon: "💣",
+  titleKey: "title",                 // i18n key (or `title:` for a literal)
+  stats: [
+    { key: "err", labelKey: "errors", variant: "alert" },
+    { key: "pos", labelKey: "position", variant: "sm", value: "0, 0" },
+  ],
+  actions: [
+    { key: "new", labelKey: "new", onClick: fn },
+  ],
+});
+ui.setStat("err", 3);   // update a stat value
+ui.stat("err");         // the value <span> (e.g. for flash animations)
+ui.action("new");       // the action <button>
+```
+
+Stat variants: `alert` (red), `sm` (smaller value font for coords/seeds).
+
+The page must use the shared layout classes: `<body class="mg-app">` plus a
+`<div class="mg-game-area">…</div>` to host the canvas/stage. The header is
+prepended above it.
+
+## Adding a game
+
+1. Create `games/<name>/index.html`. In `<head>`, load the shared runtime:
+   ```html
+   <link rel="stylesheet" href="../../shared/mg.css" />
+   <script src="../../shared/mg.js"></script>
+   ```
+2. Use `<body class="mg-app">` with a `<div class="mg-game-area">` host, register
+   translations with `MG.i18n.register(...)`, and mount `MG.mountHeader(...)`.
+3. Register the game in `games.js` (`title`, `icon`, `url`, and a `description`
+   that is either a string or a `{ en, ru, es }` map).
+4. Run `npm run check` and `npm run dev` to verify, then commit and push.
+
+## Commands
+
+- `npm run dev` — serve the site locally at http://localhost:8000 (no deps).
+- `npm run check` — validate the registry + structure (CI-friendly, exits non-zero on failure).
+
+No install step is required; both scripts use only Node's standard library
+(Node >= 18).
+
+## Conventions
+
+- Vanilla ES5-friendly JS in IIFEs with `"use strict"` — match the existing
+  style; no transpilation is assumed.
+- Game-specific look stays inside the game; shared chrome stays in `shared/`.
+- Keep games dependency-free and openable directly from the filesystem.
+
+## Deployment
+
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which uploads the repo
+root to GitHub Pages. The custom domain is set via `CNAME`.
