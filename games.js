@@ -82,4 +82,14 @@ window.GAMES = [
       es: "Compra semillas, planta, riega y cosecha cultivos por monedas — tu granja crece en tiempo real.",
     },
   },
+  {
+    title: "2048",
+    icon: "🔢",
+    url: "./games/2048/",
+    description: {
+      en: "Slide the tiles, merge matching numbers and reach 2048 — arrow keys or swipe.",
+      ru: "Двигай плитки, объединяй одинаковые числа и собери 2048 — стрелки или свайп.",
+      es: "Desliza las fichas, une los números iguales y llega a 2048 — flechas o desliza.",
+    },
+  },
 ];
