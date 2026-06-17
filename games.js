@@ -112,4 +112,14 @@ window.GAMES = [
       es: "Carreras en 3D — gira por curvas y colinas, esquiva el tráfico y supera tu mejor distancia.",
     },
   },
+  {
+    title: "Top Racer",
+    icon: "🏁",
+    url: "./games/top-racer/",
+    description: {
+      en: "Top-down racing — steer your car around the circuit, hit the racing line and chase your best lap.",
+      ru: "Гонки сверху — рули по трассе, держи идеальную траекторию и побей свой лучший круг.",
+      es: "Carreras desde arriba — conduce por el circuito, busca la trazada y bate tu mejor vuelta.",
+    },
+  },
 ];
