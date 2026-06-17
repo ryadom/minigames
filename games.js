@@ -62,4 +62,14 @@ window.GAMES = [
       es: "Intercambia gemas para alinear 3+ — crea cohetes, bombas y explosiones arcoíris.",
     },
   },
+  {
+    title: "Sudoku",
+    icon: "🔢",
+    url: "./games/sudoku/",
+    description: {
+      en: "Classic 9×9 Sudoku — pick easy, medium, hard or expert and fill the grid.",
+      ru: "Классическое судоку 9×9 — выбери уровень от лёгкого до эксперта и заполни сетку.",
+      es: "Sudoku clásico 9×9 — elige fácil, medio, difícil o experto y completa la cuadrícula.",
+    },
+  },
 ];
