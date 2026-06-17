@@ -252,6 +252,37 @@
       transform: none;
     }
 
+    /* Loadout: stat tiles. */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #181a2c;
+      border: 1px solid #2c2e4a;
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+    .stat-item .si-icon { font-size: 1.4rem; flex: 0 0 auto; }
+    .stat-item .si-body { min-width: 0; }
+    .stat-item .si-label {
+      font-size: 0.68rem;
+      opacity: 0.65;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .stat-item .si-value {
+      font-weight: 800;
+      font-size: 1.05rem;
+      color: #4cf0d8;
+      font-variant-numeric: tabular-nums;
+    }
+    .loadout-empty { opacity: 0.7; font-size: 0.95rem; padding: 8px 2px; }
+
     /* On-screen joystick (touch only). */
     .stick {
       position: absolute;
@@ -322,6 +353,12 @@
           wikiTitle: "Survival Guide",
           secWeapons: "Weapons", secPassives: "Power-ups", secEnemies: "Bestiary",
           close: "✕ Close", unlockAt: "from {t}",
+          // loadout / stats screen
+          loadout: "Loadout", loadoutTitle: "Loadout & Stats",
+          secStats: "Stats", secOwnedWeapons: "Your weapons", secOwnedPassives: "Your power-ups",
+          st_hp: "Health", st_speed: "Move speed", st_pickup: "Pickup range",
+          st_regen: "Regen", st_power: "Damage", st_time: "Time",
+          loadoutEmpty: "Nothing yet — start a run to build your loadout.",
           // weapons + upgrades
           w_knife: "Dagger", w_knife_d: "Throws a dagger toward the nearest foe.",
           w_aura: "Garlic Aura", w_aura_d: "A holy ring that burns nearby enemies.",
@@ -364,6 +401,11 @@
           wikiTitle: "Гид по выживанию",
           secWeapons: "Оружие", secPassives: "Усиления", secEnemies: "Бестиарий",
           close: "✕ Закрыть", unlockAt: "с {t}",
+          loadout: "Снаряжение", loadoutTitle: "Снаряжение и статы",
+          secStats: "Статы", secOwnedWeapons: "Ваше оружие", secOwnedPassives: "Ваши усиления",
+          st_hp: "Здоровье", st_speed: "Скорость", st_pickup: "Радиус подбора",
+          st_regen: "Регенерация", st_power: "Урон", st_time: "Время",
+          loadoutEmpty: "Пока пусто — начните забег, чтобы собрать снаряжение.",
           w_knife: "Кинжал", w_knife_d: "Бросает кинжал в ближайшего врага.",
           w_aura: "Аура чеснока", w_aura_d: "Святое кольцо жжёт врагов рядом.",
           w_bolt: "Магострела", w_bolt_d: "Самонаводящиеся снаряды ищут врагов.",
@@ -404,6 +446,11 @@
           wikiTitle: "Guía de supervivencia",
           secWeapons: "Armas", secPassives: "Mejoras", secEnemies: "Bestiario",
           close: "✕ Cerrar", unlockAt: "desde {t}",
+          loadout: "Equipo", loadoutTitle: "Equipo y estadísticas",
+          secStats: "Estadísticas", secOwnedWeapons: "Tus armas", secOwnedPassives: "Tus mejoras",
+          st_hp: "Salud", st_speed: "Velocidad", st_pickup: "Rango de recogida",
+          st_regen: "Regeneración", st_power: "Daño", st_time: "Tiempo",
+          loadoutEmpty: "Nada aún — inicia una partida para armar tu equipo.",
           w_knife: "Daga", w_knife_d: "Lanza una daga al enemigo más cercano.",
           w_aura: "Aura de Ajo", w_aura_d: "Un anillo sagrado quema a los cercanos.",
           w_bolt: "Rayo Mágico", w_bolt_d: "Rayos teledirigidos buscan enemigos.",
@@ -450,6 +497,7 @@
           { key: "hp", labelKey: "kills", variant: "alert", value: "0" }
         ],
         actions: [
+          { key: "loadout", labelKey: "loadout", onClick: function () { toggleLoadout(); } },
           { key: "wiki", labelKey: "wiki", onClick: function () { toggleWiki(); } },
           { key: "pause", labelKey: "pauseBtn", onClick: function () { togglePause(); } }
         ]
@@ -468,9 +516,10 @@
       }
 
       /* ============================ state ============================ */
-      var STATE_READY = 0, STATE_PLAY = 1, STATE_LEVELUP = 2, STATE_DEAD = 3, STATE_PAUSE = 4, STATE_WIKI = 5;
+      var STATE_READY = 0, STATE_PLAY = 1, STATE_LEVELUP = 2, STATE_DEAD = 3, STATE_PAUSE = 4, STATE_WIKI = 5, STATE_LOADOUT = 6;
       var state = STATE_READY;
-      var wikiReturn = STATE_READY;   // state to restore when the wiki closes
+      var wikiReturn = STATE_READY;     // state to restore when the wiki closes
+      var loadoutReturn = STATE_READY;  // state to restore when the loadout closes
 
       var player, enemies, projectiles, gems, particles, hazards;
       var elapsed, kills, spawnTimer, lastTime, camX, camY, slowMo;
@@ -1043,10 +1092,100 @@
           }
           return;
         }
-        if (state === STATE_LEVELUP) return; // don't interrupt a choice
+        if (state === STATE_LEVELUP || state === STATE_LOADOUT) return; // don't interrupt
         wikiReturn = state;
         state = STATE_WIKI;
         showWiki();
+      }
+
+      /* ========================== loadout =========================== */
+      // A small stat tile (icon + label + value) for the stats grid.
+      function statTile(icon, label, value) {
+        return '<div class="stat-item">' +
+          '<div class="si-icon">' + icon + '</div>' +
+          '<div class="si-body">' +
+            '<div class="si-label">' + label + '</div>' +
+            '<div class="si-value">' + value + '</div>' +
+          '</div></div>';
+      }
+
+      // The level badge shown next to an owned weapon / power-up.
+      function levelBadge(lvl, max) {
+        return lvl >= max ? T("maxBadge") : T("lvlBadge").replace("{n}", lvl);
+      }
+
+      function showLoadout() {
+        var p = player;
+        var html = '<div class="levelup-title">🎒 ' + T("loadoutTitle") + '</div>' +
+                   '<div class="wiki-scroll">';
+
+        // --- Stats ---
+        html += '<div class="wiki-sec">' + T("secStats") + '</div>';
+        html += '<div class="stat-grid">' +
+          statTile("❤️", T("st_hp"), Math.ceil(p.hp) + " / " + p.maxHp) +
+          statTile("⬆️", T("levelLabel"), p.level) +
+          statTile("👢", T("st_speed"), Math.round(p.speed)) +
+          statTile("💪", T("st_power"), Math.round(p.power * 100) + "%") +
+          statTile("🧲", T("st_pickup"), Math.round(p.pickup)) +
+          statTile("💚", T("st_regen"), p.regen.toFixed(1) + "/s") +
+          statTile("💀", T("killsLabel"), kills) +
+          statTile("⏱️", T("st_time"), fmtTime(elapsed)) +
+          '</div>';
+
+        // --- Owned weapons ---
+        var id, has;
+        html += '<div class="wiki-sec">' + T("secOwnedWeapons") + '</div><div class="cards">';
+        has = false;
+        for (id in WEAPONS) {
+          var wl = p.weapons[id] || 0;
+          if (wl <= 0) continue;
+          has = true;
+          html += wikiCard(WEAPONS[id].icon, T(WEAPONS[id].nameKey),
+            T(WEAPONS[id].descKey), levelBadge(wl, WEAPONS[id].max));
+        }
+        html += '</div>';
+
+        // --- Owned power-ups ---
+        html += '<div class="wiki-sec">' + T("secOwnedPassives") + '</div><div class="cards">';
+        for (id in PASSIVES) {
+          var pl = p.passives[id] || 0;
+          if (pl <= 0) continue;
+          has = true;
+          html += wikiCard(PASSIVES[id].icon, T(PASSIVES[id].nameKey),
+            T(PASSIVES[id].descKey), levelBadge(pl, PASSIVES[id].max));
+        }
+        html += '</div>';
+
+        if (!has) {
+          html += '<div class="loadout-empty">' + T("loadoutEmpty") + '</div>';
+        }
+
+        html += '</div>'; // .wiki-scroll
+        html += '<button class="play-pill" id="loadout-close">' + T("close") + '</button>';
+        panel.innerHTML = html;
+        panel.classList.add("panel-wiki");
+        overlay.classList.remove("hidden");
+        var btn = $("loadout-close");
+        if (btn) btn.addEventListener("click", toggleLoadout);
+      }
+
+      function toggleLoadout() {
+        if (state === STATE_LOADOUT) {
+          // Restore whatever we interrupted.
+          state = loadoutReturn;
+          panel.classList.remove("panel-wiki");
+          if (state === STATE_PLAY) {
+            overlay.classList.add("hidden");
+            lastTime = performance.now();
+          } else {
+            showOverlay();
+          }
+          return;
+        }
+        if (state === STATE_LEVELUP || state === STATE_WIKI) return; // don't interrupt
+        loadoutReturn = state;
+        state = STATE_LOADOUT;
+        showLoadout();
       }
 
       // Re-render any open text overlay live on language change.
@@ -1054,6 +1193,7 @@
         if (state === STATE_READY || state === STATE_DEAD || state === STATE_PAUSE) showOverlay();
         else if (state === STATE_LEVELUP) openLevelUp();
         else if (state === STATE_WIKI) showWiki();
+        else if (state === STATE_LOADOUT) showLoadout();
       });
 
       /* ============================ input ============================ */
@@ -1062,6 +1202,7 @@
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].indexOf(e.key) !== -1) e.preventDefault();
         keys[e.key.toLowerCase()] = true;
         if (e.key === "Escape" || e.key === "p") togglePause();
+        if (e.key === "i") toggleLoadout();
       });
       window.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
 
