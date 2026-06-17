@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🏎️ Top Racer — Minigames</title>
+  <meta name="description" content="Top-down racing — steer your car around the circuit, nail the racing line and chase your best lap. Play in your browser, no installs." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>" />
+
+  <!-- Shared chrome: header bar + language control. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <script src="../../shared/mg.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: #1d2230;
+      color: #fff;
+      font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .mg-game-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1d2230;
+    }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    /* ---- On-screen controls (touch first, but work with mouse too) ---- */
+    .controls {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .pad {
+      position: absolute;
+      bottom: max(18px, env(safe-area-inset-bottom));
+      display: flex;
+      gap: 14px;
+    }
+    .pad.steer { left: 16px; }
+    .pad.pedals { right: 16px; }
+
+    .ctl {
+      pointer-events: auto;
+      width: 68px;
+      height: 68px;
+      border: none;
+      border-radius: 50%;
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.14);
+      border: 2px solid rgba(255, 255, 255, 0.22);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.05s, background 0.05s;
+      touch-action: none;
+    }
+    .ctl:active,
+    .ctl.held {
+      background: rgba(255, 255, 255, 0.34);
+      transform: scale(0.93);
+    }
+    .ctl.gas {
+      background: rgba(86, 200, 100, 0.28);
+      border-color: rgba(120, 240, 140, 0.45);
+    }
+    .ctl.gas.held { background: rgba(86, 220, 110, 0.55); }
+    .ctl.brake {
+      background: rgba(230, 90, 90, 0.26);
+      border-color: rgba(255, 130, 130, 0.45);
+    }
+    .ctl.brake.held { background: rgba(240, 90, 90, 0.55); }
+
+    /* ---- Overlay screens ---- */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+    }
+    .overlay.hidden { display: none; }
+
+    .panel {
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 18px;
+      padding: 26px 30px;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+      max-width: 90%;
+    }
+
+    .title {
+      font-size: clamp(1.7rem, 7vw, 2.6rem);
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+      margin-bottom: 6px;
+    }
+    .hint { font-size: 1rem; opacity: 0.9; margin-top: 8px; line-height: 1.5; }
+    .score-line { font-size: 1.05rem; margin-top: 12px; }
+    .score-line b { font-size: 1.5rem; }
+
+    .play-pill {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 11px 26px;
+      font-weight: 800;
+      font-size: 1.05rem;
+      color: #16361f;
+      background: #ffe34d;
+      border-radius: 999px;
+      box-shadow: 0 4px 0 #c9a900;
+      animation: bob 1.1s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    /* Big centered countdown / flash number drawn over the canvas. */
+    .flash {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      font-size: clamp(4rem, 22vw, 9rem);
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 6px 0 rgba(0, 0, 0, 0.4);
+    }
+    .flash.hidden { display: none; }
+  </style>
+</head>
+<body class="mg-app">
+  <!-- Header is mounted by the shared runtime (see MG.mountHeader below). -->
+  <div class="mg-game-area">
+    <div class="stage">
+      <canvas id="game"></canvas>
+
+      <div class="flash hidden" id="flash"></div>
+
+      <div class="controls" id="controls">
+        <div class="pad steer">
+          <button class="ctl" data-k="left" aria-label="Steer left">◀</button>
+          <button class="ctl" data-k="right" aria-label="Steer right">▶</button>
+        </div>
+        <div class="pad pedals">
+          <button class="ctl brake" data-k="brake" aria-label="Brake / reverse">▼</button>
+          <button class="ctl gas" data-k="gas" aria-label="Accelerate">▲</button>
+        </div>
+      </div>
+
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <div class="title" id="overlay-title">🏎️ Top Racer</div>
+          <div class="hint" id="overlay-hint"></div>
+          <div class="score-line" id="overlay-score" hidden></div>
+          <div class="play-pill" id="overlay-action"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var $ = function (id) { return document.getElementById(id); };
+
+      /* ============================ i18n ============================ */
+      MG.i18n.register({
+        en: {
+          title: "Top Racer",
+          lap: "Lap", time: "Time", best: "Best",
+          hint: "Steer with ◀ ▶ or arrow keys · ▲ gas · ▼ brake\nKeep on the track and chase your best lap!",
+          tapStart: "▶ Start engine",
+          go: "GO!",
+          newBest: "New best lap! 🏁",
+          bestLabel: "Best lap", lastLabel: "Last lap",
+          restart: "Restart"
+        },
+        ru: {
+          title: "Top Racer",
+          lap: "Круг", time: "Время", best: "Рекорд",
+          hint: "Руль ◀ ▶ или стрелки · ▲ газ · ▼ тормоз\nДержись трассы и побей свой лучший круг!",
+          tapStart: "▶ Завести мотор",
+          go: "СТАРТ!",
+          newBest: "Новый рекорд круга! 🏁",
+          bestLabel: "Лучший круг", lastLabel: "Последний круг",
+          restart: "Заново"
+        },
+        es: {
+          title: "Top Racer",
+          lap: "Vuelta", time: "Tiempo", best: "Mejor",
+          hint: "Gira con ◀ ▶ o flechas · ▲ acelera · ▼ frena\n¡Mantente en pista y bate tu mejor vuelta!",
+          tapStart: "▶ Arrancar motor",
+          go: "¡YA!",
+          newBest: "¡Mejor vuelta! 🏁",
+          bestLabel: "Mejor vuelta", lastLabel: "Última vuelta",
+          restart: "Reiniciar"
+        }
+      });
+
+      var canvas = $("game");
+      var ctx = canvas.getContext("2d");
+      var overlay = $("overlay");
+      var overlayTitle = $("overlay-title");
+      var overlayHint = $("overlay-hint");
+      var overlayScore = $("overlay-score");
+      var overlayAction = $("overlay-action");
+      var flashEl = $("flash");
+
+      var ui = MG.mountHeader({
+        icon: "🏎️",
+        titleKey: "title",
+        stats: [
+          { key: "lap", labelKey: "lap", value: "1" },
+          { key: "time", labelKey: "time", variant: "sm", value: "0.00" },
+          { key: "best", labelKey: "best", variant: "sm", value: "—" }
+        ],
+        actions: [
+          { key: "restart", labelKey: "restart", onClick: function () { resetRace(); showReady(); } }
+        ]
+      });
+
+      /* ===================== Canvas / camera sizing ===================== */
+      var VW = 360, VH = 640, dpr = 1;
+      function resize() {
+        var rect = canvas.getBoundingClientRect();
+        dpr = window.devicePixelRatio || 1;
+        VW = Math.max(1, rect.width);
+        VH = Math.max(1, rect.height);
+        canvas.width = Math.round(VW * dpr);
+        canvas.height = Math.round(VH * dpr);
+      }
+
+      /* ============================ Track ============================
+         A closed circuit, defined by a handful of waypoints that we smooth
+         into a centreline with a Catmull-Rom spline. From the centreline we
+         derive the left/right edges (for the asphalt + curbs) and use it for
+         off-track detection and lap/progress tracking. */
+      var TRACK_HW = 78;          // half-width of the asphalt
+      var CURB_W = 12;            // curb strip width (outside the asphalt)
+
+      var WAYPOINTS = [
+        [420, 200], [920, 170], [1280, 330], [1320, 660], [1060, 840],
+        [1180, 1080], [820, 1190], [440, 1090], [540, 800], [250, 660],
+        [220, 380]
+      ];
+
+      function cr(p0, p1, p2, p3, t) {
+        var t2 = t * t, t3 = t2 * t;
+        return [
+          0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t +
+            (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+            (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+          0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t +
+            (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+            (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)
+        ];
+      }
+
+      var center = [];   // [{x,y}]
+      var left = [];     // outer edge points
+      var right = [];
+      var curbOutL = [];
+      var curbOutR = [];
+
+      function buildTrack() {
+        var pts = [];
+        var n = WAYPOINTS.length;
+        var perSeg = 20;
+        for (var i = 0; i < n; i++) {
+          var p0 = WAYPOINTS[(i - 1 + n) % n];
+          var p1 = WAYPOINTS[i];
+          var p2 = WAYPOINTS[(i + 1) % n];
+          var p3 = WAYPOINTS[(i + 2) % n];
+          for (var j = 0; j < perSeg; j++) {
+            var c = cr(p0, p1, p2, p3, j / perSeg);
+            pts.push({ x: c[0], y: c[1] });
+          }
+        }
+        center = pts;
+        var m = pts.length;
+        for (var k = 0; k < m; k++) {
+          var prev = pts[(k - 1 + m) % m];
+          var next = pts[(k + 1) % m];
+          var tx = next.x - prev.x, ty = next.y - prev.y;
+          var len = Math.hypot(tx, ty) || 1;
+          tx /= len; ty /= len;
+          var nx = -ty, ny = tx;   // left normal
+          left.push({ x: pts[k].x + nx * TRACK_HW, y: pts[k].y + ny * TRACK_HW });
+          right.push({ x: pts[k].x - nx * TRACK_HW, y: pts[k].y - ny * TRACK_HW });
+          curbOutL.push({ x: pts[k].x + nx * (TRACK_HW + CURB_W), y: pts[k].y + ny * (TRACK_HW + CURB_W) });
+          curbOutR.push({ x: pts[k].x - nx * (TRACK_HW + CURB_W), y: pts[k].y - ny * (TRACK_HW + CURB_W) });
+        }
+      }
+
+      // Decorative grass patches scattered across the world (fixed positions
+      // so they read as motion as the camera moves).
+      var patches = [];
+      function buildPatches() {
+        var rnd = mulberry(98765);
+        var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        for (var i = 0; i < center.length; i++) {
+          minX = Math.min(minX, center[i].x); maxX = Math.max(maxX, center[i].x);
+          minY = Math.min(minY, center[i].y); maxY = Math.max(maxY, center[i].y);
+        }
+        var pad = 260;
+        for (var c = 0; c < 220; c++) {
+          var x = minX - pad + rnd() * (maxX - minX + pad * 2);
+          var y = minY - pad + rnd() * (maxY - minY + pad * 2);
+          // Skip patches that fall on the asphalt.
+          if (distToTrack(x, y).dist < TRACK_HW + CURB_W + 10) continue;
+          patches.push({ x: x, y: y, r: 7 + rnd() * 16, t: rnd() });
+        }
+      }
+      function mulberry(a) {
+        return function () {
+          a |= 0; a = (a + 0x6D2B79F5) | 0;
+          var t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      // Nearest distance from a point to the centreline polyline, plus the
+      // index of the nearest segment (used for lap progress).
+      function distToTrack(px, py) {
+        var best = Infinity, bestI = 0;
+        var m = center.length;
+        for (var i = 0; i < m; i++) {
+          var a = center[i], b = center[(i + 1) % m];
+          var dx = b.x - a.x, dy = b.y - a.y;
+          var l2 = dx * dx + dy * dy || 1;
+          var t = ((px - a.x) * dx + (py - a.y) * dy) / l2;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          var cx = a.x + dx * t, cy = a.y + dy * t;
+          var d = Math.hypot(px - cx, py - cy);
+          if (d < best) { best = d; bestI = i; }
+        }
+        return { dist: best, idx: bestI };
+      }
+
+      /* ============================ Car ============================
+         Heading convention: forward = (sin a, -cos a), so a = 0 points up.
+         The camera rotates by -a so the car always faces screen-up. */
+      var ACCEL = 0.13;
+      var BRAKE = 0.20;
+      var MAX_SPEED = 5.6;
+      var OFF_MAX = 2.3;
+      var REVERSE_MAX = -2.0;
+      var DRAG = 0.992;
+      var ROLL = 0.972;
+      var OFF_DRAG = 0.90;
+      var STEER = 0.052;
+
+      var car, input, state, raceStartT, lapStartT, lap, lastLap, best;
+      var prevFrac, passedHalf, skid;
+      var STATE_READY = 0, STATE_COUNT = 1, STATE_PLAY = 2;
+      var countUntil = 0;
+
+      var store = MG.storage("racing", { version: 1 });
+      best = (store.load() || { best: 0 }).best || 0;
+      ui.setStat("best", best ? fmt(best) : "—");
+
+      function startPose() {
+        // Place the car on the start/finish line (centre[0]), facing along
+        // the track tangent (toward increasing index).
+        var a = center[0], b = center[1];
+        var tx = b.x - a.x, ty = b.y - a.y;
+        return { x: a.x, y: a.y, angle: Math.atan2(tx, -ty) };
+      }
+
+      function resetRace() {
+        var p = startPose();
+        car = { x: p.x, y: p.y, angle: p.angle, speed: 0 };
+        input = { left: false, right: false, gas: false, brake: false };
+        lap = 1;
+        lastLap = 0;
+        prevFrac = 0;
+        passedHalf = false;
+        skid = [];
+        state = STATE_READY;
+        raceStartT = 0;
+        lapStartT = 0;
+        ui.setStat("lap", "1");
+        ui.setStat("time", "0.00");
+        flashEl.classList.add("hidden");
+      }
+
+      function showReady() {
+        state = STATE_READY;
+        overlay.classList.remove("hidden");
+        renderOverlay();
+      }
+
+      function beginCountdown() {
+        overlay.classList.add("hidden");
+        state = STATE_COUNT;
+        countUntil = now() + 3000;
+      }
+
+      function go() {
+        state = STATE_PLAY;
+        var t = now();
+        raceStartT = t;
+        lapStartT = t;
+        flashEl.textContent = MG.i18n.t("go");
+        flashEl.classList.remove("hidden");
+        setTimeout(function () { if (state === STATE_PLAY) flashEl.classList.add("hidden"); }, 650);
+      }
+
+      function now() { return performance.now(); }
+
+      function fmt(ms) {
+        if (!ms || ms < 0) return "0.00";
+        var s = ms / 1000;
+        if (s >= 60) {
+          var mm = Math.floor(s / 60);
+          var ss = s - mm * 60;
+          return mm + ":" + (ss < 10 ? "0" : "") + ss.toFixed(2);
+        }
+        return s.toFixed(2);
+      }
+
+      function renderOverlay() {
+        var t = MG.i18n.t;
+        overlayTitle.textContent = "🏎️ " + t("title");
+        if (lastLap > 0) {
+          overlayHint.textContent = t("hint");
+          overlayScore.hidden = false;
+          var line = t("lastLabel") + " <b>" + fmt(lastLap) + "</b>";
+          if (best > 0) line += "<br>" + t("bestLabel") + " <b>" + fmt(best) + "</b>";
+          overlayScore.innerHTML = line;
+        } else {
+          overlayHint.textContent = t("hint");
+          overlayScore.hidden = true;
+        }
+        overlayAction.textContent = t("tapStart");
+      }
+      MG.i18n.onChange(function () {
+        if (!overlay.classList.contains("hidden")) renderOverlay();
+      });
+
+      /* ============================ Update ============================ */
+      function update() {
+        if (state === STATE_COUNT) {
+          var remain = countUntil - now();
+          if (remain <= 0) { go(); }
+          else {
+            flashEl.classList.remove("hidden");
+            flashEl.textContent = String(Math.ceil(remain / 1000));
+          }
+          return;
+        }
+        if (state !== STATE_PLAY) return;
+
+        var off = distToTrack(car.x, car.y);
+        var onTrack = off.dist <= TRACK_HW;
+
+        // Throttle / brake.
+        if (input.gas) car.speed += ACCEL;
+        if (input.brake) {
+          if (car.speed > 0.15) car.speed -= BRAKE;
+          else car.speed -= ACCEL * 0.6;   // creep into reverse
+        }
+
+        // Resistance.
+        car.speed *= DRAG;
+        if (!input.gas && !input.brake) car.speed *= ROLL;
+        if (!onTrack) car.speed *= OFF_DRAG;
+
+        var cap = onTrack ? MAX_SPEED : OFF_MAX;
+        if (car.speed > cap) car.speed = cap;
+        if (car.speed < REVERSE_MAX) car.speed = REVERSE_MAX;
+        if (Math.abs(car.speed) < 0.02) car.speed = 0;
+
+        // Steering — scales with speed, reverses when backing up.
+        var dir = (input.left ? -1 : 0) + (input.right ? 1 : 0);
+        if (dir !== 0 && car.speed !== 0) {
+          var grip = Math.min(1, Math.abs(car.speed) / 1.6);
+          car.angle += dir * STEER * grip * (car.speed < 0 ? -1 : 1);
+        }
+
+        // Move.
+        car.x += Math.sin(car.angle) * car.speed;
+        car.y += -Math.cos(car.angle) * car.speed;
+
+        // Skid marks when braking hard or sliding off at speed.
+        var sliding = (input.brake && Math.abs(car.speed) > 2) || (!onTrack && Math.abs(car.speed) > 1.5);
+        if (sliding) {
+          var rear = 13;
+          skid.push({
+            x: car.x - Math.sin(car.angle) * rear,
+            y: car.y + Math.cos(car.angle) * rear,
+            a: car.angle
+          });
+          if (skid.length > 160) skid.shift();
+        }
+
+        // Lap / progress tracking.
+        var frac = off.idx / center.length;
+        if (frac > 0.5) passedHalf = true;
+        if (passedHalf && prevFrac > 0.85 && frac < 0.15) {
+          completeLap();
+          passedHalf = false;
+        }
+        prevFrac = frac;
+
+        // HUD time.
+        ui.setStat("time", fmt(now() - lapStartT));
+      }
+
+      function completeLap() {
+        var t = now();
+        lastLap = t - lapStartT;
+        lapStartT = t;
+        lap++;
+        ui.setStat("lap", String(lap));
+        if (best === 0 || lastLap < best) {
+          best = lastLap;
+          store.save({ best: best });
+          ui.setStat("best", fmt(best));
+          flashEl.textContent = MG.i18n.t("newBest");
+          flashEl.style.fontSize = "clamp(1.4rem, 7vw, 2.6rem)";
+          flashEl.classList.remove("hidden");
+          setTimeout(function () {
+            flashEl.classList.add("hidden");
+            flashEl.style.fontSize = "";
+          }, 1100);
+        }
+      }
+
+      /* ============================ Render ============================ */
+      function draw() {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Grass background.
+        ctx.fillStyle = "#3f8a3a";
+        ctx.fillRect(0, 0, VW, VH);
+
+        ctx.save();
+        // Camera: car centred horizontally, a bit below mid so we see ahead.
+        ctx.translate(VW / 2, VH * 0.62);
+        ctx.rotate(-car.angle);
+        ctx.translate(-car.x, -car.y);
+
+        drawPatches();
+        drawTrack();
+        drawSkid();
+        drawStartLine();
+        drawCar();
+
+        ctx.restore();
+
+        drawSpeedo();
+      }
+
+      function drawPatches() {
+        for (var i = 0; i < patches.length; i++) {
+          var p = patches[i];
+          ctx.fillStyle = p.t > 0.5 ? "rgba(40,110,40,0.55)" : "rgba(95,165,70,0.5)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function edgePath(outer, inner) {
+        var m = center.length;
+        ctx.beginPath();
+        ctx.moveTo(outer[0].x, outer[0].y);
+        for (var i = 1; i < m; i++) ctx.lineTo(outer[i].x, outer[i].y);
+        ctx.lineTo(outer[0].x, outer[0].y);
+        for (var j = 0; j < m; j++) ctx.lineTo(inner[m - 1 - j].x, inner[m - 1 - j].y);
+        ctx.closePath();
+      }
+
+      function drawTrack() {
+        var m = center.length;
+
+        // Curb base (red/white) drawn as a fat band, then asphalt on top.
+        // Outer curb band: from curbOut to track edge.
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // Asphalt.
+        ctx.fillStyle = "#43454c";
+        ctx.beginPath();
+        ctx.moveTo(left[0].x, left[0].y);
+        for (var i = 1; i < m; i++) ctx.lineTo(left[i].x, left[i].y);
+        ctx.lineTo(left[0].x, left[0].y);
+        for (var j = 0; j < m; j++) ctx.lineTo(right[m - 1 - j].x, right[m - 1 - j].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Curbs — alternating red/white quads along each edge.
+        for (var k = 0; k < m; k++) {
+          var k2 = (k + 1) % m;
+          var col = (k % 2 === 0) ? "#e8443a" : "#f4f4f4";
+          // Left curb.
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.moveTo(left[k].x, left[k].y);
+          ctx.lineTo(left[k2].x, left[k2].y);
+          ctx.lineTo(curbOutL[k2].x, curbOutL[k2].y);
+          ctx.lineTo(curbOutL[k].x, curbOutL[k].y);
+          ctx.closePath();
+          ctx.fill();
+          // Right curb.
+          ctx.beginPath();
+          ctx.moveTo(right[k].x, right[k].y);
+          ctx.lineTo(right[k2].x, right[k2].y);
+          ctx.lineTo(curbOutR[k2].x, curbOutR[k2].y);
+          ctx.lineTo(curbOutR[k].x, curbOutR[k].y);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Dashed centre line.
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 4;
+        ctx.setLineDash([20, 24]);
+        ctx.beginPath();
+        ctx.moveTo(center[0].x, center[0].y);
+        for (var c = 1; c < m; c++) ctx.lineTo(center[c].x, center[c].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      function drawStartLine() {
+        // Checkered band across the track at centre[0].
+        var a = center[0], b = center[1];
+        var tx = b.x - a.x, ty = b.y - a.y;
+        var len = Math.hypot(tx, ty) || 1;
+        tx /= len; ty /= len;
+        var nx = -ty, ny = tx;       // across the track
+        var cols = 10, depth = 26;
+        var step = (TRACK_HW * 2) / cols;
+        ctx.save();
+        for (var row = 0; row < 2; row++) {
+          for (var i = 0; i < cols; i++) {
+            var on = ((i + row) % 2) === 0;
+            ctx.fillStyle = on ? "#f4f4f4" : "#222";
+            var ox = a.x + nx * (-TRACK_HW + i * step) + tx * (row * depth);
+            var oy = a.y + ny * (-TRACK_HW + i * step) + ty * (row * depth);
+            ctx.beginPath();
+            ctx.moveTo(ox, oy);
+            ctx.lineTo(ox + nx * step, oy + ny * step);
+            ctx.lineTo(ox + nx * step + tx * depth, oy + ny * step + ty * depth);
+            ctx.lineTo(ox + tx * depth, oy + ty * depth);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
+
+      function drawSkid() {
+        ctx.fillStyle = "rgba(20,20,24,0.35)";
+        for (var i = 0; i < skid.length; i++) {
+          var s = skid[i];
+          ctx.save();
+          ctx.translate(s.x, s.y);
+          ctx.rotate(s.a);
+          ctx.fillRect(-5, -3, 3, 6);
+          ctx.fillRect(2, -3, 3, 6);
+          ctx.restore();
+        }
+      }
+
+      function drawCar() {
+        ctx.save();
+        ctx.translate(car.x, car.y);
+        ctx.rotate(car.angle);
+
+        // Shadow.
+        ctx.fillStyle = "rgba(0,0,0,0.28)";
+        roundRect(-12, -16, 24, 36, 6);
+        ctx.fill();
+
+        // Body.
+        var grad = ctx.createLinearGradient(-13, 0, 13, 0);
+        grad.addColorStop(0, "#c81f2d");
+        grad.addColorStop(0.5, "#ff3b4a");
+        grad.addColorStop(1, "#c81f2d");
+        ctx.fillStyle = grad;
+        roundRect(-13, -19, 26, 38, 7);
+        ctx.fill();
+
+        // Wings.
+        ctx.fillStyle = "#9a121d";
+        ctx.fillRect(-16, -12, 4, 9);
+        ctx.fillRect(12, -12, 4, 9);
+        ctx.fillRect(-17, 9, 5, 8);
+        ctx.fillRect(12, 9, 5, 8);
+
+        // Cockpit / windshield.
+        ctx.fillStyle = "#1a2330";
+        roundRect(-8, -8, 16, 14, 4);
+        ctx.fill();
+        ctx.fillStyle = "rgba(140,200,255,0.5)";
+        roundRect(-7, -7, 14, 6, 3);
+        ctx.fill();
+
+        // Nose stripe.
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(-3, -19, 6, 7);
+
+        ctx.restore();
+      }
+
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function drawSpeedo() {
+        var kmh = Math.round(Math.abs(car.speed) * 38);
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        var bw = 96, bh = 40;
+        var bx = VW / 2 - bw / 2, by = 12;
+        ctx.beginPath();
+        ctx.moveTo(bx + 12, by);
+        ctx.arcTo(bx + bw, by, bx + bw, by + bh, 12);
+        ctx.arcTo(bx + bw, by + bh, bx, by + bh, 12);
+        ctx.arcTo(bx, by + bh, bx, by, 12);
+        ctx.arcTo(bx, by, bx + bw, by, 12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "800 22px 'Trebuchet MS', sans-serif";
+        ctx.fillText(kmh, VW / 2, by + 16);
+        ctx.font = "600 10px 'Trebuchet MS', sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.fillText("km/h", VW / 2, by + 31);
+      }
+
+      /* ============================ Loop ============================ */
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      /* ============================ Input ============================ */
+      // Overlay tap → start the countdown.
+      function onOverlayTap(e) {
+        e.preventDefault();
+        if (state === STATE_READY) beginCountdown();
+      }
+      overlay.addEventListener("mousedown", onOverlayTap);
+      overlay.addEventListener("touchstart", onOverlayTap, { passive: false });
+
+      // Keyboard.
+      var keyMap = {
+        ArrowLeft: "left", KeyA: "left",
+        ArrowRight: "right", KeyD: "right",
+        ArrowUp: "gas", KeyW: "gas",
+        ArrowDown: "brake", KeyS: "brake"
+      };
+      window.addEventListener("keydown", function (e) {
+        if (e.code === "Space" || e.code === "Enter") {
+          if (state === STATE_READY) { e.preventDefault(); beginCountdown(); return; }
+        }
+        var k = keyMap[e.code];
+        if (k) { input[k] = true; e.preventDefault(); }
+      });
+      window.addEventListener("keyup", function (e) {
+        var k = keyMap[e.code];
+        if (k) { input[k] = false; e.preventDefault(); }
+      });
+
+      // On-screen buttons — multi-touch friendly via pointer events.
+      var buttons = document.querySelectorAll(".ctl");
+      Array.prototype.forEach.call(buttons, function (btn) {
+        var k = btn.getAttribute("data-k");
+        function press(e) {
+          e.preventDefault();
+          input[k] = true;
+          btn.classList.add("held");
+          if (state === STATE_READY) beginCountdown();
+        }
+        function release(e) {
+          if (e) e.preventDefault();
+          input[k] = false;
+          btn.classList.remove("held");
+        }
+        btn.addEventListener("pointerdown", press);
+        btn.addEventListener("pointerup", release);
+        btn.addEventListener("pointercancel", release);
+        btn.addEventListener("pointerleave", release);
+        // Avoid the synthetic mouse/scroll behaviours on touch.
+        btn.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      });
+
+      // Releasing the pointer anywhere clears any stuck buttons.
+      window.addEventListener("pointerup", function () {
+        if (state !== STATE_PLAY && state !== STATE_COUNT) return;
+      });
+
+      window.addEventListener("resize", resize);
+      window.addEventListener("blur", function () {
+        input.left = input.right = input.gas = input.brake = false;
+        Array.prototype.forEach.call(buttons, function (b) { b.classList.remove("held"); });
+      });
+
+      /* ============================ Boot ============================ */
+      buildTrack();
+      buildPatches();
+      resize();
+      resetRace();
+      showReady();
+      loop();
+    })();
+  </script>
+</body>
+</html>

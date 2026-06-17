@@ -102,4 +102,14 @@ window.GAMES = [
       es: "Desliza las fichas, une los números iguales y llega a 2048 — flechas o desliza.",
     },
   },
+  {
+    title: "Top Racer",
+    icon: "🏎️",
+    url: "./games/racing/",
+    description: {
+      en: "Top-down racing — steer your car around the circuit, hit the racing line and chase your best lap.",
+      ru: "Гонки сверху — рули по трассе, держи идеальную траекторию и побей свой лучший круг.",
+      es: "Carreras desde arriba — conduce por el circuito, busca la trazada y bate tu mejor vuelta.",
+    },
+  },
 ];
