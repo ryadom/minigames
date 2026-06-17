@@ -214,7 +214,17 @@
 
       var bird, pipes, score, best, frame, groundX, deadTimer;
 
-      best = Number(localStorage.getItem("flappy_best") || 0);
+      // Shared versioned save store (see MG.storage in shared/mg.js).
+      var store = MG.storage("flappy-bird", { version: 1 });
+      var save = store.load();
+      if (!save) {
+        // One-time import of the pre-MG bare "flappy_best" key.
+        var legacy = null;
+        try { legacy = localStorage.getItem("flappy_best"); } catch (e) {}
+        save = store.save({ best: legacy != null ? Number(legacy) || 0 : 0 });
+        if (legacy != null) { try { localStorage.removeItem("flappy_best"); } catch (e) {} }
+      }
+      best = save.best;
       ui.setStat("best", best);
 
       function reset() {
@@ -270,7 +280,7 @@
         deadTimer = 0;
         if (score > best) {
           best = score;
-          localStorage.setItem("flappy_best", String(best));
+          store.save({ best: best });
           ui.setStat("best", best);
         }
       }
