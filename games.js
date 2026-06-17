@@ -62,4 +62,14 @@ window.GAMES = [
       es: "Intercambia gemas para alinear 3+ — crea cohetes, bombas y explosiones arcoíris.",
     },
   },
+  {
+    title: "Farm",
+    icon: "🚜",
+    url: "./games/farm/",
+    description: {
+      en: "Buy seeds, plant, water and harvest crops for coins — your little farm grows in real time.",
+      ru: "Покупай семена, сажай, поливай и собирай урожай за монеты — ферма растёт в реальном времени.",
+      es: "Compra semillas, planta, riega y cosecha cultivos por monedas — tu granja crece en tiempo real.",
+    },
+  },
 ];
