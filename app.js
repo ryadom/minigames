@@ -11,13 +11,10 @@
       empty: "No games yet — check back soon! 🚧",
       made: "Made for fun",
       source: "Source on GitHub",
-      saves: "Saved progress",
-      savesHint: "Saved in this browser",
-      clear: "Clear",
-      clearAll: "Clear all",
-      savedAt: "Saved {date}",
+      lastPlayed: "Last played {date}",
+      menu: "Options",
+      clearSave: "Clear save data",
       confirmClear: "Delete saved progress for {game}? This can't be undone.",
-      confirmClearAll: "Delete all saved progress in this browser? This can't be undone.",
     },
     ru: {
       tagline: "Коллекция бесплатных браузерных мини-игр. Без установок и регистрации — просто играй.",
@@ -25,13 +22,10 @@
       empty: "Игр пока нет — заходи позже! 🚧",
       made: "Сделано для удовольствия",
       source: "Исходники на GitHub",
-      saves: "Сохранения",
-      savesHint: "Сохранено в этом браузере",
-      clear: "Удалить",
-      clearAll: "Удалить всё",
-      savedAt: "Сохранено {date}",
+      lastPlayed: "Последняя игра {date}",
+      menu: "Меню",
+      clearSave: "Удалить сохранение",
       confirmClear: "Удалить сохранение для {game}? Это нельзя отменить.",
-      confirmClearAll: "Удалить все сохранения в этом браузере? Это нельзя отменить.",
     },
     es: {
       tagline: "Una colección de minijuegos gratis para el navegador. Sin instalar, sin registros — solo juega.",
@@ -39,13 +33,10 @@
       empty: "Aún no hay juegos — ¡vuelve pronto! 🚧",
       made: "Hecho por diversión",
       source: "Código en GitHub",
-      saves: "Progreso guardado",
-      savesHint: "Guardado en este navegador",
-      clear: "Borrar",
-      clearAll: "Borrar todo",
-      savedAt: "Guardado {date}",
+      lastPlayed: "Jugado por última vez {date}",
+      menu: "Opciones",
+      clearSave: "Borrar datos guardados",
       confirmClear: "¿Borrar el progreso guardado de {game}? No se puede deshacer.",
-      confirmClearAll: "¿Borrar todo el progreso guardado en este navegador? No se puede deshacer.",
     },
   });
 
@@ -53,23 +44,14 @@
   var list = document.getElementById("game-list");
   var emptyState = document.getElementById("empty-state");
   var langSel = document.getElementById("lang");
-  var savesSection = document.getElementById("saves-section");
-  var savesHeading = document.getElementById("saves-heading");
-  var savesList = document.getElementById("saves-list");
-  var savesClearAll = document.getElementById("saves-clear-all");
 
   // The MG.storage name a game uses is its folder name by convention, which is
-  // the last path segment of its url. Build a lookup from save name → game so
-  // the save manager can show each save with the right icon and title.
+  // the last path segment of its url. Build a lookup from save name → game so a
+  // card can find its own save (last-played time, clear action).
   function saveNameFor(url) {
     var parts = String(url || "").split("/").filter(Boolean);
     return parts.length ? parts[parts.length - 1] : "";
   }
-  var gameBySaveName = {};
-  games.forEach(function (g) {
-    var name = saveNameFor(g.url);
-    if (name) gameBySaveName[name] = g;
-  });
 
   // Resolve a value that may be a plain string or a { en, ru, es } map.
   function localize(value) {
@@ -98,50 +80,6 @@
     langSel.value = MG.i18n.lang;
   }
 
-  function renderGames() {
-    list.innerHTML = "";
-
-    if (games.length === 0) {
-      list.hidden = true;
-      emptyState.hidden = false;
-      return;
-    }
-    list.hidden = false;
-    emptyState.hidden = true;
-
-    games.forEach(function (game) {
-      var li = document.createElement("li");
-
-      var card = document.createElement("a");
-      card.className = "game-card";
-      card.href = game.url;
-
-      var icon = document.createElement("span");
-      icon.className = "icon";
-      icon.textContent = game.icon || "🎮";
-
-      var title = document.createElement("span");
-      title.className = "title";
-      title.textContent = localize(game.title);
-
-      var desc = document.createElement("p");
-      desc.className = "desc";
-      desc.textContent = localize(game.description);
-
-      card.appendChild(icon);
-      card.appendChild(title);
-      card.appendChild(desc);
-      li.appendChild(card);
-      list.appendChild(li);
-    });
-  }
-
-  function render() {
-    renderChrome();
-    renderGames();
-    renderSaves();
-  }
-
   // Fill {placeholder} tokens in a template with values from a map.
   function fill(tmpl, vars) {
     return String(tmpl).replace(/\{(\w+)\}/g, function (m, k) {
@@ -162,68 +100,140 @@
     }
   }
 
-  function renderSaves() {
-    var saves = (MG.storage && MG.storage.list) ? MG.storage.list() : [];
-    savesList.innerHTML = "";
+  // Snapshot of persisted saves, keyed by save name (folder name).
+  function loadSaves() {
+    var byName = {};
+    var all = (MG.storage && MG.storage.list) ? MG.storage.list() : [];
+    all.forEach(function (s) { byName[s.name] = s; });
+    return byName;
+  }
 
-    if (!saves.length) {
-      savesSection.hidden = true;
+  // Close any open card menu. Re-assigned by renderGames each render so the
+  // single document-level handler always targets the current DOM.
+  var closeMenu = function () {};
+
+  function renderGames() {
+    list.innerHTML = "";
+    closeMenu();
+
+    if (games.length === 0) {
+      list.hidden = true;
+      emptyState.hidden = false;
       return;
     }
-    savesSection.hidden = false;
-    savesHeading.textContent = MG.i18n.t("saves");
-    savesClearAll.textContent = MG.i18n.t("clearAll");
+    list.hidden = false;
+    emptyState.hidden = true;
 
-    saves.forEach(function (s) {
-      var game = gameBySaveName[s.name];
-      var titleText = game ? localize(game.title) : s.name;
+    var saves = loadSaves();
+    var openMenuEl = null;
+
+    closeMenu = function () {
+      if (openMenuEl) {
+        openMenuEl.menu.hidden = true;
+        openMenuEl.btn.setAttribute("aria-expanded", "false");
+        openMenuEl = null;
+      }
+    };
+
+    games.forEach(function (game) {
+      var titleText = localize(game.title);
+      var save = saves[saveNameFor(game.url)];
 
       var li = document.createElement("li");
-      li.className = "save-row";
+      li.className = "game-card-wrap";
+
+      var card = document.createElement("a");
+      card.className = "game-card";
+      card.href = game.url;
 
       var icon = document.createElement("span");
       icon.className = "icon";
-      icon.textContent = (game && game.icon) || "💾";
-
-      var info = document.createElement("div");
-      info.className = "save-info";
+      icon.textContent = game.icon || "🎮";
 
       var title = document.createElement("span");
-      title.className = "save-title";
+      title.className = "title";
       title.textContent = titleText;
 
-      var meta = document.createElement("span");
-      meta.className = "save-meta";
-      meta.textContent = s.savedAt
-        ? fill(MG.i18n.t("savedAt"), { date: formatSavedAt(s.savedAt) })
-        : MG.i18n.t("savesHint");
+      var desc = document.createElement("p");
+      desc.className = "desc";
+      desc.textContent = localize(game.description);
 
-      info.appendChild(title);
-      info.appendChild(meta);
+      card.appendChild(icon);
+      card.appendChild(title);
+      card.appendChild(desc);
 
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "saves-btn";
-      btn.textContent = MG.i18n.t("clear");
-      btn.addEventListener("click", function () {
-        var ok = window.confirm(fill(MG.i18n.t("confirmClear"), { game: titleText }));
-        if (!ok) return;
-        MG.storage.remove(s.name);
-        renderSaves();
-      });
+      // Last-played line, shown only for games with a saved game in this browser.
+      if (save) {
+        var played = document.createElement("p");
+        played.className = "game-played";
+        played.textContent = save.savedAt
+          ? fill(MG.i18n.t("lastPlayed"), { date: formatSavedAt(save.savedAt) })
+          : "";
+        if (played.textContent) card.appendChild(played);
+      }
 
-      li.appendChild(icon);
-      li.appendChild(info);
-      li.appendChild(btn);
-      savesList.appendChild(li);
+      li.appendChild(card);
+
+      // Per-card options menu — only meaningful when there's a save to clear.
+      if (save) {
+        var menuBtn = document.createElement("button");
+        menuBtn.type = "button";
+        menuBtn.className = "card-menu-btn";
+        menuBtn.setAttribute("aria-haspopup", "true");
+        menuBtn.setAttribute("aria-expanded", "false");
+        menuBtn.setAttribute("aria-label", MG.i18n.t("menu"));
+        menuBtn.title = MG.i18n.t("menu");
+        menuBtn.textContent = "⋯";
+
+        var menu = document.createElement("div");
+        menu.className = "card-menu";
+        menu.hidden = true;
+
+        var clearItem = document.createElement("button");
+        clearItem.type = "button";
+        clearItem.className = "card-menu-item card-menu-item--danger";
+        clearItem.textContent = MG.i18n.t("clearSave");
+        clearItem.addEventListener("click", function () {
+          closeMenu();
+          var ok = window.confirm(fill(MG.i18n.t("confirmClear"), { game: titleText }));
+          if (!ok) return;
+          MG.storage.remove(save.name);
+          renderGames();
+        });
+
+        menu.appendChild(clearItem);
+
+        var ref = { btn: menuBtn, menu: menu };
+        menuBtn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var isOpen = openMenuEl === ref;
+          closeMenu();
+          if (!isOpen) {
+            menu.hidden = false;
+            menuBtn.setAttribute("aria-expanded", "true");
+            openMenuEl = ref;
+          }
+        });
+
+        li.appendChild(menuBtn);
+        li.appendChild(menu);
+      }
+
+      list.appendChild(li);
     });
   }
 
-  savesClearAll.addEventListener("click", function () {
-    if (!window.confirm(MG.i18n.t("confirmClearAll"))) return;
-    MG.storage.clearAll();
-    renderSaves();
+  // One document-level handler closes the open menu on an outside click or Esc.
+  document.addEventListener("click", function () { closeMenu(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeMenu();
   });
+
+  function render() {
+    renderChrome();
+    renderGames();
+  }
 
   MG.i18n.onChange(render);
   render();

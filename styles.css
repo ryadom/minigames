@@ -125,6 +125,15 @@ main { flex: 1; padding-bottom: 64px; }
 .game-card .title { font-weight: 600; font-size: 1.1rem; }
 .game-card .desc { color: var(--muted); font-size: 0.92rem; margin: 0; }
 
+/* Last-played line, pushed to the bottom of the card. */
+.game-card .game-played {
+  margin: 4px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .empty-state {
   text-align: center;
   color: var(--muted);
@@ -135,83 +144,85 @@ main { flex: 1; padding-bottom: 64px; }
   font-size: 1.05rem;
 }
 
-/* Saved progress */
-#saves-section { margin-top: 44px; }
+/* Per-card options menu (clear save data, …). The wrapper is positioned so the
+   trigger and dropdown can overlay the card without breaking its link. */
+.game-card-wrap { position: relative; }
 
-.saves-head {
+.card-menu-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.saves-head .section-title { margin: 0; }
-
-.saves-list {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.save-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  background: var(--card);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius);
-}
-
-.save-row .icon { font-size: 1.6rem; line-height: 1; }
-
-.save-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.save-title { font-weight: 600; }
-
-.save-meta {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.saves-btn {
-  flex: none;
+  justify-content: center;
   font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--bg-soft);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 8px 14px;
-  border-radius: 10px;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--muted);
+  background: rgba(15, 16, 32, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.saves-btn:hover {
-  border-color: var(--accent-2);
-  color: #fff;
+/* Reveal the trigger on hover/focus, or whenever its menu is open. */
+.game-card-wrap:hover .card-menu-btn,
+.game-card-wrap:focus-within .card-menu-btn,
+.card-menu-btn[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.card-menu-btn:hover,
+.card-menu-btn[aria-expanded="true"] {
+  color: var(--text);
+  border-color: var(--accent);
   background: var(--card-hover);
 }
 
-.saves-btn--danger:hover {
-  border-color: #ff6b6b;
-  background: rgba(255, 107, 107, 0.14);
+/* Touch devices can't hover, so keep the trigger visible there. */
+@media (hover: none) {
+  .card-menu-btn { opacity: 1; }
 }
 
-@media (max-width: 420px) {
-  .save-row { flex-wrap: wrap; }
-  .save-info { flex-basis: calc(100% - 60px); }
-  .saves-btn { margin-left: auto; }
+.card-menu {
+  position: absolute;
+  top: 46px;
+  right: 12px;
+  z-index: 5;
+  min-width: 170px;
+  padding: 6px;
+  background: var(--bg-soft);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.card-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.card-menu-item:hover { background: var(--card-hover); }
+
+.card-menu-item--danger { color: #ff9a9a; }
+.card-menu-item--danger:hover {
+  color: #fff;
+  background: rgba(255, 107, 107, 0.18);
 }
 
 /* Footer */
