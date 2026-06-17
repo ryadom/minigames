@@ -302,16 +302,6 @@
 
     function loadState() {
       var st = store.load();
-      if (!st) {
-        // One-time import of the pre-MG "inf-mines-v2" key (same v2 shape).
-        try {
-          var raw = localStorage.getItem("inf-mines-v2");
-          if (raw) {
-            var old = JSON.parse(raw);
-            if (old && old.v === 2) { st = store.save(old); localStorage.removeItem("inf-mines-v2"); }
-          }
-        } catch (e) { /* ignore */ }
-      }
       try {
         if (!st) return false;
         seed = st.seed;

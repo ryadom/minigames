@@ -216,15 +216,7 @@
 
       // Shared versioned save store (see MG.storage in shared/mg.js).
       var store = MG.storage("flappy-bird", { version: 1 });
-      var save = store.load();
-      if (!save) {
-        // One-time import of the pre-MG bare "flappy_best" key.
-        var legacy = null;
-        try { legacy = localStorage.getItem("flappy_best"); } catch (e) {}
-        save = store.save({ best: legacy != null ? Number(legacy) || 0 : 0 });
-        if (legacy != null) { try { localStorage.removeItem("flappy_best"); } catch (e) {} }
-      }
-      best = save.best;
+      best = (store.load() || { best: 0 }).best;
       ui.setStat("best", best);
 
       function reset() {
