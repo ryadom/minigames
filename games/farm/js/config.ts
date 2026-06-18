@@ -211,11 +211,6 @@ ANIMALS.forEach((a) => {
   ANIMAL_FOR_PROD[a.prod] = a;
 });
 
-// Growth sprite stages.
-export const SEED_SPRITE = "🌰";
-export const SPROUT_SPRITE = "🌱";
-export const LEAF_SPRITE = "🌿";
-
 /* ======================================================================
  *  BUILD CATALOG — everything the player can place on the world grid.
  *  Soil tiles host crops; the shops & pens open their management panels.
