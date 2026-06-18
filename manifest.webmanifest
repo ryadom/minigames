@@ -1,0 +1,22 @@
+{
+  "name": "Minigames",
+  "short_name": "Minigames",
+  "description": "A collection of free browser minigames. No installs, no sign-ups — just play.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1020",
+  "theme_color": "#0f1020",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
