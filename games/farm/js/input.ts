@@ -30,8 +30,11 @@ let panHint: HTMLElement;
 let tx = 0;
 let ty = 0;
 // `coverScale` is the smallest scale that still covers the viewport; the player
-// can zoom in on top of it via `userZoom`. `scale` is always their product.
+// can zoom on top of it via `userZoom`. `scale` is always their product. Zooming
+// out below 1 shrinks the world past the viewport edges (the world is then
+// centered in the empty space) so the whole farm can be seen at once.
 const MAX_ZOOM = 3;
+const MIN_ZOOM = 0.4;
 let coverScale = 1;
 let userZoom = 1;
 let scale = 1;
@@ -39,7 +42,7 @@ let scaledW = 0;
 let scaledH = 0;
 let centered = false;
 
-const clampZoom = (z: number): number => (z < 1 ? 1 : z > MAX_ZOOM ? MAX_ZOOM : z);
+const clampZoom = (z: number): number => (z < MIN_ZOOM ? MIN_ZOOM : z > MAX_ZOOM ? MAX_ZOOM : z);
 
 export function ensureScale(): void {
   const vw = worldView.clientWidth;
@@ -77,12 +80,23 @@ function clampPan(): void {
   // Reserve room at the bottom for the floating toolbar so the lowest
   // crop tiles and pens can always be panned out from under it.
   const inset = toolbarEl ? toolbarEl.offsetHeight : 0;
-  const minX = vw - scaledW;
-  const minY = vh - scaledH - inset;
-  if (tx > 0) tx = 0;
-  if (tx < minX) tx = minX;
-  if (ty > 0) ty = 0;
-  if (ty < minY) ty = minY;
+  // When the world is smaller than the viewport (zoomed out past cover) center
+  // it in the empty space; otherwise clamp panning so no gap shows at the edges.
+  if (scaledW <= vw) {
+    tx = (vw - scaledW) / 2;
+  } else {
+    const minX = vw - scaledW;
+    if (tx > 0) tx = 0;
+    if (tx < minX) tx = minX;
+  }
+  const availH = vh - inset;
+  if (scaledH <= availH) {
+    ty = (availH - scaledH) / 2;
+  } else {
+    const minY = vh - scaledH - inset;
+    if (ty > 0) ty = 0;
+    if (ty < minY) ty = minY;
+  }
 }
 export function applyWorld(): void {
   world.style.width = `${scaledW}px`;
