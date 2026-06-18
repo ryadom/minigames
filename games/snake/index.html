@@ -42,14 +42,11 @@
       padding: 12px;
     }
 
+    /* The stage is sized to an exact square in JS (see resize) so the grid
+       cells stay square on every screen. Width/height are set inline. */
     .stage {
       position: relative;
-      width: 100%;
-      height: 100%;
-      max-width: min(70vh, 480px);
-      aspect-ratio: 1 / 1;
       margin: auto;
-      max-height: 100%;
       border-radius: 14px;
       overflow: hidden;
       box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
@@ -202,11 +199,21 @@
       var H = GRID * cell;
       var viewScale = 1;
 
-      // High-DPI sizing — keep the world square, fit it into the stage.
+      // High-DPI sizing — size the stage to the largest square that fits the
+      // available area (so cells are always square), then back the canvas with
+      // a matching device-pixel buffer.
+      var stage = canvas.parentNode;
       function resize() {
-        var rect = canvas.getBoundingClientRect();
+        var area = stage.parentNode;            // .mg-game-area
+        var pad = 12;                            // matches .mg-game-area padding
+        var availW = Math.max(1, area.clientWidth - pad * 2);
+        var availH = Math.max(1, area.clientHeight - pad * 2);
+        var size = Math.max(1, Math.floor(Math.min(availW, availH, 480)));
+
+        stage.style.width = size + "px";
+        stage.style.height = size + "px";
+
         var dpr = window.devicePixelRatio || 1;
-        var size = Math.min(rect.width, rect.height) || 1;
         canvas.width = Math.round(size * dpr);
         canvas.height = Math.round(size * dpr);
         viewScale = (size / W) * dpr;
@@ -524,6 +531,10 @@
       overlay.addEventListener("touchstart", onOverlayTap, { passive: false });
 
       window.addEventListener("resize", resize);
+      // iOS reports stale sizes during an orientation flip — re-measure after it settles.
+      window.addEventListener("orientationchange", function () {
+        setTimeout(resize, 200);
+      });
 
       // --- Boot ---
       resize();
