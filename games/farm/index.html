@@ -242,27 +242,77 @@
       animation: pulse 1.2s ease-in-out infinite;
     }
 
-    /* ---- Pasture: the fenced pen drawn into the scene (opens the barn). ---- */
-    .pasture-hot {
+    /* ---- Animal pens: one fenced enclosure per animal type, drawn into the
+     *  scene. The whole pen is a hold-and-sweep target — drag across the
+     *  animals to collect what's ready (and feed the hungry ones). ---- */
+    .pen-hot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0.5cqw 0.3cqw;
+    }
+    .pen-hot::after { inset: 7% 4% 4%; border-radius: 10%; }
+    .pen-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3cqw;
+      font-size: clamp(0.5rem, 1cqw, 0.95rem);
+      font-weight: 700;
+      line-height: 1.2;
+      color: #3a2b1a;
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 1cqw;
+      padding: 0.1cqw 0.7cqw;
+      white-space: nowrap;
+      box-shadow: 0 0.2cqw 0 rgba(120, 85, 40, 0.35);
+      pointer-events: none;
+    }
+    .pen-animals {
+      flex: 1 1 auto;
+      width: 100%;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
       align-content: center;
-      gap: 0.6cqw;
-      padding: 1.5cqw;
+      justify-content: center;
+      gap: 0.2cqw 0.4cqw;
+      padding-top: 0.5cqw;
     }
-    .pasture-hot::after { inset: 4%; border-radius: 8%; }
-    .pasture-hot .an { font-size: clamp(1rem, 3.2cqw, 2.6rem); line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
-    .pasture-hot .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
-    .pasture-hot .pempty {
-      font-size: clamp(0.6rem, 1.4cqw, 1.1rem);
+    .pen-hot .an {
+      position: relative;
+      font-size: clamp(0.9rem, 2.6cqw, 2.2rem);
+      line-height: 1;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+      transition: transform 0.08s ease;
+    }
+    .pen-hot .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
+    .pen-hot .an.hungry { opacity: 0.6; filter: grayscale(0.45) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25)); }
+    .pen-hot .an .prod {
+      position: absolute;
+      top: -0.35em;
+      right: -0.55em;
+      font-size: 0.62em;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+    }
+    .pen-buy {
+      font-size: clamp(0.7rem, 1.7cqw, 1.4rem);
+      font-weight: 700;
+      line-height: 1.05;
+      text-align: center;
+      color: #3f5226;
+      opacity: 0.8;
+      margin-top: 0.4cqw;
+    }
+    .pen-buy .pi { font-size: 1.5em; display: block; filter: grayscale(0.3); opacity: 0.7; }
+    .pen-lock {
+      font-size: clamp(0.55rem, 1.2cqw, 1rem);
       font-weight: 700;
       color: #3f5226;
-      text-align: center;
-      background: rgba(255, 255, 255, 0.7);
-      padding: 0.6cqw 1.4cqw;
-      border-radius: 1.4cqw;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 0.3cqw 0.8cqw;
+      border-radius: 1cqw;
+      margin-top: 0.6cqw;
     }
 
     /* ---- A floating hint badge over the map. ---- */
@@ -625,6 +675,7 @@
       DISHES.forEach(function (d) { ITEM[d.id] = { id: d.id, ico: d.ico, sell: d.sell, kind: "dish" }; });
 
       var CROP_BY_ID = {}; CROPS.forEach(function (c) { CROP_BY_ID[c.id] = c; });
+      var PROD_BY_ID = {}; PRODUCTS.forEach(function (p) { PROD_BY_ID[p.id] = p; });
       var ANIMAL_BY_ID = {}; ANIMALS.forEach(function (a) { ANIMAL_BY_ID[a.id] = a; });
       var DISH_BY_ID = {}; DISHES.forEach(function (d) { DISH_BY_ID[d.id] = d; });
       var ANIMAL_FOR_PROD = {}; ANIMALS.forEach(function (a) { ANIMAL_FOR_PROD[a.prod] = a; });
@@ -648,7 +699,7 @@
           newFarm: "New farm",
           confirmReset: "Reset your farm? All progress, crops, animals and coins will be lost.",
           tabFarm: "Field", tabBarn: "Barn", tabCook: "Kitchen", tabMarket: "Market", tabQuests: "Orders",
-          dragHint: "Drag to look around your village 🏡",
+          dragHint: "Drag open land to look around · hold and sweep the field or pens to tend them 🏡",
           // village
           vPasture: "Pasture", vPastureEmpty: "Empty pasture — buy animals at the Market",
           // field
@@ -656,10 +707,10 @@
           tipPlant: "Pick a seed, then tap soil to plant it.",
           tipWater: "Tap a growing plot to water it — wet crops grow twice as fast.",
           tipClear: "Tap a plot to clear what's growing there.",
-          tipReady: "Plots with a golden glow are ripe — tap to harvest into storage.",
+          tipReady: "Plots with a golden glow are ripe — hold and sweep across them to harvest into storage.",
           unlockPlot: "Unlock plot", lockedPlot: "Locked plot",
           // barn
-          tipBarn: "Feed your animals, then collect what they make.",
+          tipBarn: "Hold and sweep across the pens out on the map to collect and feed — or manage here.",
           barnEmpty: "No animals yet. Buy some at the Market.",
           feed: "Feed", collect: "Collect", fed: "Fed", hungry: "Hungry",
           // kitchen
@@ -700,15 +751,15 @@
           newFarm: "Новая ферма",
           confirmReset: "Сбросить ферму? Весь прогресс, посевы, животные и монеты пропадут.",
           tabFarm: "Поле", tabBarn: "Хлев", tabCook: "Кухня", tabMarket: "Рынок", tabQuests: "Заказы",
-          dragHint: "Тяни, чтобы осмотреть деревню 🏡",
+          dragHint: "Тяни по пустому месту, чтобы осмотреться · удерживай и веди по грядкам или загонам, чтобы ухаживать 🏡",
           vPasture: "Пастбище", vPastureEmpty: "Пустой загон — купи животных на Рынке",
           water: "Полив", clear: "Убрать",
           tipPlant: "Выбери семя и нажми на грядку, чтобы посадить.",
           tipWater: "Нажми на растущую грядку, чтобы полить — мокрые растут вдвое быстрее.",
           tipClear: "Нажми на грядку, чтобы убрать с неё растение.",
-          tipReady: "Грядки с золотым свечением созрели — нажми, чтобы собрать в хранилище.",
+          tipReady: "Грядки с золотым свечением созрели — удерживай и веди по ним, чтобы собрать в хранилище.",
           unlockPlot: "Открыть грядку", lockedPlot: "Закрытая грядка",
-          tipBarn: "Корми животных и собирай то, что они дают.",
+          tipBarn: "Удерживай и веди по загонам на карте, чтобы собирать и кормить — или управляй здесь.",
           barnEmpty: "Животных пока нет. Купи их на Рынке.",
           feed: "Кормить", collect: "Собрать", fed: "Сыт", hungry: "Голоден",
           tipCook: "Готовь из ингредиентов блюда — они стоят куда дороже.",
@@ -745,15 +796,15 @@
           newFarm: "Nueva granja",
           confirmReset: "¿Reiniciar tu granja? Perderás todo el progreso, cultivos, animales y monedas.",
           tabFarm: "Campo", tabBarn: "Establo", tabCook: "Cocina", tabMarket: "Mercado", tabQuests: "Pedidos",
-          dragHint: "Arrastra para mirar tu aldea 🏡",
+          dragHint: "Arrastra el terreno para mirar · mantén pulsado y desliza por el campo o los corrales para atenderlos 🏡",
           vPasture: "Pasto", vPastureEmpty: "Pasto vacío — compra animales en el Mercado",
           water: "Regar", clear: "Quitar",
           tipPlant: "Elige una semilla y toca la tierra para plantar.",
           tipWater: "Toca una parcela en crecimiento para regarla — mojadas crecen el doble de rápido.",
           tipClear: "Toca una parcela para quitar lo que crece ahí.",
-          tipReady: "Las parcelas con brillo dorado están maduras — tócalas para guardar la cosecha.",
+          tipReady: "Las parcelas con brillo dorado están maduras — mantén pulsado y desliza para cosecharlas.",
           unlockPlot: "Abrir parcela", lockedPlot: "Parcela cerrada",
-          tipBarn: "Alimenta a tus animales y recoge lo que producen.",
+          tipBarn: "Mantén pulsado y desliza por los corrales del mapa para recoger y alimentar — o gestiona aquí.",
           barnEmpty: "Aún no hay animales. Cómpralos en el Mercado.",
           feed: "Alimentar", collect: "Recoger", fed: "Saciado", hungry: "Con hambre",
           tipCook: "Cocina ingredientes en platos que valen mucho más.",
@@ -1104,8 +1155,16 @@
         { cx: 770, by: 228, w: 72,  roof: "#7d96c0", roof2: "#6076a0", wall: "#eef0f4", wall2: "#d3d8e2" },
         { cx: 420, by: 236, w: 80,  roof: "#6f9b46", roof2: "#577a35", wall: "#f3e3c0", wall2: "#ddc89c" }
       ];
-      // The fenced pasture pen (front of the scene; tapping opens the barn).
-      var PEN = { L: 370, R: 700, T: 730, B: 870 };
+      // One fenced pen per animal type, lined up across the front of the
+      // scene (between the barn on the left and the orders post on the right).
+      // Each pen holds only its own kind of animal and is a hold-and-sweep
+      // target for collecting / feeding right out on the map.
+      var PEN_DEFS = [
+        { type: "chicken", L: 400, R: 508, T: 745, B: 880 },
+        { type: "cow",     L: 520, R: 628, T: 745, B: 880 },
+        { type: "sheep",   L: 640, R: 748, T: 745, B: 880 },
+        { type: "pig",     L: 760, R: 868, T: 745, B: 880 }
+      ];
 
       // The crop field: a 4×4 grid of tilled tiles centred on the map.
       var FIELD = { cols: 4, rows: 4, tile: 80, gap: 18, cx: 600, cy: 520 };
@@ -1200,12 +1259,17 @@
         return s;
       }
 
-      function svgPen() {
-        var s = '<rect x="' + nf(PEN.L) + '" y="' + nf(PEN.T) + '" width="' + nf(PEN.R - PEN.L) + '" height="' + nf(PEN.B - PEN.T) + '" rx="16" fill="#a9d57e"/>' +
-          '<rect x="' + nf(PEN.L) + '" y="' + nf(PEN.T) + '" width="' + nf(PEN.R - PEN.L) + '" height="' + nf(PEN.B - PEN.T) + '" rx="16" fill="url(#pengrass)"/>';
-        s += svgFence(PEN.L, PEN.R, PEN.T + 6) + svgFence(PEN.L, PEN.R, PEN.B - 2);
-        s += '<rect x="' + nf(PEN.L - 2.5) + '" y="' + nf(PEN.T - 10) + '" width="5" height="' + nf(PEN.B - PEN.T + 14) + '" rx="2" fill="#b98e58"/>';
-        s += '<rect x="' + nf(PEN.R - 2.5) + '" y="' + nf(PEN.T - 10) + '" width="5" height="' + nf(PEN.B - PEN.T + 14) + '" rx="2" fill="#b98e58"/>';
+      function svgPenRect(L, R, T, B) {
+        var s = '<rect x="' + nf(L) + '" y="' + nf(T) + '" width="' + nf(R - L) + '" height="' + nf(B - T) + '" rx="14" fill="#a9d57e"/>' +
+          '<rect x="' + nf(L) + '" y="' + nf(T) + '" width="' + nf(R - L) + '" height="' + nf(B - T) + '" rx="14" fill="url(#pengrass)"/>';
+        s += svgFence(L, R, T + 6) + svgFence(L, R, B - 2);
+        s += '<rect x="' + nf(L - 2.5) + '" y="' + nf(T - 10) + '" width="5" height="' + nf(B - T + 14) + '" rx="2" fill="#b98e58"/>';
+        s += '<rect x="' + nf(R - 2.5) + '" y="' + nf(T - 10) + '" width="5" height="' + nf(B - T + 14) + '" rx="2" fill="#b98e58"/>';
+        return s;
+      }
+      function svgPens() {
+        var s = "";
+        PEN_DEFS.forEach(function (pn) { s += svgPenRect(pn.L, pn.R, pn.T, pn.B); });
         return s;
       }
 
@@ -1253,8 +1317,8 @@
         // Interactive buildings — back row, then front row.
         s += svgHouse(BLD.market) + svgHouse(BLD.cook);
         s += svgHouse(BLD.barn) + svgHouse(BLD.quests);
-        // The pasture pen and a couple of front trees.
-        s += svgPen();
+        // The animal pens and a couple of front trees.
+        s += svgPens();
         s += svgTree(90, 700, 46) + svgTree(1130, 660, 42) + svgTree(1130, 860, 38);
         return s;
       }
@@ -1275,22 +1339,49 @@
           "</span></button>";
       }
 
-      function pastureHotspot() {
-        var left = PEN.L / WORLD_W * 100, top = PEN.T / WORLD_H * 100;
-        var w = (PEN.R - PEN.L) / WORLD_W * 100, h = (PEN.B - PEN.T) / WORLD_H * 100;
-        var inner = "";
-        if (!state.animals.length) {
-          inner = '<span class="pempty">' + esc(MG.i18n.t("vPastureEmpty")) + "</span>";
-        } else {
-          state.animals.forEach(function (a) {
-            var def = ANIMAL_BY_ID[a.type];
-            var rdy = a.grown >= def.interval;
-            inner += '<span class="an' + (rdy ? " rdy" : "") + '">' + def.ico + "</span>";
-          });
-        }
-        return '<button class="hotspot pasture-hot" data-act="open" data-arg="barn" ' +
-          'style="left:' + pf(left) + '%;top:' + pf(top) + '%;width:' + pf(w) + '%;height:' + pf(h) + '%">' +
-          inner + "</button>";
+      // One overlay per animal pen: a label tag plus the animals living there
+      // as individual hold-and-sweep cells (data-animcell = index into
+      // state.animals). Locked pens show the level gate; empty unlocked pens
+      // invite a trip to the Market.
+      function penHotspots() {
+        var html = "";
+        PEN_DEFS.forEach(function (pn) {
+          var def = ANIMAL_BY_ID[pn.type];
+          var left = pn.L / WORLD_W * 100, top = pn.T / WORLD_H * 100;
+          var w = (pn.R - pn.L) / WORLD_W * 100, h = (pn.B - pn.T) / WORLD_H * 100;
+          var locked = !isUnlocked(def.lvl);
+          var mine = [];
+          state.animals.forEach(function (a, i) { if (a.type === pn.type) mine.push({ a: a, i: i }); });
+
+          var act = "noop", arg = "", inner = "", ready = 0;
+          if (locked) {
+            act = "penlocked"; arg = pn.type;
+            inner = '<span class="pen-lock">🔒 ' + esc(tf("lvl", { n: def.lvl })) + "</span>";
+          } else if (!mine.length) {
+            act = "open"; arg = "market";
+            inner = '<span class="pen-buy"><span class="pi">' + def.ico + "</span>🛒</span>";
+          } else {
+            inner = '<span class="pen-animals">';
+            mine.forEach(function (m) {
+              var rdy = m.a.grown >= def.interval;
+              var fed = Date.now() < m.a.feedUntil;
+              if (rdy) ready++;
+              inner += '<span class="an' + (rdy ? " rdy" : (fed ? " fed" : " hungry")) +
+                '" data-animcell="' + m.i + '">' + def.ico +
+                (rdy ? '<span class="prod">' + ITEM[def.prod].ico + "</span>" : "") + "</span>";
+            });
+            inner += "</span>";
+          }
+
+          var tag = '<span class="pen-tag">' + def.ico + " " + esc(name(pn.type)) +
+            (mine.length ? " ×" + mine.length : "") + "</span>";
+          html += '<button class="hotspot pen-hot' + (locked ? " locked" : "") + '" data-act="' + act + '"' +
+            (arg ? ' data-arg="' + arg + '"' : "") +
+            ' style="left:' + pf(left) + '%;top:' + pf(top) + '%;width:' + pf(w) + '%;height:' + pf(h) + '%">' +
+            (ready ? '<span class="b-badge">' + ready + "</span>" : "") +
+            tag + inner + "</button>";
+        });
+        return html;
       }
 
       function plotSprite(p) {
@@ -1393,7 +1484,7 @@
           hotspot(BLD.cook, MG.i18n.t("tabCook"), cookStatus(), readyCounts().cook || "") +
           hotspot(BLD.barn, MG.i18n.t("tabBarn"), "🐄 " + state.animals.length + "/" + state.barnCap, readyCounts().pen || "") +
           hotspot(BLD.quests, MG.i18n.t("tabQuests"), "🎁 " + readyCounts().fillable + "/" + state.quests.length, readyCounts().fillable || "") +
-          pastureHotspot() +
+          penHotspots() +
           renderPlots();
         applyWorld();
         toolbarEl.innerHTML = renderToolbar();
@@ -1666,13 +1757,64 @@
        * ==================================================================== */
       var panId = null, panStartX = 0, panStartY = 0, panTx0 = 0, panTy0 = 0, dragging = false, suppressClick = false;
 
+      // A "paint" gesture: holding on a field tile or an animal and sweeping
+      // across more of them performs the action on each one entered — no
+      // per-tile clicking. Pressing on open land pans the map as before.
+      var paintMode = null, paintId = null, paintVisited = null, paintAgg = null;
+
+      function startPaint(mode, e) {
+        paintMode = mode;
+        paintId = e.pointerId;
+        paintVisited = {};
+        paintAgg = freshAgg();
+        try { worldView.setPointerCapture(paintId); } catch (err) {}
+        hidePanHint();
+      }
+      // Act on whatever interactive cell sits under the pointer, once per cell.
+      function paintAt(cx, cy) {
+        var el = document.elementFromPoint(cx, cy);
+        if (!el || !el.closest) return;
+        if (paintMode === "field") {
+          var cell = el.closest("[data-plotcell]");
+          if (!cell || cell.getAttribute("data-act") !== "plot") return;
+          var i = +cell.getAttribute("data-plotcell");
+          if (paintVisited["f" + i]) return;
+          paintVisited["f" + i] = true;
+          if (actPlot(i, paintAgg)) { patch(); syncStats(); }
+        } else if (paintMode === "pen") {
+          var ac = el.closest("[data-animcell]");
+          if (!ac) return;
+          var j = +ac.getAttribute("data-animcell");
+          if (paintVisited["a" + j]) return;
+          paintVisited["a" + j] = true;
+          if (actAnimal(j, paintAgg)) { updateAnimCell(ac, j); syncStats(); }
+        }
+      }
+      function endPaint() {
+        if (paintMode === null) return;
+        var agg = paintAgg;
+        paintMode = null; paintId = null; paintVisited = null; paintAgg = null;
+        suppressClick = true; setTimeout(function () { suppressClick = false; }, 0);
+        flushAgg(agg);
+        save(); render();
+      }
+
       worldView.addEventListener("pointerdown", function (e) {
         if (e.target.closest && e.target.closest("#toolbar")) return; // let the toolbar scroll/tap
+        var plotCell = e.target.closest && e.target.closest("[data-plotcell]");
+        var animCell = e.target.closest && e.target.closest("[data-animcell]");
+        if (plotCell && plotCell.getAttribute("data-act") === "plot") {
+          startPaint("field", e); paintAt(e.clientX, e.clientY); return;
+        }
+        if (animCell) {
+          startPaint("pen", e); paintAt(e.clientX, e.clientY); return;
+        }
         panId = e.pointerId;
         panStartX = e.clientX; panStartY = e.clientY;
         panTx0 = tx; panTy0 = ty; dragging = false;
       });
       worldView.addEventListener("pointermove", function (e) {
+        if (paintMode !== null && e.pointerId === paintId) { paintAt(e.clientX, e.clientY); return; }
         if (panId === null || e.pointerId !== panId) return;
         var dx = e.clientX - panStartX, dy = e.clientY - panStartY;
         if (!dragging && Math.abs(dx) + Math.abs(dy) > 6) {
@@ -1693,8 +1835,8 @@
         worldView.classList.remove("drag");
         panId = null; dragging = false;
       }
-      worldView.addEventListener("pointerup", endPan);
-      worldView.addEventListener("pointercancel", endPan);
+      worldView.addEventListener("pointerup", function () { endPaint(); endPan(); });
+      worldView.addEventListener("pointercancel", function () { endPaint(); endPan(); });
 
       worldView.addEventListener("click", function (e) {
         if (suppressClick) return;
@@ -1724,7 +1866,18 @@
           state.sel = arg; markDirty(); render(); return;
         }
 
-        if (act === "plot") { onPlot(+arg); return; }
+        if (act === "plot") {
+          var ag = freshAgg();
+          if (actPlot(+arg, ag)) { flushAgg(ag); save(); render(); }
+          else flushAgg(ag);
+          return;
+        }
+
+        if (act === "penlocked") {
+          var ad = ANIMAL_BY_ID[arg];
+          if (ad) toast(tf("needLevel", { n: ad.lvl }));
+          return;
+        }
 
         if (act === "buyplot") {
           if (state.unlocked >= GRID) return;
@@ -1747,35 +1900,96 @@
         if (act === "quest") { deliver(+arg); return; }
       }
 
-      function onPlot(i) {
+      // ---- Hold-and-sweep actions -------------------------------------------
+      // Each act* mutates state for a single tile/animal and records what it did
+      // into `agg`, without touching the DOM. A whole sweep aggregates into one
+      // `agg`, then flushAgg() shows a single summary toast and we render once.
+      function freshAgg() {
+        return { harvest: {}, collect: {}, plant: 0, water: 0, clear: 0, fed: 0,
+                 full: false, needCoins: false, needLevel: 0 };
+      }
+
+      // Apply the selected tool to one field tile. Harvests ripe crops first
+      // (whatever the tool), otherwise plants / waters / clears. Returns true
+      // when something actually changed.
+      function actPlot(i, agg) {
         var p = state.plots[i];
-        if (!p) return;
+        if (!p) return false;
         if (p.crop && p.grown >= CROP_BY_ID[p.crop].grow) {
-          if (spaceLeft() < 1) { toast(MG.i18n.t("full")); return; }
+          if (spaceLeft() < 1) { agg.full = true; return false; }
           var c = CROP_BY_ID[p.crop];
           addItem(c.id, 1);
           addXp(c.xp);
           p.crop = null; p.grown = 0; p.water = 0;
-          toast(tf("harvested", { n: 1, item: c.ico + " " + name(c.id) }));
-          save(); render(); return;
+          agg.harvest[c.id] = (agg.harvest[c.id] || 0) + 1;
+          markDirty(); return true;
         }
         if (state.sel === "clear") {
-          if (p.crop) { p.crop = null; p.grown = 0; p.water = 0; save(); render(); }
-          return;
+          if (p.crop) { p.crop = null; p.grown = 0; p.water = 0; agg.clear++; markDirty(); return true; }
+          return false;
         }
         if (state.sel === "water") {
-          if (p.crop) { p.water = WATER_MS; save(); patch(); }
-          return;
+          if (p.crop && p.water <= 0) { p.water = WATER_MS; agg.water++; markDirty(); return true; }
+          return false;
         }
         if (!p.crop) {
           var crop = CROP_BY_ID[state.sel];
-          if (!crop) return;
-          if (!isUnlocked(crop.lvl)) { toast(tf("needLevel", { n: crop.lvl })); return; }
-          if (state.coins < crop.seed) { toast(MG.i18n.t("needCoins")); return; }
+          if (!crop) return false;
+          if (!isUnlocked(crop.lvl)) { agg.needLevel = crop.lvl; return false; }
+          if (state.coins < crop.seed) { agg.needCoins = true; return false; }
           state.coins -= crop.seed;
           p.crop = crop.id; p.grown = 0; p.water = 0;
-          save(); render();
+          agg.plant++; markDirty(); return true;
         }
+        return false;
+      }
+
+      // Tend one animal: collect its product if ready, else feed it if it's
+      // hungry and we have the feed crop. Returns true when something changed.
+      function actAnimal(i, agg) {
+        var a = state.animals[i]; if (!a) return false;
+        var def = ANIMAL_BY_ID[a.type];
+        if (a.grown >= def.interval) {
+          if (spaceLeft() < 1) { agg.full = true; return false; }
+          addItem(def.prod, 1);
+          addXp((PROD_BY_ID[def.prod] || {}).xp || 0);
+          a.grown = 0;
+          agg.collect[def.prod] = (agg.collect[def.prod] || 0) + 1;
+          markDirty(); return true;
+        }
+        if (Date.now() >= a.feedUntil && (state.inv[def.feed] || 0) >= 1) {
+          takeItem(def.feed, 1);
+          a.feedUntil = Date.now() + FEED_MS;
+          agg.fed++;
+          markDirty(); return true;
+        }
+        return false;
+      }
+
+      // Boil a finished sweep down to a single, language-light summary toast.
+      function flushAgg(agg) {
+        if (!agg) return;
+        var parts = [], id;
+        for (id in agg.harvest) parts.push("+" + agg.harvest[id] + " " + ITEM[id].ico);
+        for (id in agg.collect) parts.push("+" + agg.collect[id] + " " + ITEM[id].ico);
+        if (agg.plant) parts.push("🌱×" + agg.plant);
+        if (agg.water) parts.push("💧×" + agg.water);
+        if (agg.clear) parts.push("🧺×" + agg.clear);
+        if (agg.fed) parts.push("🍽️×" + agg.fed);
+        if (parts.length) { toast(parts.join("  ")); return; }
+        if (agg.full) { toast(MG.i18n.t("full")); return; }
+        if (agg.needCoins) { toast(MG.i18n.t("needCoins")); return; }
+        if (agg.needLevel) { toast(tf("needLevel", { n: agg.needLevel })); return; }
+      }
+
+      // Refresh one animal cell's look in place during a pen sweep.
+      function updateAnimCell(el, i) {
+        var a = state.animals[i]; if (!a) return;
+        var def = ANIMAL_BY_ID[a.type];
+        var rdy = a.grown >= def.interval;
+        var fed = Date.now() < a.feedUntil;
+        el.className = "an" + (rdy ? " rdy" : (fed ? " fed" : " hungry"));
+        if (!rdy) { var prod = el.querySelector(".prod"); if (prod) prod.parentNode.removeChild(prod); }
       }
 
       function feed(i) {
@@ -1906,7 +2120,7 @@
         // lines, badges, countdowns and re-rolled prices honest. Skip it while
         // the player is actively dragging so the pan stays buttery.
         viewAccum += dt;
-        if (viewAccum > 1000) { viewAccum = 0; if (!dragging) render(); }
+        if (viewAccum > 1000) { viewAccum = 0; if (!dragging && paintMode === null) render(); }
 
         saveAccum += dt;
         if (dirty && saveAccum > 1500) { save(); dirty = false; saveAccum = 0; }
