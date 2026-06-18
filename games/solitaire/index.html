@@ -303,7 +303,7 @@
         if (!pile.length) return card.rank === 13;          // empty: King only
         var top = pile[pile.length - 1];
         if (!top.up) return false;
-        return top.c.color !== card.color && top.c.rank === card.rank - 1;
+        return top.c.color !== card.color && card.rank === top.c.rank - 1;
       }
 
       // Can `card` go onto foundation pile `f`?
