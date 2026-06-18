@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🐍 Snake — Minigames</title>
+  <meta name="description" content="Snake — eat the apples, grow longer and don't bite yourself. Arrow keys, WASD or swipe. Play in your browser, no installs." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>" />
+
+  <!-- Shared chrome: header bar + language control. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <script src="../../shared/mg.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: #1d2230;
+      color: #fff;
+      font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* The game area hosts the centered stage below the shared header. */
+    .mg-game-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1d2230;
+      padding: 12px;
+    }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: min(70vh, 480px);
+      aspect-ratio: 1 / 1;
+      margin: auto;
+      max-height: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    /* Overlay screens */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+    }
+    .overlay.hidden { display: none; }
+
+    .panel {
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 18px;
+      padding: 26px 30px;
+      backdrop-filter: blur(3px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .title {
+      font-size: clamp(1.8rem, 7vw, 2.6rem);
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+      margin-bottom: 6px;
+    }
+
+    .hint {
+      font-size: 1rem;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    .score-line {
+      font-size: 1.1rem;
+      margin-top: 8px;
+    }
+    .score-line b { font-size: 1.6rem; }
+
+    .play-pill {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 10px 22px;
+      font-weight: 800;
+      font-size: 1.05rem;
+      color: #143e10;
+      background: #7ee05a;
+      border-radius: 999px;
+      box-shadow: 0 4px 0 #3f9e26;
+      animation: bob 1.1s ease-in-out infinite;
+    }
+
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+  </style>
+</head>
+<body class="mg-app">
+  <!-- Header is mounted by the shared runtime (see MG.mountHeader below). -->
+  <div class="mg-game-area">
+    <div class="stage">
+      <canvas id="game"></canvas>
+
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <div class="title" id="overlay-title">🐍 Snake</div>
+          <div class="hint" id="overlay-hint"></div>
+          <div class="score-line" id="overlay-score" hidden></div>
+          <div class="play-pill" id="overlay-action"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var $ = function (id) { return document.getElementById(id); };
+
+      /* ============================ i18n ============================ */
+      MG.i18n.register({
+        en: {
+          title: "Snake", score: "Score", best: "Best",
+          hint: "Arrow keys, WASD or swipe to steer",
+          gameover: "Game Over", scoreLabel: "Score", bestLabel: "Best",
+          play: "▶ Play", playAgain: "▶ Play again"
+        },
+        ru: {
+          title: "Змейка", score: "Счёт", best: "Рекорд",
+          hint: "Стрелки, WASD или свайп — поворот",
+          gameover: "Игра окончена", scoreLabel: "Счёт", bestLabel: "Рекорд",
+          play: "▶ Играть", playAgain: "▶ Ещё раз"
+        },
+        es: {
+          title: "Serpiente", score: "Puntos", best: "Mejor",
+          hint: "Flechas, WASD o desliza para girar",
+          gameover: "Fin del juego", scoreLabel: "Puntos", bestLabel: "Mejor",
+          play: "▶ Jugar", playAgain: "▶ Jugar otra vez"
+        }
+      });
+
+      var canvas = $("game");
+      var ctx = canvas.getContext("2d");
+      var overlay = $("overlay");
+      var overlayTitle = $("overlay-title");
+      var overlayHint = $("overlay-hint");
+      var overlayScore = $("overlay-score");
+      var overlayAction = $("overlay-action");
+
+      // Shared header: brand + language selector + Score and Best stat chips.
+      var ui = MG.mountHeader({
+        icon: "🐍",
+        titleKey: "title",
+        stats: [
+          { key: "score", labelKey: "score", value: 0 },
+          { key: "best", labelKey: "best" }
+        ]
+      });
+
+      // --- Grid configuration ---
+      // The world is a square grid of GRID×GRID cells. The canvas is drawn at
+      // a logical pixel size and scaled to fit the (square) stage.
+      var GRID = 17;
+      var cell = 24;             // logical px per cell (recomputed on resize)
+      var W = GRID * cell;
+      var H = GRID * cell;
+      var viewScale = 1;
+
+      // High-DPI sizing — keep the world square, fit it into the stage.
+      function resize() {
+        var rect = canvas.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        var size = Math.min(rect.width, rect.height) || 1;
+        canvas.width = Math.round(size * dpr);
+        canvas.height = Math.round(size * dpr);
+        viewScale = (size / W) * dpr;
+      }
+
+      // --- Speed (ms per step) — starts gentle, ramps up as the snake grows ---
+      var STEP_START = 150;
+      var STEP_MIN = 70;
+      var STEP_RAMP = 4;         // ms faster per apple eaten
+
+      // --- State ---
+      var STATE_READY = 0, STATE_PLAY = 1, STATE_DEAD = 2;
+      var state = STATE_READY;
+
+      var snake, dir, nextDir, food, score, best, stepMs, acc, lastTime, growBy;
+
+      // Shared versioned save store (see MG.storage in shared/mg.js).
+      var store = MG.storage("snake", { version: 1 });
+      best = (store.load() || { best: 0 }).best;
+      ui.setStat("best", best);
+
+      function reset() {
+        var mid = (GRID / 2) | 0;
+        snake = [
+          { x: mid - 1, y: mid },
+          { x: mid - 2, y: mid },
+          { x: mid - 3, y: mid }
+        ];
+        dir = { x: 1, y: 0 };
+        nextDir = { x: 1, y: 0 };
+        score = 0;
+        growBy = 0;
+        stepMs = STEP_START;
+        acc = 0;
+        lastTime = 0;
+        ui.setStat("score", 0);
+        placeFood();
+      }
+
+      // Place food on a random free cell.
+      function placeFood() {
+        var free = [];
+        for (var y = 0; y < GRID; y++) {
+          for (var x = 0; x < GRID; x++) {
+            if (!occupied(x, y)) free.push({ x: x, y: y });
+          }
+        }
+        if (!free.length) { food = null; return; } // board full — win-ish
+        food = free[(Math.random() * free.length) | 0];
+      }
+
+      function occupied(x, y) {
+        for (var i = 0; i < snake.length; i++) {
+          if (snake[i].x === x && snake[i].y === y) return true;
+        }
+        return false;
+      }
+
+      // --- Input: queue a turn (can't reverse straight back). ---
+      function setDir(x, y) {
+        if (state === STATE_READY) startGame();
+        if (state !== STATE_PLAY) return;
+        // Disallow reversing onto the neck.
+        if (x === -dir.x && y === -dir.y) return;
+        nextDir = { x: x, y: y };
+      }
+
+      function startGame() {
+        reset();
+        state = STATE_PLAY;
+        overlay.classList.add("hidden");
+      }
+
+      function showReady() {
+        reset();
+        state = STATE_READY;
+        overlay.classList.remove("hidden");
+        renderOverlay();
+      }
+
+      function die() {
+        state = STATE_DEAD;
+        if (score > best) {
+          best = score;
+          store.save({ best: best });
+          ui.setStat("best", best);
+        }
+        showGameOver();
+      }
+
+      function showGameOver() {
+        overlay.classList.remove("hidden");
+        renderOverlay();
+      }
+
+      // Render overlay text for the current state in the current language.
+      function renderOverlay() {
+        var t = MG.i18n.t;
+        if (state === STATE_DEAD) {
+          overlayTitle.textContent = "🐍 " + t("title");
+          overlayHint.textContent = t("gameover");
+          overlayScore.hidden = false;
+          overlayScore.innerHTML =
+            t("scoreLabel") + " <b>" + score + "</b><br>" + t("bestLabel") + " <b>" + best + "</b>";
+          overlayAction.textContent = t("playAgain");
+        } else {
+          overlayTitle.textContent = "🐍 " + t("title");
+          overlayHint.textContent = t("hint");
+          overlayScore.hidden = true;
+          overlayAction.textContent = t("play");
+        }
+      }
+      MG.i18n.onChange(function () {
+        if (!overlay.classList.contains("hidden")) renderOverlay();
+      });
+
+      // Briefly flash a stat chip's value (e.g. when the score ticks up).
+      function flashStat(key) {
+        var e = ui.stat(key);
+        if (!e) return;
+        e.classList.remove("mg-flash");
+        void e.offsetWidth;
+        e.classList.add("mg-flash");
+      }
+
+      // --- Step the simulation by one grid move. ---
+      function step() {
+        dir = nextDir;
+        var head = snake[0];
+        var nx = head.x + dir.x;
+        var ny = head.y + dir.y;
+
+        // Walls.
+        if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) { die(); return; }
+        // Self bite — ignore the tail cell, which is about to move away
+        // (unless we're growing this step).
+        for (var i = 0; i < snake.length; i++) {
+          if (i === snake.length - 1 && growBy === 0) break;
+          if (snake[i].x === nx && snake[i].y === ny) { die(); return; }
+        }
+
+        snake.unshift({ x: nx, y: ny });
+
+        if (food && nx === food.x && ny === food.y) {
+          score++;
+          growBy += 1;
+          ui.setStat("score", score);
+          flashStat("score");
+          stepMs = Math.max(STEP_MIN, STEP_START - score * STEP_RAMP);
+          placeFood();
+        }
+
+        if (growBy > 0) {
+          growBy--;
+        } else {
+          snake.pop();
+        }
+      }
+
+      // --- Render ---
+      function draw() {
+        ctx.save();
+        ctx.scale(viewScale, viewScale);
+
+        // Board: subtle checkerboard.
+        for (var y = 0; y < GRID; y++) {
+          for (var x = 0; x < GRID; x++) {
+            ctx.fillStyle = (x + y) % 2 === 0 ? "#2a3142" : "#252b3a";
+            ctx.fillRect(x * cell, y * cell, cell, cell);
+          }
+        }
+
+        // Food (apple).
+        if (food) drawFood(food.x, food.y);
+
+        // Snake.
+        for (var i = snake.length - 1; i >= 0; i--) {
+          drawSegment(i);
+        }
+
+        ctx.restore();
+      }
+
+      function drawFood(gx, gy) {
+        var cx = gx * cell + cell / 2;
+        var cy = gy * cell + cell / 2;
+        var r = cell * 0.34;
+        ctx.fillStyle = "#ff5a52";
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        // Shine.
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.beginPath();
+        ctx.arc(cx - r * 0.3, cy - r * 0.35, r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        // Leaf.
+        ctx.fillStyle = "#5fbf3b";
+        ctx.beginPath();
+        ctx.ellipse(cx + r * 0.4, cy - r * 0.9, r * 0.42, r * 0.22, -0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawSegment(i) {
+        var s = snake[i];
+        var pad = cell * 0.10;
+        var x = s.x * cell + pad;
+        var y = s.y * cell + pad;
+        var sz = cell - pad * 2;
+        var r = sz * 0.32;
+
+        var isHead = i === 0;
+        // Body gradient from bright head to deeper tail.
+        var f = snake.length > 1 ? i / (snake.length - 1) : 0;
+        var light = 56 - f * 14;
+        ctx.fillStyle = isHead ? "#7ee05a" : "hsl(110, 55%, " + light + "%)";
+        roundRect(x, y, sz, sz, r);
+        ctx.fill();
+
+        if (isHead) drawEyes(s);
+      }
+
+      function drawEyes(head) {
+        var cx = head.x * cell + cell / 2;
+        var cy = head.y * cell + cell / 2;
+        var off = cell * 0.18;
+        var er = cell * 0.10;
+        // Eyes sit toward the facing edge, perpendicular to travel.
+        var fx = dir.x * cell * 0.16;
+        var fy = dir.y * cell * 0.16;
+        var px = -dir.y, py = dir.x; // perpendicular
+        var e1x = cx + fx + px * off, e1y = cy + fy + py * off;
+        var e2x = cx + fx - px * off, e2y = cy + fy - py * off;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(e1x, e1y, er, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(e2x, e2y, er, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#1a1a1a";
+        var pr = er * 0.55;
+        ctx.beginPath(); ctx.arc(e1x + dir.x * pr, e1y + dir.y * pr, pr, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(e2x + dir.x * pr, e2y + dir.y * pr, pr, 0, Math.PI * 2); ctx.fill();
+      }
+
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      // --- Loop (time-based stepping so speed is frame-rate independent) ---
+      function loop(now) {
+        if (!lastTime) lastTime = now;
+        var dt = now - lastTime;
+        lastTime = now;
+
+        if (state === STATE_PLAY) {
+          acc += dt;
+          // Guard against huge dt (tab switch) eating many steps at once.
+          if (acc > stepMs * 4) acc = stepMs;
+          while (state === STATE_PLAY && acc >= stepMs) {
+            acc -= stepMs;
+            step();
+          }
+        }
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      // --- Input ---
+      window.addEventListener("keydown", function (e) {
+        var k = e.key;
+        if (k === "ArrowUp" || k === "w" || k === "W") { setDir(0, -1); e.preventDefault(); }
+        else if (k === "ArrowDown" || k === "s" || k === "S") { setDir(0, 1); e.preventDefault(); }
+        else if (k === "ArrowLeft" || k === "a" || k === "A") { setDir(-1, 0); e.preventDefault(); }
+        else if (k === "ArrowRight" || k === "d" || k === "D") { setDir(1, 0); e.preventDefault(); }
+        else if (k === " " || k === "Enter") {
+          if (state !== STATE_PLAY) startGame();
+          e.preventDefault();
+        }
+      });
+
+      // Touch: swipe to steer, tap on overlay to (re)start.
+      var touchStart = null;
+      canvas.addEventListener("touchstart", function (e) {
+        var tch = e.changedTouches[0];
+        touchStart = { x: tch.clientX, y: tch.clientY };
+        e.preventDefault();
+      }, { passive: false });
+      canvas.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+      canvas.addEventListener("touchend", function (e) {
+        if (!touchStart) return;
+        var tch = e.changedTouches[0];
+        var dx = tch.clientX - touchStart.x;
+        var dy = tch.clientY - touchStart.y;
+        touchStart = null;
+        if (Math.abs(dx) < 18 && Math.abs(dy) < 18) {
+          // Treated as a tap — start/continue.
+          if (state !== STATE_PLAY) startGame();
+          return;
+        }
+        if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+        else setDir(0, dy > 0 ? 1 : -1);
+        e.preventDefault();
+      }, { passive: false });
+
+      // Tap the overlay to (re)start.
+      function onOverlayTap(e) {
+        e.preventDefault();
+        if (state !== STATE_PLAY) startGame();
+      }
+      overlay.addEventListener("mousedown", onOverlayTap);
+      overlay.addEventListener("touchstart", onOverlayTap, { passive: false });
+
+      window.addEventListener("resize", resize);
+
+      // --- Boot ---
+      resize();
+      reset();
+      showReady();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
