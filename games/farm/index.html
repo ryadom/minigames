@@ -394,10 +394,137 @@
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* ====================================================================
+     *  VILLAGE HUB — the spatial home screen. Each zone is a tappable
+     *  tile that opens its detailed panel (field, barn, kitchen, …).
+     * ================================================================== */
+    .village { position: relative; }
+
+    /* A little sky strip with sun, clouds and treetops for village feel. */
+    .vsky {
+      position: relative;
+      height: 46px;
+      margin: -4px -2px 10px;
+      border-radius: 16px 16px 0 0;
+      background: linear-gradient(180deg, #bfe9ff 0%, #d8f1ff 70%, #cdeeb4 100%);
+      overflow: hidden;
+    }
+    .vsky span {
+      position: absolute;
+      line-height: 1;
+      filter: drop-shadow(0 2px 1px rgba(0,0,0,0.12));
+    }
+    .vsky .sun { left: 14px; top: 6px; font-size: 1.7rem; animation: vsun 6s ease-in-out infinite; }
+    .vsky .c1 { left: 38%; top: 8px; font-size: 1.3rem; animation: vfloat 9s ease-in-out infinite; }
+    .vsky .c2 { right: 14%; top: 16px; font-size: 1rem; opacity: 0.9; animation: vfloat 12s ease-in-out infinite reverse; }
+    .vsky .t1 { right: 6px; bottom: -4px; font-size: 1.7rem; }
+    .vsky .t2 { right: 30px; bottom: -6px; font-size: 1.3rem; }
+    @keyframes vsun { 0%,100% { transform: rotate(0); } 50% { transform: rotate(18deg); } }
+    @keyframes vfloat { 0%,100% { transform: translateX(0); } 50% { transform: translateX(10px); } }
+
+    .vzones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .zone {
+      position: relative;
+      border: none;
+      border-radius: 16px;
+      padding: 11px 12px 12px;
+      background: rgba(255,255,255,0.94);
+      box-shadow: 0 5px 0 rgba(0,0,0,0.13);
+      cursor: pointer;
+      text-align: left;
+      color: #2e3b22;
+      font-family: inherit;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform 0.08s ease, box-shadow 0.12s ease;
+    }
+    .zone:active { transform: translateY(2px); box-shadow: 0 3px 0 rgba(0,0,0,0.13); }
+    .zone.wide { grid-column: 1 / -1; }
+
+    .zhead { display: flex; align-items: center; gap: 8px; }
+    .zhead .zico { font-size: 1.55rem; line-height: 1; flex: 0 0 auto; }
+    .zhead .ztt { font-weight: 800; font-size: 0.96rem; line-height: 1.1; }
+    .zhead .zsub { font-size: 0.7rem; color: #5a6648; font-weight: 700; }
+
+    .zbadge {
+      position: absolute;
+      top: 9px; right: 9px;
+      background: #7fd06a;
+      color: #14310c;
+      font-weight: 800;
+      font-size: 0.74rem;
+      border-radius: 999px;
+      padding: 2px 9px;
+      box-shadow: 0 2px 0 #4f9b3e;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    /* Field zone: a compact preview of the soil plots. */
+    .zfield {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 4px;
+      padding: 8px;
+      border-radius: 11px;
+      background: linear-gradient(180deg, #7a4a26 0%, #683d1f 100%);
+      box-shadow: inset 0 0 0 3px #5a3318;
+    }
+    .zfield .mp {
+      aspect-ratio: 1 / 1;
+      border-radius: 5px;
+      background:
+        repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0 4px, transparent 4px 8px),
+        linear-gradient(180deg, #9c6a3e 0%, #8a5a30 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(0.7rem, 3.4vw, 1rem);
+      line-height: 1;
+    }
+    .zfield .mp.ready { box-shadow: inset 0 0 0 2px #ffd23f; animation: ripe 1.3s ease-in-out infinite; }
+    .zfield .mp.locked {
+      background: linear-gradient(180deg, #5d4530 0%, #4a361f 100%);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+    }
+
+    /* Pasture zone: animals milling about a grassy pen. */
+    .zpen {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+      min-height: 46px;
+      padding: 8px 10px;
+      border-radius: 11px;
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.12) 0 3px, transparent 3px 16px),
+        linear-gradient(180deg, #bfe39a 0%, #a6d27e 100%);
+      box-shadow: inset 0 0 0 2px rgba(90,120,50,0.35);
+    }
+    .zpen .an { font-size: 1.5rem; line-height: 1; }
+    .zpen .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
+    .zpen .zempty { font-size: 0.74rem; color: #4a5c30; font-weight: 700; opacity: 0.85; }
+
+    /* Building zones (kitchen / market / orders): a big icon + status lines. */
+    .zbuild { display: flex; align-items: center; gap: 11px; }
+    .zbuild .b {
+      font-size: 2.5rem;
+      line-height: 1;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 3px 2px rgba(0,0,0,0.18));
+    }
+    .zbuild .bcol { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .zbuild .bs { font-size: 0.78rem; font-weight: 700; color: #5a6648; white-space: nowrap; }
+    .zbuild .bs.coin { color: #7a5a00; }
+
     @media (max-width: 380px) {
       .card { padding: 10px 11px; gap: 9px; }
       .card .big { font-size: 1.8rem; }
-      .nav button .nlbl { font-size: 0.58rem; }
+      .nav button .nlbl { font-size: 0.54rem; }
+      .nav button .nico { font-size: 1.2rem; }
+      .zbuild .b { font-size: 2.1rem; }
     }
   </style>
 </head>
@@ -496,7 +623,13 @@
           newFarm: "New farm",
           confirmReset: "Reset your farm? All progress, crops, animals and coins will be lost.",
           // tabs
+          tabVillage: "Village",
           tabFarm: "Field", tabBarn: "Barn", tabCook: "Kitchen", tabMarket: "Market", tabQuests: "Orders",
+          // village hub
+          tipVillage: "Welcome to your farm — tap a place to visit it.",
+          vField: "Grow crops", vPasture: "Raise animals", vKitchen: "Cook dishes",
+          vMarket: "Buy & sell", vOrders: "Deliver goods",
+          vPastureEmpty: "Empty pasture — buy animals at the market",
           // field
           water: "Water", clear: "Clear",
           tipPlant: "Pick a seed, then tap soil to plant it.",
@@ -546,7 +679,12 @@
           title: "Ферма", coins: "Монеты", level: "Уровень",
           newFarm: "Новая ферма",
           confirmReset: "Сбросить ферму? Весь прогресс, посевы, животные и монеты пропадут.",
+          tabVillage: "Деревня",
           tabFarm: "Поле", tabBarn: "Хлев", tabCook: "Кухня", tabMarket: "Рынок", tabQuests: "Заказы",
+          tipVillage: "Добро пожаловать на ферму — нажми на место, чтобы зайти.",
+          vField: "Выращивай урожай", vPasture: "Разводи животных", vKitchen: "Готовь блюда",
+          vMarket: "Покупай и продавай", vOrders: "Выполняй заказы",
+          vPastureEmpty: "Пустой загон — купи животных на рынке",
           water: "Полив", clear: "Убрать",
           tipPlant: "Выбери семя и нажми на грядку, чтобы посадить.",
           tipWater: "Нажми на растущую грядку, чтобы полить — мокрые растут вдвое быстрее.",
@@ -590,7 +728,12 @@
           title: "Granja", coins: "Monedas", level: "Nivel",
           newFarm: "Nueva granja",
           confirmReset: "¿Reiniciar tu granja? Perderás todo el progreso, cultivos, animales y monedas.",
+          tabVillage: "Aldea",
           tabFarm: "Campo", tabBarn: "Establo", tabCook: "Cocina", tabMarket: "Mercado", tabQuests: "Pedidos",
+          tipVillage: "Bienvenido a tu granja — toca un lugar para visitarlo.",
+          vField: "Cultiva", vPasture: "Cría animales", vKitchen: "Cocina platos",
+          vMarket: "Compra y vende", vOrders: "Entrega pedidos",
+          vPastureEmpty: "Pasto vacío — compra animales en el mercado",
           water: "Regar", clear: "Quitar",
           tipPlant: "Elige una semilla y toca la tierra para plantar.",
           tipWater: "Toca una parcela en crecimiento para regarla — mojadas crecen el doble de rápido.",
@@ -668,7 +811,7 @@
           cooks: [null],
           quests: [],
           prices: {}, marketUntil: 0,
-          tab: "farm",
+          tab: "village",
           lastSeen: Date.now()
         };
         rollMarket(s, true);
@@ -893,6 +1036,7 @@
       var toastEl = $("toast");
 
       var TABS = [
+        { id: "village", ico: "🏡", lbl: "tabVillage" },
         { id: "farm", ico: "🌱", lbl: "tabFarm" },
         { id: "barn", ico: "🐄", lbl: "tabBarn" },
         { id: "cook", ico: "🍳", lbl: "tabCook" },
@@ -936,6 +1080,7 @@
       }
       // Show a red dot on a tab when it has something ready to act on.
       function navDot(tab) {
+        if (tab === "village") return navDot("farm") || navDot("barn") || navDot("cook") || navDot("quests");
         if (tab === "farm") return state.plots.some(function (p, i) { return i < state.unlocked && p.crop && p.grown >= CROP_BY_ID[p.crop].grow; });
         if (tab === "barn") return state.animals.some(function (a) { return a.grown >= ANIMAL_BY_ID[a.type].interval; });
         if (tab === "cook") return state.cooks.some(function (c) { return c && Date.now() >= c.endsAt; });
@@ -949,7 +1094,8 @@
       function render() {
         var scroll = view.scrollTop;
         var html;
-        if (state.tab === "farm") html = renderFarm();
+        if (state.tab === "village") html = renderVillage();
+        else if (state.tab === "farm") html = renderFarm();
         else if (state.tab === "barn") html = renderBarn();
         else if (state.tab === "cook") html = renderCook();
         else if (state.tab === "market") html = renderMarket();
@@ -961,6 +1107,99 @@
       }
 
       function tipLine(key) { return '<div class="tip">' + esc(MG.i18n.t(key)) + "</div>"; }
+
+      /* ------------------------------- VILLAGE ----------------------------- */
+      // The home hub: a little scene with the field, the animal pasture and the
+      // village buildings. Each zone is a button that opens its detail tab.
+      function zone(o) {
+        var badge = o.ready ? '<span class="zbadge">' + o.ready + "</span>" : "";
+        return '<button class="zone' + (o.wide ? " wide" : "") + '" data-act="nav" data-arg="' + o.act + '">' +
+          badge +
+          '<div class="zhead"><span class="zico">' + o.ico + "</span><div>" +
+            '<div class="ztt">' + esc(o.title) + "</div>" +
+            '<div class="zsub">' + esc(o.sub) + "</div></div></div>" +
+          o.body +
+          "</button>";
+      }
+      function building(emoji, lines) {
+        var inner = lines.map(function (l) {
+          return '<div class="bs' + (l.coin ? " coin" : "") + '">' + l.text + "</div>";
+        }).join("");
+        return '<div class="zbuild"><span class="b">' + emoji + '</span><div class="bcol">' + inner + "</div></div>";
+      }
+
+      function renderVillage() {
+        var h = tipLine("tipVillage");
+        h += '<div class="village">';
+        h += '<div class="vsky"><span class="sun">☀️</span><span class="c1">☁️</span>' +
+          '<span class="c2">☁️</span><span class="t1">🌳</span><span class="t2">🌳</span></div>';
+        h += '<div class="vzones">';
+
+        // FIELD — a mini preview of every plot.
+        var readyCrops = 0;
+        var mini = '<div class="zfield">';
+        for (var i = 0; i < GRID; i++) {
+          if (i >= state.unlocked) { mini += '<span class="mp locked"></span>'; continue; }
+          var p = state.plots[i], cls = "mp", spr = "";
+          if (p.crop) {
+            var c = CROP_BY_ID[p.crop];
+            if (p.grown >= c.grow) { cls += " ready"; spr = c.ico; readyCrops++; }
+            else spr = plotSprite(p);
+          }
+          mini += '<span class="' + cls + '">' + spr + "</span>";
+        }
+        mini += "</div>";
+        h += zone({ act: "farm", wide: true, ico: "🌾", title: MG.i18n.t("tabFarm"),
+          sub: MG.i18n.t("vField"), ready: readyCrops, body: mini });
+
+        // PASTURE — the animals you own, milling about a pen.
+        var penReady = 0, pen = '<div class="zpen">';
+        if (!state.animals.length) {
+          pen += '<span class="zempty">' + esc(MG.i18n.t("vPastureEmpty")) + "</span>";
+        } else {
+          state.animals.forEach(function (a) {
+            var def = ANIMAL_BY_ID[a.type];
+            var rdy = a.grown >= def.interval;
+            if (rdy) penReady++;
+            pen += '<span class="an' + (rdy ? " rdy" : "") + '">' + def.ico + "</span>";
+          });
+        }
+        pen += "</div>";
+        h += zone({ act: "barn", ico: "🐄", title: MG.i18n.t("tabBarn"),
+          sub: MG.i18n.t("vPasture"), ready: penReady, body: pen });
+
+        // KITCHEN building.
+        var cookReady = 0, cooking = 0;
+        state.cooks.forEach(function (c) {
+          if (c) { if (Date.now() >= c.endsAt) cookReady++; else cooking++; }
+        });
+        h += zone({ act: "cook", ico: "🍳", title: MG.i18n.t("tabCook"),
+          sub: MG.i18n.t("vKitchen"), ready: cookReady,
+          body: building("🏠", [
+            { text: "⏲️ " + cooking + " · ✓ " + cookReady },
+            { text: "🍳 " + state.stoves + " " + esc(MG.i18n.t("stoves")) }
+          ]) });
+
+        // MARKET building.
+        h += zone({ act: "market", ico: "🛒", title: MG.i18n.t("tabMarket"),
+          sub: MG.i18n.t("vMarket"),
+          body: building("🏪", [
+            { text: "📦 " + invCount() + "/" + state.cap },
+            { text: "🪙 " + state.coins, coin: true }
+          ]) });
+
+        // ORDERS board.
+        var fillable = 0, orders = 0;
+        state.quests.forEach(function (q) {
+          if (q) { orders++; if ((state.inv[q.item] || 0) >= q.need) fillable++; }
+        });
+        h += zone({ act: "quests", ico: "📋", title: MG.i18n.t("tabQuests"),
+          sub: MG.i18n.t("vOrders"), ready: fillable,
+          body: building("🪧", [{ text: "🎁 " + fillable + " / " + orders }]) });
+
+        h += "</div></div>";
+        return h;
+      }
 
       /* -------------------------------- FIELD ------------------------------ */
       function plotSprite(p) {
@@ -1462,7 +1701,7 @@
         viewAccum += dt;
         if (viewAccum > 1000) {
           viewAccum = 0;
-          if (state.tab === "barn" || state.tab === "cook") render();
+          if (state.tab === "barn" || state.tab === "cook" || state.tab === "village") render();
         }
 
         // nav dots + header stats refresh
