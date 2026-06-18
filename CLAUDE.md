@@ -16,23 +16,21 @@ This is a **static site** with a thin TypeScript build. There is intentionally
 what GitHub Pages deploys**. There is no framework the *running* site depends on
 — the output is plain static HTML/CSS/JS.
 
-The codebase is **mid-migration** from the original zero-build, ES5,
-`window`-global style to TypeScript ES modules. Both styles coexist and the
-build serves both:
-
-- **Migrated** code (the shared runtime + the 🚜 Farm game) is TypeScript **ES
-  modules**, bundled per page with `Bun.build`.
-- **Legacy** games are still plain JS and load the shared runtime via a classic
-  `<script src=".../shared/mg.js">` tag (the `window.MG` global).
+The whole codebase is **TypeScript ES modules** — the home page, every game,
+the shared runtime and the service worker. (It was migrated from an original
+zero-build, ES5, `window`-global style; that migration is now complete, so no
+legacy `<script src=".../shared/mg.js">` global-loading game code remains.)
+Each page bundles the runtime in via `import { MG } from ".../shared/mg"`.
 
 `build.ts` (run by `bun run build`) does three things:
 
-1. Copies every static asset (HTML, CSS, images, legacy game JS, PWA files,
-   `CNAME`, …) into `dist/`, skipping tooling and `.ts` sources.
+1. Copies every static asset (HTML, CSS, images, PWA files, `CNAME`, …) into
+   `dist/`, skipping tooling and `.ts` sources.
 2. Compiles the shared runtime (`shared/*.ts`) to **classic IIFE scripts** that
-   publish `window.MG` — so legacy games keep working unchanged.
-3. Bundles each migrated game (ES modules) into one self-contained module
-   script (the shared runtime is inlined into it).
+   publish `window.MG` (still emitted for any classic-`<script>` consumer), and
+   the service worker (`sw.ts`) to a root `sw.js`.
+3. Bundles the home page (`app.ts`) and each game (ES modules) into one
+   self-contained module script (the shared runtime is inlined into each).
 
 Bun is also the package manager / task runner; **Biome** does lint + format and
 **`tsc --noEmit`** does type-checking. None of these run in the browser — they
@@ -40,14 +38,14 @@ produce/check the static `dist/` output.
 
 ```
 .
-├── index.html              # Home page shell (legacy JS for now)
+├── index.html              # Home page shell (loads the app.ts module bundle)
 ├── styles.css              # Home page styles
-├── games.js                # Registry: window.GAMES (title, icon, url, description)
-├── app.js                  # Renders the game list + home language control (legacy)
+├── games.ts                # Registry: exports GAMES (title, icon, url, description)
+├── app.ts                  # Renders the game list + home language control
 ├── manifest.webmanifest    # PWA manifest (installable app metadata)
-├── sw.js                   # Service worker (offline cache, scope "/")
+├── sw.ts                   # Service worker (offline cache, scope "/"); built to sw.js
 ├── icon.svg                # PWA / app icon (maskable)
-├── build.ts                # Bun build → dist/ (copy static + compile shared + bundle games)
+├── build.ts                # Bun build → dist/ (copy static + compile shared + bundle pages)
 ├── tsconfig.json           # TypeScript config (strict, noEmit; Bun bundles)
 ├── biome.json              # Biome lint + format config
 ├── global.d.ts             # Ambient types (window.MG)
@@ -58,9 +56,7 @@ produce/check the static `dist/` output.
 │   ├── mg.css              # Shared chrome styles (header bar, theme tokens)
 │   └── cards.css           # Shared card styles
 ├── games/
-│   ├── farm/               # Migrated: TypeScript ES modules (js/*.ts, entry js/main.ts)
-│   ├── minesweeper/index.html   # Legacy: plain JS + <script src=".../shared/mg.js">
-│   └── …                        # 10 more legacy games
+│   └── <name>/             # Each game: TypeScript ES modules (js/*.ts, entry js/main.ts)
 ├── scripts/
 │   ├── serve.mjs           # `bun run dev` — static server (serves dist/ via SERVE_ROOT)
 │   └── validate.mjs        # `bun run check` — structure validation
@@ -69,16 +65,15 @@ produce/check the static `dist/` output.
     └── deploy.yml          # build with Bun, deploy dist/ to GitHub Pages
 ```
 
-When migrating a game to TypeScript, add its module entry point to the `farm`
-list in `build.ts` and switch its `index.html` from the legacy `<script
-src=".../shared/mg.js">` + per-file `<script>` tags to a single
-`<script type="module" src="js/main.js">`.
+Every game's module entry point is listed in the `GAMES` array in `build.ts`,
+and its `index.html` loads a single `<script type="module" src="js/main.js">`.
 
 ## The shared runtime (`shared/mg.ts` → `window.MG`)
 
-Migrated games `import { MG } from "../../../shared/mg"`; legacy games load
-`shared/mg.css` + `shared/mg.js` (the IIFE build) and use the `window.MG` global.
-Either way it's the same runtime. The public type surface lives in
+Games `import { MG } from "../../../shared/mg"` and the bundler inlines the
+runtime into each page's module. The classic IIFE build (`shared/mg.js`,
+exposing the `window.MG` global) is still emitted for any classic-`<script>`
+consumer, but nothing in the site relies on it. The public type surface lives in
 `shared/types.ts` (`MGGlobal`, `I18n`, `MountHeaderOpts`, `HeaderUI`,
 `SaveStore`, …). Pieces:
 
@@ -164,14 +159,17 @@ than downgraded.
 The site is an installable, offline-capable PWA:
 
 - `manifest.webmanifest` + `icon.svg` (root) describe the installable app.
-- `sw.js` (root) is the service worker. Its scope is the whole site (`/`); it
-  precaches the app shell and uses **stale-while-revalidate** for everything
-  else, so each game is cached the first time it's visited and works offline
-  after that. Bump `CACHE` in `sw.js` when the precached shell changes.
-- The shared runtime does the wiring for **every** page: since every game loads
-  it (as a global or bundled in), it injects the `<link rel="manifest">` +
-  install metadata and registers the service worker — no per-game HTML changes
-  needed. Setup is a no-op on `file://` (service workers need http/https).
+- `sw.ts` (root, built to `dist/sw.js`) is the service worker. Its scope is the
+  whole site (`/`); it precaches the app shell and uses
+  **stale-while-revalidate** for everything else, so each game is cached the
+  first time it's visited and works offline after that. Bump `CACHE` in `sw.ts`
+  when the precached shell changes.
+- The shared runtime does the wiring for **every** page: since every page
+  bundles it in, it injects the `<link rel="manifest">` + install metadata and
+  registers the service worker — no per-game HTML changes needed. It resolves
+  the site root from the page URL, so it works at the root or under
+  `games/<name>/`. Setup is a no-op on `file://` (service workers need
+  http/https).
 
 When adding a game you get PWA support for free (it loads the shared runtime).
 `bun run check` validates the manifest and that its icons exist.
@@ -196,14 +194,15 @@ reference). To add one:
    ```
    Use `<body class="mg-app">` with a `<div class="mg-game-area">` host, register
    translations with `MG.i18n.register(...)`, and mount `MG.mountHeader(...)`.
-3. Add the game's entry point to the build list in `build.ts`.
-4. Register the game in `games.js` (`title`, `icon`, `url`, and a `description`
-   that is either a string or a `{ en, ru, es }` map).
+3. Add the game's entry point to the `GAMES` list in `build.ts`.
+4. Register the game in `games.ts` (add an entry to the exported `GAMES`
+   array — `title`, `icon`, `url`, and a `description` that is either a string
+   or a `{ en, ru, es }` map).
 5. Run `bun run lint && bun run typecheck && bun run check && bun run build` to
    verify, then commit and push.
 
-(The 11 legacy games are still plain JS loading `<script src=".../shared/mg.js">`.
-That keeps working; migrate them to TypeScript opportunistically.)
+(Every game in the repo is already a TypeScript ES module — use any of them, or
+the 🚜 Farm game, as a reference.)
 
 ## Commands
 

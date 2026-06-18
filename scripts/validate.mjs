@@ -1,29 +1,25 @@
 // Validates the project's structure without a build step:
-//   • every game in the registry (games.js) has a title, icon and url,
+//   • every game in the registry (games.ts) has a title, icon and url,
 //   • each game url points at a folder that contains an index.html,
 //   • the shared runtime files exist,
 //   • each game page actually loads the shared runtime.
 //
-// Run with `npm run check`. Exits non-zero on the first batch of failures,
+// Run with `bun run check`. Exits non-zero on the first batch of failures,
 // so it can be used as a CI / pre-commit gate.
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import vm from "node:vm";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const errors = [];
 
-// --- Load the games registry (games.js sets window.GAMES). ---
-const registrySrc = readFileSync(join(ROOT, "games.js"), "utf8");
-const sandbox = { window: {}, navigator: { language: "en" } };
-vm.createContext(sandbox);
-vm.runInContext(registrySrc, sandbox);
-const games = sandbox.window.GAMES;
+// --- Load the games registry (games.ts exports GAMES). Run under Bun, which
+//     imports TypeScript directly. ---
+const { GAMES: games } = await import(join(ROOT, "games.ts"));
 
 if (!Array.isArray(games)) {
-  errors.push("games.js did not define a window.GAMES array");
+  errors.push("games.ts did not export a GAMES array");
 } else {
   games.forEach((game, i) => {
     const label = game && game.title ? `"${game.title}"` : `#${i}`;
@@ -58,7 +54,7 @@ for (const f of ["shared/mg.ts", "shared/mg.css"]) {
 }
 
 // --- PWA assets must exist, and the manifest must be valid JSON with icons. ---
-for (const f of ["manifest.webmanifest", "sw.js", "icon.svg"]) {
+for (const f of ["manifest.webmanifest", "sw.ts", "icon.svg"]) {
   if (!existsSync(join(ROOT, f))) errors.push(`missing PWA file: ${f}`);
 }
 if (existsSync(join(ROOT, "manifest.webmanifest"))) {

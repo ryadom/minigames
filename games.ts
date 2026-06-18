@@ -8,7 +8,7 @@
  *     title: "Snake",
  *     icon: "🐍",
  *     url: "./games/snake/",
- *     // `tags` are short category keys, localized on the home page (app.js)
+ *     // `tags` are short category keys, localized on the home page (app.ts)
  *     // from the shared `tag.<key>` string tables — add new keys there.
  *     tags: ["arcade", "action"],
  *     // `description` may be a plain string or a { en, ru, es } map.
@@ -19,13 +19,28 @@
  *     },
  *   }
  *
- * Descriptions are resolved to the active language by app.js (via MG.i18n);
+ * Descriptions are resolved to the active language by app.ts (via MG.i18n);
  * a plain string is shown as-is in every language. Tags are likewise localized
- * by app.js via their `tag.<key>` entries.
+ * by app.ts via their `tag.<key>` entries.
  *
  * The list on the home page is generated automatically from this array.
  */
-window.GAMES = [
+import type { Lang } from "./shared/types";
+
+/** A value shown to the player that may be a plain string or a per-language map. */
+export type Localized = string | Partial<Record<Lang, string>>;
+
+/** One entry in the home-page game registry. */
+export interface Game {
+  title: Localized;
+  icon: string;
+  url: string;
+  /** Short category keys, localized on the home page via `tag.<key>`. */
+  tags?: string[];
+  description?: Localized;
+}
+
+export const GAMES: Game[] = [
   {
     title: "Minesweeper",
     icon: "💣",

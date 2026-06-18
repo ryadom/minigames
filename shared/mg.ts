@@ -456,6 +456,16 @@ function siteRoot(): string | null {
       }
     }
     if (s?.src) return s.src.replace(/shared\/mg\.js.*$/, "");
+
+    // Migrated pages bundle the runtime into a module script, so there's no
+    // shared/mg.js tag to anchor on. Derive the site root from the page URL
+    // instead: game pages live under games/<name>/, the home page sits at the
+    // root. Keeps subdirectory deploys working (the root isn't assumed to be
+    // the origin's "/").
+    const path = location.pathname;
+    const underGames = path.match(/^(.*\/)games\/[^/]+\//);
+    if (underGames) return underGames[1];
+    return path.replace(/[^/]*$/, "");
   } catch {
     /* ignore */
   }

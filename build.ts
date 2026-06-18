@@ -5,12 +5,12 @@
  *  framework. This step only turns the TypeScript sources into the JavaScript
  *  the browser loads and copies the rest of the site across:
  *
- *    1. Copy every static asset (HTML, CSS, images, not-yet-migrated game JS,
- *       PWA files, CNAME, …) into dist/, skipping tooling and .ts sources.
+ *    1. Copy every static asset (HTML, CSS, images, PWA files, CNAME, …) into
+ *       dist/, skipping tooling and .ts sources.
  *    2. Compile the shared runtime (shared/*.ts) to classic IIFE scripts that
- *       publish window.MG — so games that still load it via <script> keep
- *       working unchanged.
- *    3. Bundle each migrated game (ES modules) into a single module script.
+ *       publish window.MG, and the service worker (sw.ts) to a root script.
+ *    3. Bundle the home page and each game (ES modules) into a single
+ *       self-contained module script (the shared runtime is inlined into each).
  *
  *  Run with `bun run build`.
  * ========================================================================== */
@@ -90,11 +90,35 @@ async function main(): Promise<void> {
 
   await copyStatic("");
 
-  // Shared runtime → classic global scripts (window.MG) for legacy games.
+  // Shared runtime → classic global scripts (window.MG). Migrated code imports
+  // it directly (inlined into each bundle); these stay available for any page
+  // that still loads it via a classic <script>.
   await bundle("shared runtime", ["shared/mg.ts", "shared/cards.ts"], "shared", "iife");
 
-  // Migrated games → ES module bundles (one self-contained module each).
-  await bundle("farm", ["games/farm/js/main.ts"], "games/farm/js", "esm");
+  // Home page → one ES module bundle (shared runtime + registry inlined).
+  await bundle("home page", ["app.ts"], "", "esm");
+
+  // Service worker → a classic script at the site root (scope "/").
+  await bundle("service worker", ["sw.ts"], "", "iife");
+
+  // Games → ES module bundles (one self-contained module each).
+  const GAMES = [
+    "2048",
+    "farm",
+    "flappy-bird",
+    "killer-sudoku",
+    "match-three",
+    "minesweeper",
+    "racing",
+    "snake",
+    "solitaire",
+    "sudoku",
+    "top-racer",
+    "vampire-survivors",
+  ];
+  for (const game of GAMES) {
+    await bundle(game, [`games/${game}/js/main.ts`], `games/${game}/js`, "esm");
+  }
 
   console.log("✓ build complete → dist/");
 }
