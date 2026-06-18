@@ -109,9 +109,9 @@ window.GAMES = [
     url: "./games/farm/",
     tags: ["simulation", "casual"],
     description: {
-      en: "Grow crops, raise animals, cook dishes, fill orders and trade at the market — level up your farm.",
-      ru: "Выращивай урожай, держи животных, готовь блюда, выполняй заказы и торгуй на рынке — прокачивай ферму.",
-      es: "Cultiva, cría animales, cocina platos, completa pedidos y comercia en el mercado — sube de nivel tu granja.",
+      en: "Grow crops & greenhouse flowers, raise animals, cook dishes, fill orders, trade and upgrade — level up your farm.",
+      ru: "Выращивай урожай и цветы в теплице, держи животных, готовь блюда, выполняй заказы, торгуй и улучшай — прокачивай ферму.",
+      es: "Cultiva campos e invernadero, cría animales, cocina platos, completa pedidos, comercia y mejora — sube de nivel tu granja.",
     },
   },
   {
