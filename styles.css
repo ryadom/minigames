@@ -125,6 +125,27 @@ main { flex: 1; padding-bottom: 64px; }
 .game-card .title { font-weight: 600; font-size: 1.1rem; }
 .game-card .desc { color: var(--muted); font-size: 0.92rem; margin: 0; }
 
+/* Category tags — a row of small chips under the description. */
+.game-card .game-tags {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.game-card .game-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: rgba(124, 131, 255, 0.12);
+  border: 1px solid rgba(124, 131, 255, 0.3);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
 /* Last-played line, pushed to the bottom of the card. */
 .game-card .game-played {
   margin: 4px 0 0;
