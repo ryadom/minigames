@@ -10,7 +10,6 @@
 
   <!-- Shared chrome: header bar + language control. -->
   <link rel="stylesheet" href="../../shared/mg.css" />
-  <script src="../../shared/mg.js"></script>
 
   <!-- Game-specific styles. -->
   <link rel="stylesheet" href="farm.css" />
@@ -33,27 +32,19 @@
   <div class="toast" id="toast"></div>
 
   <!--
-    The game is split into focused modules sharing one window.Farm namespace.
-    Load order matters only for the static content each file aliases up front;
-    all cross-module wiring is deferred to boot (see js/config.js → Farm.ready).
-      config   — namespace bootstrap, tuning constants, content tables
+    The game is an ES module graph rooted at js/main.ts, bundled to js/main.js.
+      config   — tuning constants, content tables
+      types    — shared TypeScript interfaces
       i18n     — translations + name/tf helpers
       economy  — inventory, pricing, market, XP, quests, cost curves
       scene    — the SVG world (pure drawing)
+      runtime  — boot-bound header UI + DOM refs
       state    — canonical game state + versioned save/load
       view     — all rendering (world overlays, building panels, live patch)
       actions  — the command layer (player actions + dispatcher)
       input    — world-view controller (scale, pan, sweep gestures, taps)
       main     — header, DOM wiring, the real-time tick loop & boot
   -->
-  <script src="js/config.js"></script>
-  <script src="js/i18n.js"></script>
-  <script src="js/economy.js"></script>
-  <script src="js/scene.js"></script>
-  <script src="js/state.js"></script>
-  <script src="js/view.js"></script>
-  <script src="js/actions.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/main.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

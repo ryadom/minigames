@@ -10,41 +10,77 @@ is its own page under `games/<name>/`.
 
 ## Architecture (read this before changing structure)
 
-This is a **zero-build static site**. There is intentionally **no bundler and no
-framework** (no React/Vite/webpack). The repository root *is* the deployed site:
-GitHub Pages uploads it as-is and serves the files directly. This keeps games
-trivially portable (a game is one `index.html` you can open from disk) and the
-deploy pipeline dependency-free.
+This is a **static site** with a thin TypeScript build. There is intentionally
+**no runtime framework** (no React/Vue/etc.). The sources are TypeScript;
+[Bun](https://bun.sh) compiles and bundles them into `dist/`, and **`dist/` is
+what GitHub Pages deploys**. There is no framework the *running* site depends on
+— the output is plain static HTML/CSS/JS.
 
-Node is used **only for local tooling** (a dev server and a validation script).
-It is never part of the deploy — do not introduce a build step that the site
-depends on to run.
+The codebase is **mid-migration** from the original zero-build, ES5,
+`window`-global style to TypeScript ES modules. Both styles coexist and the
+build serves both:
+
+- **Migrated** code (the shared runtime + the 🚜 Farm game) is TypeScript **ES
+  modules**, bundled per page with `Bun.build`.
+- **Legacy** games are still plain JS and load the shared runtime via a classic
+  `<script src=".../shared/mg.js">` tag (the `window.MG` global).
+
+`build.ts` (run by `bun run build`) does three things:
+
+1. Copies every static asset (HTML, CSS, images, legacy game JS, PWA files,
+   `CNAME`, …) into `dist/`, skipping tooling and `.ts` sources.
+2. Compiles the shared runtime (`shared/*.ts`) to **classic IIFE scripts** that
+   publish `window.MG` — so legacy games keep working unchanged.
+3. Bundles each migrated game (ES modules) into one self-contained module
+   script (the shared runtime is inlined into it).
+
+Bun is also the package manager / task runner; **Biome** does lint + format and
+**`tsc --noEmit`** does type-checking. None of these run in the browser — they
+produce/check the static `dist/` output.
 
 ```
 .
-├── index.html              # Home page shell
+├── index.html              # Home page shell (legacy JS for now)
 ├── styles.css              # Home page styles
 ├── games.js                # Registry: window.GAMES (title, icon, url, description)
-├── app.js                  # Renders the game list + home language control
+├── app.js                  # Renders the game list + home language control (legacy)
 ├── manifest.webmanifest    # PWA manifest (installable app metadata)
 ├── sw.js                   # Service worker (offline cache, scope "/")
 ├── icon.svg                # PWA / app icon (maskable)
+├── build.ts                # Bun build → dist/ (copy static + compile shared + bundle games)
+├── tsconfig.json           # TypeScript config (strict, noEmit; Bun bundles)
+├── biome.json              # Biome lint + format config
+├── global.d.ts             # Ambient types (window.MG)
 ├── shared/
-│   ├── mg.js               # Shared runtime: window.MG (i18n + header + PWA)
-│   └── mg.css              # Shared chrome styles (header bar, theme tokens)
+│   ├── mg.ts               # Shared runtime: window.MG (i18n + header + storage + PWA)
+│   ├── cards.ts            # Shared playing-card runtime (window.MG.cards)
+│   ├── types.ts            # Public types for the shared runtime
+│   ├── mg.css              # Shared chrome styles (header bar, theme tokens)
+│   └── cards.css           # Shared card styles
 ├── games/
-│   ├── minesweeper/index.html
-│   └── flappy-bird/index.html
+│   ├── farm/               # Migrated: TypeScript ES modules (js/*.ts, entry js/main.ts)
+│   ├── minesweeper/index.html   # Legacy: plain JS + <script src=".../shared/mg.js">
+│   └── …                        # 10 more legacy games
 ├── scripts/
-│   ├── serve.mjs           # `npm run dev` — zero-dep static server
-│   └── validate.mjs        # `npm run check` — structure validation
-└── .github/workflows/deploy.yml
+│   ├── serve.mjs           # `bun run dev` — static server (serves dist/ via SERVE_ROOT)
+│   └── validate.mjs        # `bun run check` — structure validation
+└── .github/workflows/
+    ├── ci.yml              # lint + typecheck + validate + build (push / PR)
+    └── deploy.yml          # build with Bun, deploy dist/ to GitHub Pages
 ```
 
-## The shared runtime (`shared/mg.js` → `window.MG`)
+When migrating a game to TypeScript, add its module entry point to the `farm`
+list in `build.ts` and switch its `index.html` from the legacy `<script
+src=".../shared/mg.js">` + per-file `<script>` tags to a single
+`<script type="module" src="js/main.js">`.
 
-Every game and the home page load `shared/mg.css` + `shared/mg.js` and use the
-common chrome instead of re-implementing it. Two pieces:
+## The shared runtime (`shared/mg.ts` → `window.MG`)
+
+Migrated games `import { MG } from "../../../shared/mg"`; legacy games load
+`shared/mg.css` + `shared/mg.js` (the IIFE build) and use the `window.MG` global.
+Either way it's the same runtime. The public type surface lives in
+`shared/types.ts` (`MGGlobal`, `I18n`, `MountHeaderOpts`, `HeaderUI`,
+`SaveStore`, …). Pieces:
 
 ### `MG.i18n` — language control
 
@@ -125,50 +161,71 @@ than downgraded.
 
 ## PWA / offline support
 
-The site is an installable, offline-capable PWA, and it stays **zero-build**:
+The site is an installable, offline-capable PWA:
 
 - `manifest.webmanifest` + `icon.svg` (root) describe the installable app.
 - `sw.js` (root) is the service worker. Its scope is the whole site (`/`); it
   precaches the app shell and uses **stale-while-revalidate** for everything
   else, so each game is cached the first time it's visited and works offline
   after that. Bump `CACHE` in `sw.js` when the precached shell changes.
-- `shared/mg.js` does the wiring for **every** page: since every game already
-  loads it, it injects the `<link rel="manifest">` + install metadata and
-  registers the service worker — no per-game HTML changes needed. Paths are
-  resolved relative to `mg.js`'s own URL, so they work from any depth. Setup is
-  a no-op on `file://` (service workers need http/https), so games still open
-  directly from disk.
+- The shared runtime does the wiring for **every** page: since every game loads
+  it (as a global or bundled in), it injects the `<link rel="manifest">` +
+  install metadata and registers the service worker — no per-game HTML changes
+  needed. Setup is a no-op on `file://` (service workers need http/https).
 
-When adding a game you get PWA support for free (it loads `mg.js`). `npm run
-check` validates the manifest and that its icons exist.
+When adding a game you get PWA support for free (it loads the shared runtime).
+`bun run check` validates the manifest and that its icons exist.
 
 ## Adding a game
 
-1. Create `games/<name>/index.html`. In `<head>`, load the shared runtime:
+New games should be written in **TypeScript ES modules** (the Farm game is the
+reference). To add one:
+
+1. Create `games/<name>/index.html`. Load the shared stylesheet and a single
+   module entry point (the bundler emits the `.js`):
    ```html
    <link rel="stylesheet" href="../../shared/mg.css" />
-   <script src="../../shared/mg.js"></script>
+   ...
+   <script type="module" src="js/main.js"></script>
    ```
-2. Use `<body class="mg-app">` with a `<div class="mg-game-area">` host, register
+2. Write the game as TypeScript modules under `games/<name>/js/` (entry
+   `main.ts`), importing the shared runtime directly:
+   ```ts
+   import { MG } from "../../../shared/mg";
+   import type { HeaderUI } from "../../../shared/types";
+   ```
+   Use `<body class="mg-app">` with a `<div class="mg-game-area">` host, register
    translations with `MG.i18n.register(...)`, and mount `MG.mountHeader(...)`.
-3. Register the game in `games.js` (`title`, `icon`, `url`, and a `description`
+3. Add the game's entry point to the build list in `build.ts`.
+4. Register the game in `games.js` (`title`, `icon`, `url`, and a `description`
    that is either a string or a `{ en, ru, es }` map).
-4. Run `npm run check` and `npm run dev` to verify, then commit and push.
+5. Run `bun run lint && bun run typecheck && bun run check && bun run build` to
+   verify, then commit and push.
+
+(The 11 legacy games are still plain JS loading `<script src=".../shared/mg.js">`.
+That keeps working; migrate them to TypeScript opportunistically.)
 
 ## Commands
 
-- `npm run dev` — serve the site locally at http://localhost:8000 (no deps).
-- `npm run check` — validate the registry + structure (CI-friendly, exits non-zero on failure).
+- `bun install` — install dev tooling (TypeScript, Biome). One-time.
+- `bun run build` — compile + bundle the site into `dist/`.
+- `bun run dev` — build, then serve `dist/` at http://localhost:8000.
+- `bun run lint` — Biome lint + format check. `bun run format` auto-fixes.
+- `bun run typecheck` — `tsc --noEmit` (strict).
+- `bun run check` — validate the registry + structure (exits non-zero on failure).
 
-No install step is required; both scripts use only Node's standard library
-(Node >= 18).
+Requires [Bun](https://bun.sh) ≥ 1.3.
 
 ## Conventions
 
-- Vanilla ES5-friendly JS in IIFEs with `"use strict"` — match the existing
-  style; no transpilation is assumed.
+- **TypeScript ES modules** for new/migrated code (`import`/`export`, strict
+  types). Match the Farm game's style. Legacy games stay ES5 IIFE until ported.
+- Lint & format with **Biome** (`bun run lint` / `bun run format`): double
+  quotes, semicolons, 2-space indent, 100-col width, trailing commas.
+- Type definitions for the shared runtime live in `shared/types.ts`; keep the
+  runtime and that contract in sync.
 - Game-specific look stays inside the game; shared chrome stays in `shared/`.
-- Keep games dependency-free and openable directly from the filesystem.
+- Keep games dependency-free (no npm runtime deps — only dev tooling).
 - **Games must work on mobile devices.** Phones are a first-class target, so:
   - Build for touch, not just mouse/keyboard — every control must be reachable
     by tap. Don't hide actions behind `:hover` (there is no hover on touch) and
@@ -180,5 +237,8 @@ No install step is required; both scripts use only Node's standard library
 
 ## Deployment
 
-Pushing to `main` triggers `.github/workflows/deploy.yml`, which uploads the repo
-root to GitHub Pages. The custom domain is set via `CNAME`.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which installs deps
+with Bun, runs `bun run build`, and uploads the resulting `dist/` to GitHub
+Pages. A separate `ci.yml` runs lint + typecheck + structure validation + build
+on every push and pull request. The custom domain is set via `CNAME` (copied
+into `dist/` by the build).
