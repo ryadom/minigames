@@ -413,135 +413,118 @@
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
     /* ====================================================================
-     *  VILLAGE — the single, cinematic home screen. A little hamlet scene
-     *  (sky, hills, trees, houses) sits on top; the playable field is
-     *  worked right below it. Tapping a building opens its sliding panel.
+     *  VILLAGE — the single, cinematic home screen. A top-down, fake-3D
+     *  hamlet diorama (drawn as one inline SVG: land, path, fields, pond,
+     *  fences, trees and little gabled cottages) sits on top; the playable
+     *  field is worked right below it. Each interactive building is a
+     *  transparent hotspot laid precisely over its drawing — tapping it
+     *  slides up that building's panel. The whole scene is sized in
+     *  container units (cqw) so it scales crisply from phones up.
      * ================================================================== */
     .village { position: relative; }
 
-    /* ---- The scenery: sky over rolling green with buildings ---- */
-    .vscene {
+    .diorama {
       position: relative;
-      margin: -4px -2px 14px;
-      border-radius: 18px;
+      margin: 0 0 14px;
+      border-radius: 20px;
       overflow: hidden;
-      background: linear-gradient(180deg, #aee3ff 0%, #cdefff 30%, #bfe79a 30%, #a7d579 100%);
-      box-shadow: inset 0 0 0 3px rgba(255,255,255,0.45), 0 12px 28px rgba(0,0,0,0.2);
+      aspect-ratio: 200 / 250;     /* matches the SVG viewBox */
+      container-type: size;        /* enables cqw/cqh for children */
+      background: #9fd06f;
+      box-shadow: inset 0 0 0 3px rgba(255,255,255,0.45), 0 14px 30px rgba(0,0,0,0.22);
     }
-    .vscene .sky {
+    .diorama > svg {
       position: absolute;
-      line-height: 1;
-      pointer-events: none;
-      filter: drop-shadow(0 2px 1px rgba(0,0,0,0.12));
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;        /* taps fall through to the hotspots */
     }
-    .vscene .sun { left: 16px; top: 9px; font-size: 1.9rem; animation: vsun 6s ease-in-out infinite; }
-    .vscene .c1 { left: 34%; top: 11px; font-size: 1.4rem; animation: vfloat 9s ease-in-out infinite; }
-    .vscene .c2 { right: 15%; top: 22px; font-size: 1.05rem; opacity: 0.92; animation: vfloat 13s ease-in-out infinite reverse; }
-    .vscene .bird { right: 40%; top: 16px; font-size: 0.85rem; animation: vfloat 7s ease-in-out infinite; }
-    @keyframes vsun { 0%,100% { transform: rotate(0); } 50% { transform: rotate(20deg); } }
-    @keyframes vfloat { 0%,100% { transform: translateX(0); } 50% { transform: translateX(12px); } }
 
-    /* Soft hills peeking up behind the houses. */
-    .vscene .hill {
+    /* ---- Hotspots: invisible tap targets laid over each drawn building. ---- */
+    .hotspot {
       position: absolute;
-      height: 60px;
-      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-      pointer-events: none;
-    }
-    .vscene .hill.l { left: -10%; top: 46px; width: 64%; background: linear-gradient(180deg, #9ccb6f, #86bb59); }
-    .vscene .hill.r { right: -12%; top: 54px; width: 58%; background: linear-gradient(180deg, #a7d479, #8ec264); }
-
-    .vground { position: relative; padding: 72px 12px 14px; }
-    .vtrees {
-      position: absolute;
-      top: 34px; left: 0; right: 0;
-      text-align: center;
-      font-size: 1.3rem;
-      line-height: 1;
-      pointer-events: none;
-    }
-    .vtrees span { margin: 0 5px; filter: drop-shadow(0 2px 1px rgba(0,0,0,0.15)); }
-
-    /* ---- Houses: each is a tappable building (roof + wall + sign) ---- */
-    .houses { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .house {
-      position: relative;
       border: none;
       background: transparent;
       padding: 0;
+      margin: 0;
       cursor: pointer;
       font-family: inherit;
       color: #3a2b1a;
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      transition: transform 0.08s ease;
     }
-    .house:active { transform: translateY(2px); }
-    .house .roof {
-      height: 16px;
-      margin: 0 4px;
-      background: #c0512f;
-      clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+    .hotspot::after {              /* a soft press highlight over the building */
+      content: "";
+      position: absolute;
+      inset: 8% 8% 16%;
+      border-radius: 16%;
+      background: rgba(255, 255, 255, 0);
+      transition: background 0.12s ease;
+      pointer-events: none;
     }
-    .house.kitchen .roof { background: #d98b34; }
-    .house.barn .roof { background: #9a3f2a; }
-    .house.orders .roof { background: #6b8f3a; }
-    .house .wall {
-      background: linear-gradient(180deg, #fbeed3, #f0dcb4);
-      border-radius: 3px 3px 13px 13px;
-      box-shadow: inset 0 0 0 2px rgba(150,110,60,0.25), 0 5px 0 rgba(0,0,0,0.14);
-      padding: 9px 8px 11px;
-      min-height: 80px;
+    .hotspot:active::after { background: rgba(255, 255, 255, 0.22); }
+
+    /* A little shop sign / placard hanging on the front of each building. */
+    .sign {
+      position: absolute;
+      left: 50%;
+      bottom: 3%;
+      transform: translateX(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 2px;
+      background: linear-gradient(180deg, #fffdf5, #f1e3c4);
+      border-radius: 2.4cqw;
+      padding: 0.6cqw 2.2cqw 1cqw;
+      box-shadow: 0 1.2cqw 0 rgba(120, 85, 40, 0.4), 0 0.4cqw 1cqw rgba(0, 0, 0, 0.22);
+      white-space: nowrap;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
     }
-    .house .hico { font-size: 2rem; line-height: 1; filter: drop-shadow(0 2px 1px rgba(0,0,0,0.18)); }
-    .house .htt { font-weight: 800; font-size: 0.9rem; }
-    .house .hsub { font-size: 0.68rem; font-weight: 700; color: #7a5a30; text-align: center; }
-    .hbadge {
+    .hotspot:active .sign {
+      transform: translateX(-50%) translateY(0.8cqw);
+      box-shadow: 0 0.4cqw 0 rgba(120, 85, 40, 0.4);
+    }
+    .sign .si { font-size: 6cqw; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2)); }
+    .sign .st { font-size: 3.2cqw; font-weight: 800; line-height: 1.1; color: #3a2b1a; }
+    .sign .ss { font-size: 2.8cqw; font-weight: 700; line-height: 1.1; color: #7a5a30; margin-top: 0.2cqw; }
+
+    .b-badge {
       position: absolute;
-      top: 11px; right: 8px;
-      z-index: 2;
+      top: 2%;
+      right: 4%;
+      z-index: 3;
       background: #7fd06a;
       color: #14310c;
       font-weight: 800;
-      font-size: 0.72rem;
+      font-size: 3cqw;
+      line-height: 1;
       border-radius: 999px;
-      padding: 2px 8px;
-      box-shadow: 0 2px 0 #4f9b3e;
+      padding: 0.8cqw 1.7cqw;
+      box-shadow: 0 0.6cqw 0 #4f9b3e;
       animation: pulse 1.2s ease-in-out infinite;
     }
 
-    /* ---- Pasture: a grassy pen sitting in the village (opens barn) ---- */
-    .pasture {
-      position: relative;
-      width: 100%;
-      margin-top: 12px;
-      border: none;
-      cursor: pointer;
-      font-family: inherit;
+    /* ---- Pasture: the fenced pen drawn into the scene (opens the barn). ---- */
+    .pasture-hot {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px;
-      min-height: 54px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background:
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.14) 0 3px, transparent 3px 18px),
-        linear-gradient(180deg, #bfe39a 0%, #a6d27e 100%);
-      box-shadow: inset 0 0 0 2px rgba(90,120,50,0.4), 0 5px 0 rgba(0,0,0,0.12);
-      transition: transform 0.08s ease;
+      justify-content: center;
+      gap: 1cqw;
+      padding: 0 3cqw;
     }
-    .pasture:active { transform: translateY(2px); }
-    .pasture .pic { font-size: 1.1rem; margin-right: 2px; }
-    .pasture .an { font-size: 1.6rem; line-height: 1; }
-    .pasture .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
-    .pasture .pempty { font-size: 0.76rem; color: #3f5226; font-weight: 700; opacity: 0.9; }
+    .pasture-hot::after { inset: 4%; border-radius: 8%; }
+    .pasture-hot .an { font-size: 5.4cqw; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
+    .pasture-hot .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
+    .pasture-hot .pempty {
+      font-size: 2.8cqw;
+      font-weight: 700;
+      color: #3f5226;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.66);
+      padding: 0.8cqw 2cqw;
+      border-radius: 2cqw;
+    }
 
     /* ---- Field section header (inline field lives below it) ---- */
     .field-h {
@@ -557,9 +540,6 @@
     @media (max-width: 380px) {
       .card { padding: 10px 11px; gap: 9px; }
       .card .big { font-size: 1.8rem; }
-      .house .hico { font-size: 1.7rem; }
-      .house .wall { min-height: 72px; }
-      .vground { padding-top: 64px; }
     }
   </style>
 </head>
@@ -1168,17 +1148,197 @@
       function tipLine(key) { return '<div class="tip">' + esc(MG.i18n.t(key)) + "</div>"; }
 
       /* ------------------------------- VILLAGE ----------------------------- */
-      // The one and only screen: a little hamlet you can see at a glance. The
-      // field is worked right here; each house is a button that opens its panel.
-      function house(o) {
-        return '<button class="house ' + (o.cls || "") + '" data-act="open" data-arg="' + o.act + '">' +
-          (o.badge ? '<span class="hbadge">' + o.badge + "</span>" : "") +
-          '<span class="roof"></span>' +
-          '<span class="wall">' +
-            '<span class="hico">' + o.ico + "</span>" +
-            '<span class="htt">' + esc(o.title) + "</span>" +
-            (o.sub ? '<span class="hsub">' + esc(o.sub) + "</span>" : "") +
+      // The one and only screen: a top-down, fake-3D hamlet rendered as a
+      // single inline SVG (land, winding path, plowed fields, a pond, fences,
+      // trees and gabled cottages). The four playable buildings are drawn into
+      // the scene, then a transparent HTML hotspot (carrying a shop sign +
+      // status badge) is laid precisely over each one so it can be tapped.
+      // Everything is described in the SVG viewBox below and the scene scales
+      // crisply on phones via the container's aspect-ratio.
+      var VB_W = 200, VB_H = 250;
+
+      // The interactive buildings. (cx, by) is the front-bottom-center point
+      // where the cottage meets the ground; w is its footprint width.
+      var BLD = {
+        market: { act: "market", ico: "🏪", cx: 52,  by: 140, w: 48, roof: "#d8503f", roof2: "#b53c2d", wall: "#fbe6c9", wall2: "#e3cd9f" },
+        cook:   { act: "cook",   ico: "🍞", cx: 150, by: 150, w: 44, roof: "#e0962f", roof2: "#bf7c20", wall: "#fdeccb", wall2: "#ecd6a4" },
+        barn:   { act: "barn",   ico: "🐄", cx: 52,  by: 208, w: 56, roof: "#9a3b2a", roof2: "#7e2e20", wall: "#c4543a", wall2: "#a3422d" },
+        quests: { act: "quests", ico: "🪧", cx: 150, by: 214, w: 46, roof: "#5f8a37", roof2: "#4c7029", wall: "#f3e7c6", wall2: "#dccaa0" }
+      };
+      // Decorative cottages dotted around the back — just for village flavour.
+      var DECO = [
+        { cx: 104, by: 84, w: 30, roof: "#c77b3a", roof2: "#a8632b", wall: "#f3e3c0", wall2: "#ddc89c" },
+        { cx: 170, by: 96, w: 24, roof: "#7d96c0", roof2: "#6076a0", wall: "#eef0f4", wall2: "#d3d8e2" },
+        { cx: 30,  by: 92, w: 26, roof: "#6f9b46", roof2: "#577a35", wall: "#f3e3c0", wall2: "#ddc89c" }
+      ];
+      // The fenced pasture pen (front of the scene; tapping it opens the barn).
+      var PEN = { L: 50, R: 150, T: 216, B: 246 };
+
+      function nf(n) { return Math.round(n * 10) / 10; }   // tidy SVG numbers
+      function pf(n) { return Math.round(n * 100) / 100; }  // tidy percentages
+
+      // Geometry for one cottage, shared by the drawing and its tap hotspot so
+      // they always line up.
+      function geom(b) {
+        var w = b.w, cx = b.cx, by = b.by;
+        var wh = w * 0.5, rh = w * 0.42, d = w * 0.3, e = w * 0.1, dx = d, dy = -d * 0.5;
+        var L = cx - w / 2, R = cx + w / 2, top = by - wh, ridge = top - rh;
+        return {
+          w: w, cx: cx, by: by, wh: wh, rh: rh, d: d, e: e, dx: dx, dy: dy,
+          L: L, R: R, top: top, ridge: ridge,
+          minX: L - e, maxX: R + e + dx, minY: ridge + dy, maxY: by
+        };
+      }
+
+      function svgWindow(x, y, s) {
+        return '<rect x="' + nf(x) + '" y="' + nf(y) + '" width="' + nf(s) + '" height="' + nf(s * 0.9) +
+          '" rx="' + nf(s * 0.12) + '" fill="rgba(150,210,255,0.85)" stroke="rgba(255,255,255,0.6)" stroke-width="' + nf(s * 0.12) + '"/>';
+      }
+
+      // A fake-3D gabled cottage: ground shadow, a shaded right face for depth,
+      // a front wall (door + windows) and a pitched roof with a lit ridge.
+      function svgHouse(b) {
+        var g = geom(b), s = "";
+        s += '<ellipse cx="' + nf(b.cx + g.dx * 0.4) + '" cy="' + nf(b.by + g.w * 0.02) +
+          '" rx="' + nf(g.w * 0.66) + '" ry="' + nf(g.w * 0.15) + '" fill="rgba(0,0,0,0.16)"/>';
+        s += '<path d="M' + nf(g.R) + ' ' + nf(g.top) + ' L' + nf(g.R + g.dx) + ' ' + nf(g.top + g.dy) +
+          ' L' + nf(g.R + g.dx) + ' ' + nf(g.by + g.dy) + ' L' + nf(g.R) + ' ' + nf(g.by) + 'Z" fill="' + b.wall2 + '"/>';
+        s += '<rect x="' + nf(g.L) + '" y="' + nf(g.top) + '" width="' + nf(g.w) + '" height="' + nf(g.wh) + '" fill="' + b.wall + '"/>';
+        s += '<rect x="' + nf(g.L) + '" y="' + nf(g.by - g.wh * 0.13) + '" width="' + nf(g.w) + '" height="' + nf(g.wh * 0.13) + '" fill="rgba(0,0,0,0.1)"/>';
+        var ww = g.w * 0.16, wy = g.top + g.wh * 0.22;
+        s += svgWindow(g.L + g.w * 0.13, wy, ww) + svgWindow(g.R - g.w * 0.13 - ww, wy, ww);
+        var dw = g.w * 0.2, dh = g.wh * 0.5;
+        s += '<rect x="' + nf(b.cx - dw / 2) + '" y="' + nf(g.by - dh) + '" width="' + nf(dw) + '" height="' + nf(dh) +
+          '" rx="' + nf(dw * 0.28) + '" fill="rgba(86,52,24,0.6)"/>';
+        s += '<path d="M' + nf(b.cx) + ' ' + nf(g.ridge) + ' L' + nf(b.cx + g.dx) + ' ' + nf(g.ridge + g.dy) +
+          ' L' + nf(g.R + g.e + g.dx) + ' ' + nf(g.top + g.dy) + ' L' + nf(g.R + g.e) + ' ' + nf(g.top) + 'Z" fill="' + b.roof2 + '"/>';
+        s += '<path d="M' + nf(g.L - g.e) + ' ' + nf(g.top) + ' L' + nf(b.cx) + ' ' + nf(g.ridge) +
+          ' L' + nf(g.R + g.e) + ' ' + nf(g.top) + 'Z" fill="' + b.roof + '"/>';
+        s += '<path d="M' + nf(b.cx) + ' ' + nf(g.ridge) + ' L' + nf(b.cx + g.dx) + ' ' + nf(g.ridge + g.dy) +
+          '" stroke="rgba(255,255,255,0.4)" stroke-width="' + nf(g.w * 0.03) + '" stroke-linecap="round"/>';
+        return s;
+      }
+
+      function svgTree(x, y, r) {
+        return '<ellipse cx="' + nf(x) + '" cy="' + nf(y + r * 0.1) + '" rx="' + nf(r * 1.05) + '" ry="' + nf(r * 0.32) + '" fill="rgba(0,0,0,0.15)"/>' +
+          '<rect x="' + nf(x - r * 0.16) + '" y="' + nf(y - r * 0.7) + '" width="' + nf(r * 0.32) + '" height="' + nf(r * 0.9) + '" rx="' + nf(r * 0.12) + '" fill="#8a5a32"/>' +
+          '<circle cx="' + nf(x) + '" cy="' + nf(y - r * 1.05) + '" r="' + nf(r * 0.95) + '" fill="#4e9b3f"/>' +
+          '<circle cx="' + nf(x - r * 0.45) + '" cy="' + nf(y - r * 0.75) + '" r="' + nf(r * 0.62) + '" fill="#57a948"/>' +
+          '<circle cx="' + nf(x + r * 0.45) + '" cy="' + nf(y - r * 0.8) + '" r="' + nf(r * 0.6) + '" fill="#458a39"/>' +
+          '<circle cx="' + nf(x - r * 0.3) + '" cy="' + nf(y - r * 1.35) + '" r="' + nf(r * 0.4) + '" fill="#67bd55"/>';
+      }
+
+      function svgCloud(x, y, sc) {
+        var r = 8 * sc;
+        return '<g fill="rgba(255,255,255,0.92)">' +
+          '<ellipse cx="' + nf(x) + '" cy="' + nf(y) + '" rx="' + nf(r * 1.6) + '" ry="' + nf(r * 0.7) + '"/>' +
+          '<circle cx="' + nf(x - r) + '" cy="' + nf(y) + '" r="' + nf(r * 0.8) + '"/>' +
+          '<circle cx="' + nf(x + r) + '" cy="' + nf(y - r * 0.2) + '" r="' + nf(r * 0.9) + '"/>' +
+          '<circle cx="' + nf(x) + '" cy="' + nf(y - r * 0.5) + '" r="' + nf(r) + '"/></g>';
+      }
+
+      function svgPond(cx, cy, rx, ry) {
+        return '<ellipse cx="' + nf(cx) + '" cy="' + nf(cy + ry * 0.18) + '" rx="' + nf(rx * 1.05) + '" ry="' + nf(ry * 1.05) + '" fill="rgba(0,0,0,0.12)"/>' +
+          '<ellipse cx="' + nf(cx) + '" cy="' + nf(cy) + '" rx="' + nf(rx) + '" ry="' + nf(ry) + '" fill="url(#pond)"/>' +
+          '<ellipse cx="' + nf(cx - rx * 0.25) + '" cy="' + nf(cy - ry * 0.3) + '" rx="' + nf(rx * 0.4) + '" ry="' + nf(ry * 0.3) + '" fill="rgba(255,255,255,0.4)"/>';
+      }
+
+      // A plowed farm plot: a grassy border around a furrowed patch, tilted a
+      // little for the top-down look.
+      function svgField(cx, cy, w, h, rot) {
+        var x = cx - w / 2, y = cy - h / 2;
+        return '<g transform="rotate(' + rot + ' ' + nf(cx) + ' ' + nf(cy) + ')">' +
+          '<rect x="' + nf(x - 1.5) + '" y="' + nf(y - 1.5) + '" width="' + nf(w + 3) + '" height="' + nf(h + 3) + '" rx="3" fill="#6f9c45"/>' +
+          '<rect x="' + nf(x) + '" y="' + nf(y) + '" width="' + nf(w) + '" height="' + nf(h) + '" rx="2" fill="url(#furrow)"/>' +
+          '</g>';
+      }
+
+      function svgFence(x1, x2, y) {
+        var s = '<line x1="' + nf(x1) + '" y1="' + nf(y) + '" x2="' + nf(x2) + '" y2="' + nf(y) + '" stroke="#c9a26a" stroke-width="1.6"/>' +
+          '<line x1="' + nf(x1) + '" y1="' + nf(y - 3) + '" x2="' + nf(x2) + '" y2="' + nf(y - 3) + '" stroke="#dab57e" stroke-width="1.3"/>';
+        for (var x = x1; x <= x2 + 0.1; x += 8) s += '<rect x="' + nf(x - 0.9) + '" y="' + nf(y - 5) + '" width="1.8" height="7.5" rx="0.8" fill="#b98e58"/>';
+        return s;
+      }
+
+      function svgPen() {
+        var s = '<rect x="' + nf(PEN.L) + '" y="' + nf(PEN.T) + '" width="' + nf(PEN.R - PEN.L) + '" height="' + nf(PEN.B - PEN.T) + '" rx="8" fill="#a9d57e"/>' +
+          '<rect x="' + nf(PEN.L) + '" y="' + nf(PEN.T) + '" width="' + nf(PEN.R - PEN.L) + '" height="' + nf(PEN.B - PEN.T) + '" rx="8" fill="url(#pengrass)"/>';
+        s += svgFence(PEN.L, PEN.R, PEN.T + 2) + svgFence(PEN.L, PEN.R, PEN.B - 1);
+        s += '<rect x="' + nf(PEN.L - 0.9) + '" y="' + nf(PEN.T - 3) + '" width="1.8" height="' + nf(PEN.B - PEN.T + 4) + '" rx="0.8" fill="#b98e58"/>';
+        s += '<rect x="' + nf(PEN.R - 0.9) + '" y="' + nf(PEN.T - 3) + '" width="1.8" height="' + nf(PEN.B - PEN.T + 4) + '" rx="0.8" fill="#b98e58"/>';
+        return s;
+      }
+
+      var DEFS = '<defs>' +
+        '<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd9ff"/><stop offset="1" stop-color="#d8f1ff"/></linearGradient>' +
+        '<linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a7d977"/><stop offset="1" stop-color="#7cbf57"/></linearGradient>' +
+        '<radialGradient id="pond" cx="0.5" cy="0.35" r="0.75"><stop offset="0" stop-color="#bdeaf6"/><stop offset="1" stop-color="#5fb6d6"/></radialGradient>' +
+        '<pattern id="furrow" width="200" height="5" patternUnits="userSpaceOnUse"><rect width="200" height="5" fill="#8a5630"/><rect width="200" height="2" fill="#6a3f1d"/></pattern>' +
+        '<pattern id="pengrass" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2" height="6" fill="rgba(255,255,255,0.14)"/></pattern>' +
+        '</defs>';
+
+      var PATH_D = "M104 252 C 96 214 124 198 108 170 S 84 120 104 86";
+
+      // Compose the whole scene back-to-front (painter's order = depth).
+      function buildScene() {
+        var s = DEFS;
+        // Sky, sun, clouds.
+        s += '<rect x="0" y="0" width="200" height="72" fill="url(#sky)"/>';
+        s += '<circle cx="30" cy="26" r="13" fill="#ffe27a"/><circle cx="30" cy="26" r="9" fill="#ffd23f"/>';
+        s += svgCloud(124, 22, 1) + svgCloud(172, 40, 0.8) + svgCloud(72, 46, 0.7);
+        // Rolling hills on the horizon, then the grass.
+        s += '<ellipse cx="40" cy="74" rx="80" ry="26" fill="#8fc265"/><ellipse cx="170" cy="78" rx="70" ry="24" fill="#84b95b"/>';
+        s += '<rect x="0" y="66" width="200" height="184" fill="url(#grass)"/>';
+        // A field tucked behind the village, decorative cottages, back trees.
+        s += svgField(150, 90, 42, 22, -12);
+        s += svgHouse(DECO[0]) + svgHouse(DECO[1]) + svgHouse(DECO[2]);
+        s += svgTree(13, 138, 12) + svgTree(189, 150, 11) + svgTree(96, 120, 8);
+        // Winding dirt path.
+        s += '<path d="' + PATH_D + '" fill="none" stroke="#d8bd86" stroke-width="15" stroke-linecap="round"/>';
+        s += '<path d="' + PATH_D + '" fill="none" stroke="#e7d2a4" stroke-width="8" stroke-linecap="round"/>';
+        // Pond nestled among the houses.
+        s += svgPond(110, 182, 16, 9);
+        // Interactive buildings — back row then front row.
+        s += svgHouse(BLD.market) + svgHouse(BLD.cook);
+        s += svgHouse(BLD.barn) + svgHouse(BLD.quests);
+        s += svgTree(190, 196, 9);
+        // The pasture pen and the two front farm plots.
+        s += svgPen();
+        s += svgField(22, 230, 30, 20, -8) + svgField(176, 232, 28, 18, 8);
+        return s;
+      }
+
+      // A transparent tap target laid over a drawn building, carrying its shop
+      // sign (icon + name + a live status line) and an optional ready badge.
+      function hotspot(b, title, sub, badge) {
+        var g = geom(b);
+        var left = g.minX / VB_W * 100, top = g.minY / VB_H * 100;
+        var w = (g.maxX - g.minX) / VB_W * 100, h = (g.maxY - g.minY) / VB_H * 100;
+        return '<button class="hotspot" data-act="open" data-arg="' + b.act + '" ' +
+          'style="left:' + pf(left) + '%;top:' + pf(top) + '%;width:' + pf(w) + '%;height:' + pf(h) + '%">' +
+          (badge ? '<span class="b-badge">' + badge + "</span>" : "") +
+          '<span class="sign"><span class="si">' + b.ico + "</span>" +
+            '<span class="st">' + esc(title) + "</span>" +
+            (sub ? '<span class="ss">' + esc(sub) + "</span>" : "") +
           "</span></button>";
+      }
+
+      function pastureHotspot() {
+        var left = PEN.L / VB_W * 100, top = PEN.T / VB_H * 100;
+        var w = (PEN.R - PEN.L) / VB_W * 100, h = (PEN.B - PEN.T) / VB_H * 100;
+        var inner = "";
+        if (!state.animals.length) {
+          inner = '<span class="pempty">' + esc(MG.i18n.t("vPastureEmpty")) + "</span>";
+        } else {
+          state.animals.forEach(function (a) {
+            var def = ANIMAL_BY_ID[a.type];
+            var rdy = a.grown >= def.interval;
+            inner += '<span class="an' + (rdy ? " rdy" : "") + '">' + def.ico + "</span>";
+          });
+        }
+        return '<button class="hotspot pasture-hot" data-act="open" data-arg="barn" ' +
+          'style="left:' + pf(left) + '%;top:' + pf(top) + '%;width:' + pf(w) + '%;height:' + pf(h) + '%">' +
+          inner + "</button>";
       }
 
       function renderVillage() {
@@ -1190,47 +1350,18 @@
         var fillable = 0, orders = 0;
         state.quests.forEach(function (q) { if (q) { orders++; if ((state.inv[q.item] || 0) >= q.need) fillable++; } });
 
-        var h = '<div class="village">';
+        var h = '<div class="village"><div class="diorama">';
+        h += '<svg viewBox="0 0 ' + VB_W + " " + VB_H + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' +
+          buildScene() + "</svg>";
 
-        // ---- Scenery: sky, hills, trees, then the village buildings. ----
-        h += '<div class="vscene">' +
-          '<span class="sky sun">☀️</span><span class="sky c1">☁️</span>' +
-          '<span class="sky c2">☁️</span><span class="sky bird">🕊️</span>' +
-          '<div class="hill l"></div><div class="hill r"></div>' +
-          '<div class="vground">' +
-            '<div class="vtrees"><span>🌳</span><span>🌲</span><span>🌳</span><span>🌲</span></div>' +
-            '<div class="houses">';
+        // Hotspots over each building (drawing + tap target stay in sync).
+        h += hotspot(BLD.market, MG.i18n.t("tabMarket"), "🪙 " + state.coins, "");
+        h += hotspot(BLD.cook, MG.i18n.t("tabCook"), "🍳 " + state.stoves + (cooking ? " · ⏲️ " + cooking : ""), cookReady || "");
+        h += hotspot(BLD.barn, MG.i18n.t("tabBarn"), "🐄 " + state.animals.length + "/" + state.barnCap, penReady || "");
+        h += hotspot(BLD.quests, MG.i18n.t("tabQuests"), "🎁 " + fillable + "/" + orders, fillable || "");
+        h += pastureHotspot();
 
-        // MARKET — buy & sell. Tap the shop to trade.
-        h += house({ act: "market", cls: "market", ico: "🏪", title: MG.i18n.t("tabMarket"),
-          sub: "🪙 " + state.coins });
-        // KITCHEN — cook dishes.
-        h += house({ act: "cook", cls: "kitchen", ico: "🍲", title: MG.i18n.t("tabCook"),
-          sub: "🍳 " + state.stoves + " · ⏲️ " + cooking, badge: cookReady || "" });
-        // BARN — raise animals.
-        h += house({ act: "barn", cls: "barn", ico: "🛖", title: MG.i18n.t("tabBarn"),
-          sub: "🐄 " + state.animals.length + "/" + state.barnCap, badge: penReady || "" });
-        // ORDERS — the village notice board.
-        h += house({ act: "quests", cls: "orders", ico: "🪧", title: MG.i18n.t("tabQuests"),
-          sub: "🎁 " + fillable + "/" + orders, badge: fillable || "" });
-
-        h += "</div>"; // .houses
-
-        // PASTURE — your animals milling about; tapping it opens the barn.
-        var pen = '<button class="pasture" data-act="open" data-arg="barn"><span class="pic">🐄</span>';
-        if (!state.animals.length) {
-          pen += '<span class="pempty">' + esc(MG.i18n.t("vPastureEmpty")) + "</span>";
-        } else {
-          state.animals.forEach(function (a) {
-            var def = ANIMAL_BY_ID[a.type];
-            var rdy = a.grown >= def.interval;
-            pen += '<span class="an' + (rdy ? " rdy" : "") + '">' + def.ico + "</span>";
-          });
-        }
-        pen += "</button>";
-        h += pen;
-
-        h += "</div></div>"; // .vground .vscene
+        h += "</div>"; // .diorama
 
         // ---- The playable field, worked right here in the village. ----
         h += '<div class="field-section">' + renderFieldSection() + "</div>";
