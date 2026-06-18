@@ -651,7 +651,10 @@
         { id: "blueberry",  ico: "🫐", seed: 24, grow: 96000,  sell: 46, xp: 6, lvl: 6 },
         { id: "pumpkin",    ico: "🎃", seed: 28, grow: 120000, sell: 56, xp: 7, lvl: 7 },
         { id: "eggplant",   ico: "🍆", seed: 34, grow: 140000, sell: 70, xp: 9, lvl: 8 },
-        { id: "grape",      ico: "🍇", seed: 44, grow: 168000, sell: 92, xp: 11, lvl: 10 }
+        { id: "grape",      ico: "🍇", seed: 44, grow: 168000, sell: 92, xp: 11, lvl: 10 },
+        { id: "chili",      ico: "🌶️", seed: 52, grow: 150000, sell: 112, xp: 13, lvl: 11 },
+        { id: "watermelon", ico: "🍉", seed: 66, grow: 196000, sell: 145, xp: 16, lvl: 12 },
+        { id: "pineapple",  ico: "🍍", seed: 84, grow: 244000, sell: 186, xp: 20, lvl: 14 }
       ];
 
       // Flowers: grown in greenhouse pots (no water needed), high value, prized
@@ -659,7 +662,9 @@
       var FLOWERS = [
         { id: "tulip",     ico: "🌷", seed: 18, grow: 60000,  sell: 30, xp: 5, lvl: 5 },
         { id: "rose",      ico: "🌹", seed: 30, grow: 110000, sell: 56, xp: 8, lvl: 7 },
-        { id: "sunflower", ico: "🌻", seed: 46, grow: 165000, sell: 88, xp: 12, lvl: 9 }
+        { id: "sunflower", ico: "🌻", seed: 46, grow: 165000, sell: 88, xp: 12, lvl: 9 },
+        { id: "daisy",     ico: "🌼", seed: 60, grow: 140000, sell: 112, xp: 14, lvl: 11 },
+        { id: "lotus",     ico: "🪷", seed: 80, grow: 186000, sell: 152, xp: 18, lvl: 13 }
       ];
 
       // Products come from animals.
@@ -667,7 +672,8 @@
         { id: "egg",     ico: "🥚", sell: 14, xp: 2 },
         { id: "milk",    ico: "🥛", sell: 26, xp: 3 },
         { id: "wool",    ico: "🧶", sell: 34, xp: 4 },
-        { id: "truffle", ico: "🍄", sell: 52, xp: 6 }
+        { id: "truffle", ico: "🍄", sell: 52, xp: 6 },
+        { id: "honey",   ico: "🍯", sell: 40, xp: 5 }
       ];
 
       // Animals: bought into the barn, fed a crop, produce a product on a timer.
@@ -689,7 +695,10 @@
         { id: "burger",   ico: "🍔", cook: 60000, sell: 168, xp: 15, lvl: 7, recipe: { wheat: 1, tomato: 1, eggplant: 1 } },
         { id: "pie",      ico: "🥧", cook: 64000, sell: 190, xp: 17, lvl: 7, recipe: { pumpkin: 1, egg: 1, wheat: 1 } },
         { id: "icecream", ico: "🍨", cook: 58000, sell: 210, xp: 19, lvl: 8, recipe: { milk: 1, strawberry: 1, blueberry: 1 } },
-        { id: "juice",    ico: "🧃", cook: 48000, sell: 240, xp: 22, lvl: 10, recipe: { grape: 2 } }
+        { id: "juice",    ico: "🧃", cook: 48000, sell: 240, xp: 22, lvl: 10, recipe: { grape: 2 } },
+        { id: "honeytea", ico: "🍵", cook: 42000, sell: 150, xp: 14, lvl: 8,  recipe: { honey: 1, strawberry: 1 } },
+        { id: "pancake",  ico: "🥞", cook: 54000, sell: 186, xp: 16, lvl: 9,  recipe: { wheat: 1, egg: 1, honey: 1 } },
+        { id: "taco",     ico: "🌮", cook: 60000, sell: 216, xp: 19, lvl: 12, recipe: { corn: 1, tomato: 1, chili: 1 } }
       ];
 
       // Master item table (everything that can sit in storage).
@@ -721,10 +730,22 @@
       var SOIL_STEP = 0.08;     // Rich Soil: growth speed gained per level
       var MAX_SOIL = 8;
       var MAX_SPRINKLER = 4;
+      // Apiary: beehives passively make honey on a timer (no feeding). Like
+      // animals, a hive accumulates up to HIVE_MS then offers honey to collect.
+      var APIARY_LVL = 5;       // level the apiary (and first hive) unlocks at
+      var HIVE_MS = 60000;      // time one hive takes to fill with honey
+      var MAX_HIVES = 5;
+      // Workshop upgrades (sold at the Market) that tune timings and trade.
+      var OVEN_STEP = 0.1, MAX_OVEN = 5;       // each level: dishes cook faster
+      var HEATER_STEP = 0.1, MAX_HEATER = 5;   // each level: flowers grow faster
+      var TRADE_STEP = 0.06, MAX_TRADE = 5;    // each level: +% on every sale
       // Sprinkler waters every dry, growing plot on this cadence; higher levels
       // run it more often.
       function sprinkleEvery() { return Math.max(7000, 30000 - (state.sprinkler - 1) * 6000); }
       function soilMul() { return 1 + (state.soil || 0) * SOIL_STEP; }
+      function cookMul() { return 1 + (state.oven || 0) * OVEN_STEP; }     // divides cook time
+      function flowerMul() { return 1 + (state.heater || 0) * HEATER_STEP; } // divides grow time
+      function tradeMul() { return 1 + (state.trade || 0) * TRADE_STEP; }    // scales sell price
 
       /* ======================================================================
        *  i18n
@@ -735,7 +756,7 @@
           newFarm: "New farm",
           confirmReset: "Reset your farm? All progress, crops, animals and coins will be lost.",
           tabFarm: "Field", tabBarn: "Barn", tabCook: "Kitchen", tabMarket: "Market", tabQuests: "Orders",
-          tabGreenhouse: "Greenhouse",
+          tabGreenhouse: "Greenhouse", tabApiary: "Apiary",
           dragHint: "Drag open land to look around · hold and sweep the field or pens to tend them 🏡",
           // village
           vPasture: "Pasture", vPastureEmpty: "Empty pasture — buy animals at the Market",
@@ -749,6 +770,9 @@
           // greenhouse
           tipGreenhouse: "Grow flowers in pots — they need no water and fetch a fine price at market and in orders.",
           pots: "Pots", plant: "Plant", flowers: "Flowers", noFreePot: "No free pot", buyPot: "Add pot",
+          // apiary
+          tipApiary: "Keep beehives — they make honey on their own, no feeding needed. Collect it for cooking and trade.",
+          hives: "Hives", buyHive: "Add hive", apiaryEmpty: "No hives yet — add one to start making honey.",
           // barn
           tipBarn: "Hold and sweep across the pens out on the map to collect and feed — or manage here.",
           barnEmpty: "No animals yet. Buy some at the Market.",
@@ -764,6 +788,9 @@
           upCap: "Storage +20", upBarn: "Barn slot +1", upStove: "Extra stove",
           upSoil: "Rich soil", upSprinkler: "Sprinkler", maxed: "Maxed",
           upSoilSub: "Crops grow {n}% faster", upSprinklerSub: "Auto-waters the field",
+          upOven: "Faster oven", upOvenSub: "Dishes cook {n}% faster",
+          upHeater: "Greenhouse heater", upHeaterSub: "Flowers grow {n}% faster",
+          upTrade: "Trader's license", upTradeSub: "Sell everything for {n}% more",
           // quests
           tipQuests: "Fill orders for big coin and XP rewards.",
           wants: "Wants", deliver: "Deliver", newOrder: "New order in a moment…",
@@ -783,11 +810,14 @@
             wheat: "Wheat", carrot: "Carrot", potato: "Potato", tomato: "Tomato",
             corn: "Corn", strawberry: "Strawberry", blueberry: "Blueberry",
             pumpkin: "Pumpkin", eggplant: "Eggplant", grape: "Grapes",
+            chili: "Chili", watermelon: "Watermelon", pineapple: "Pineapple",
             tulip: "Tulip", rose: "Rose", sunflower: "Sunflower",
-            egg: "Egg", milk: "Milk", wool: "Wool", truffle: "Truffle",
+            daisy: "Daisy", lotus: "Lotus",
+            egg: "Egg", milk: "Milk", wool: "Wool", truffle: "Truffle", honey: "Honey",
             bread: "Bread", salad: "Salad", omelette: "Omelette", soup: "Soup",
             pizza: "Pizza", cake: "Cake", burger: "Burger", pie: "Pie",
             icecream: "Ice cream", juice: "Juice",
+            honeytea: "Honey tea", pancake: "Pancakes", taco: "Taco",
             chicken: "Chicken", cow: "Cow", sheep: "Sheep", pig: "Pig"
           }
         },
@@ -796,7 +826,7 @@
           newFarm: "Новая ферма",
           confirmReset: "Сбросить ферму? Весь прогресс, посевы, животные и монеты пропадут.",
           tabFarm: "Поле", tabBarn: "Хлев", tabCook: "Кухня", tabMarket: "Рынок", tabQuests: "Заказы",
-          tabGreenhouse: "Теплица",
+          tabGreenhouse: "Теплица", tabApiary: "Пасека",
           dragHint: "Тяни по пустому месту, чтобы осмотреться · удерживай и веди по грядкам или загонам, чтобы ухаживать 🏡",
           vPasture: "Пастбище", vPastureEmpty: "Пустой загон — купи животных на Рынке",
           water: "Полив", clear: "Убрать", fert: "Удобрить",
@@ -807,6 +837,8 @@
           unlockPlot: "Открыть грядку", lockedPlot: "Закрытая грядка",
           tipGreenhouse: "Выращивай цветы в горшках — им не нужен полив, и они дорого ценятся на рынке и в заказах.",
           pots: "Горшки", plant: "Посадить", flowers: "Цветы", noFreePot: "Нет свободного горшка", buyPot: "Добавить горшок",
+          tipApiary: "Держи ульи — они сами делают мёд, без кормёжки. Собирай его для готовки и торговли.",
+          hives: "Ульи", buyHive: "Добавить улей", apiaryEmpty: "Ульев пока нет — добавь, чтобы начать собирать мёд.",
           tipBarn: "Удерживай и веди по загонам на карте, чтобы собирать и кормить — или управляй здесь.",
           barnEmpty: "Животных пока нет. Купи их на Рынке.",
           feed: "Кормить", collect: "Собрать", fed: "Сыт", hungry: "Голоден",
@@ -819,6 +851,9 @@
           upCap: "Хранилище +20", upBarn: "Место в хлеву +1", upStove: "Ещё плита",
           upSoil: "Плодородная почва", upSprinkler: "Дождеватель", maxed: "Максимум",
           upSoilSub: "Растения растут на {n}% быстрее", upSprinklerSub: "Сам поливает поле",
+          upOven: "Быстрая печь", upOvenSub: "Блюда готовятся на {n}% быстрее",
+          upHeater: "Обогрев теплицы", upHeaterSub: "Цветы растут на {n}% быстрее",
+          upTrade: "Лицензия торговца", upTradeSub: "Продажа дороже на {n}%",
           tipQuests: "Выполняй заказы ради монет и опыта.",
           wants: "Нужно", deliver: "Сдать", newOrder: "Новый заказ скоро…",
           needCoins: "Не хватает монет.",
@@ -836,11 +871,14 @@
             wheat: "Пшеница", carrot: "Морковь", potato: "Картофель", tomato: "Помидор",
             corn: "Кукуруза", strawberry: "Клубника", blueberry: "Черника",
             pumpkin: "Тыква", eggplant: "Баклажан", grape: "Виноград",
+            chili: "Перец чили", watermelon: "Арбуз", pineapple: "Ананас",
             tulip: "Тюльпан", rose: "Роза", sunflower: "Подсолнух",
-            egg: "Яйцо", milk: "Молоко", wool: "Шерсть", truffle: "Трюфель",
+            daisy: "Ромашка", lotus: "Лотос",
+            egg: "Яйцо", milk: "Молоко", wool: "Шерсть", truffle: "Трюфель", honey: "Мёд",
             bread: "Хлеб", salad: "Салат", omelette: "Омлет", soup: "Суп",
             pizza: "Пицца", cake: "Торт", burger: "Бургер", pie: "Пирог",
             icecream: "Мороженое", juice: "Сок",
+            honeytea: "Чай с мёдом", pancake: "Блины", taco: "Тако",
             chicken: "Курица", cow: "Корова", sheep: "Овца", pig: "Свинья"
           }
         },
@@ -849,7 +887,7 @@
           newFarm: "Nueva granja",
           confirmReset: "¿Reiniciar tu granja? Perderás todo el progreso, cultivos, animales y monedas.",
           tabFarm: "Campo", tabBarn: "Establo", tabCook: "Cocina", tabMarket: "Mercado", tabQuests: "Pedidos",
-          tabGreenhouse: "Invernadero",
+          tabGreenhouse: "Invernadero", tabApiary: "Apiario",
           dragHint: "Arrastra el terreno para mirar · mantén pulsado y desliza por el campo o los corrales para atenderlos 🏡",
           vPasture: "Pasto", vPastureEmpty: "Pasto vacío — compra animales en el Mercado",
           water: "Regar", clear: "Quitar", fert: "Abonar",
@@ -860,6 +898,8 @@
           unlockPlot: "Abrir parcela", lockedPlot: "Parcela cerrada",
           tipGreenhouse: "Cultiva flores en macetas — no necesitan riego y se pagan muy bien en el mercado y en los pedidos.",
           pots: "Macetas", plant: "Plantar", flowers: "Flores", noFreePot: "Sin maceta libre", buyPot: "Añadir maceta",
+          tipApiary: "Cuida colmenas — hacen miel solas, sin alimentar. Recógela para cocinar y comerciar.",
+          hives: "Colmenas", buyHive: "Añadir colmena", apiaryEmpty: "Aún no hay colmenas — añade una para empezar a hacer miel.",
           tipBarn: "Mantén pulsado y desliza por los corrales del mapa para recoger y alimentar — o gestiona aquí.",
           barnEmpty: "Aún no hay animales. Cómpralos en el Mercado.",
           feed: "Alimentar", collect: "Recoger", fed: "Saciado", hungry: "Con hambre",
@@ -872,6 +912,9 @@
           upCap: "Almacén +20", upBarn: "Plaza de establo +1", upStove: "Fogón extra",
           upSoil: "Tierra fértil", upSprinkler: "Aspersor", maxed: "Al máximo",
           upSoilSub: "Los cultivos crecen un {n}% más rápido", upSprinklerSub: "Riega el campo solo",
+          upOven: "Horno rápido", upOvenSub: "Los platos se cocinan un {n}% más rápido",
+          upHeater: "Calefactor de invernadero", upHeaterSub: "Las flores crecen un {n}% más rápido",
+          upTrade: "Licencia de comerciante", upTradeSub: "Vende todo un {n}% más caro",
           tipQuests: "Completa pedidos por monedas y experiencia.",
           wants: "Pide", deliver: "Entregar", newOrder: "Nuevo pedido en un momento…",
           needCoins: "No hay monedas suficientes.",
@@ -889,11 +932,14 @@
             wheat: "Trigo", carrot: "Zanahoria", potato: "Patata", tomato: "Tomate",
             corn: "Maíz", strawberry: "Fresa", blueberry: "Arándano",
             pumpkin: "Calabaza", eggplant: "Berenjena", grape: "Uvas",
+            chili: "Chile", watermelon: "Sandía", pineapple: "Piña",
             tulip: "Tulipán", rose: "Rosa", sunflower: "Girasol",
-            egg: "Huevo", milk: "Leche", wool: "Lana", truffle: "Trufa",
+            daisy: "Margarita", lotus: "Loto",
+            egg: "Huevo", milk: "Leche", wool: "Lana", truffle: "Trufa", honey: "Miel",
             bread: "Pan", salad: "Ensalada", omelette: "Tortilla", soup: "Sopa",
             pizza: "Pizza", cake: "Pastel", burger: "Hamburguesa", pie: "Tarta",
             icecream: "Helado", juice: "Zumo",
+            honeytea: "Té con miel", pancake: "Tortitas", taco: "Taco",
             chicken: "Gallina", cow: "Vaca", sheep: "Oveja", pig: "Cerdo"
           }
         }
@@ -911,12 +957,15 @@
        *  SAVE / STATE
        * ==================================================================== */
       var store = MG.storage("farm", {
-        version: 3,
+        version: 4,
         migrations: {
           2: function (d) { return { coins: (d && d.coins) || 25 }; },
           // 2 → 3: greenhouse, fertiliser and the soil/sprinkler upgrades arrive.
           // Defaults are filled in by load(), so the old save passes through.
-          3: function (d) { return d || {}; }
+          3: function (d) { return d || {}; },
+          // 3 → 4: apiary (honey), workshop upgrades and the new crops/dishes
+          // arrive. load() fills the new defaults, so the old save passes through.
+          4: function (d) { return d || {}; }
         }
       });
 
@@ -941,8 +990,12 @@
           cooks: [null],
           potCap: START_POTS,
           pots: pots,
+          hives: [],
           soil: 0,
           sprinkler: 0,
+          oven: 0,
+          heater: 0,
+          trade: 0,
           quests: [],
           prices: {}, marketUntil: 0,
           tab: "village",
@@ -967,6 +1020,9 @@
           if (typeof d.potCap === "number" && d.potCap >= START_POTS) state.potCap = Math.min(MAX_POTS, d.potCap);
           if (typeof d.soil === "number" && d.soil >= 0) state.soil = Math.min(MAX_SOIL, Math.floor(d.soil));
           if (typeof d.sprinkler === "number" && d.sprinkler >= 0) state.sprinkler = Math.min(MAX_SPRINKLER, Math.floor(d.sprinkler));
+          if (typeof d.oven === "number" && d.oven >= 0) state.oven = Math.min(MAX_OVEN, Math.floor(d.oven));
+          if (typeof d.heater === "number" && d.heater >= 0) state.heater = Math.min(MAX_HEATER, Math.floor(d.heater));
+          if (typeof d.trade === "number" && d.trade >= 0) state.trade = Math.min(MAX_TRADE, Math.floor(d.trade));
           if (CROP_BY_ID[d.sel] || d.sel === "water" || d.sel === "clear" || d.sel === "fert") state.sel = d.sel;
 
           if (d.inv && typeof d.inv === "object") {
@@ -1001,7 +1057,7 @@
             state.cooks = [];
             for (var c = 0; c < state.stoves; c++) {
               var ck = d.cooks[c];
-              if (ck && DISH_BY_ID[ck.dish]) state.cooks.push({ dish: ck.dish, endsAt: +ck.endsAt || 0 });
+              if (ck && DISH_BY_ID[ck.dish]) state.cooks.push({ dish: ck.dish, endsAt: +ck.endsAt || 0, total: +ck.total || DISH_BY_ID[ck.dish].cook });
               else state.cooks.push(null);
             }
           } else {
@@ -1010,8 +1066,14 @@
           state.pots = [];
           for (var pp = 0; pp < state.potCap; pp++) {
             var pt = Array.isArray(d.pots) ? d.pots[pp] : null;
-            if (pt && FLOWER_BY_ID[pt.flower]) state.pots.push({ flower: pt.flower, endsAt: +pt.endsAt || 0 });
+            if (pt && FLOWER_BY_ID[pt.flower]) state.pots.push({ flower: pt.flower, endsAt: +pt.endsAt || 0, total: +pt.total || FLOWER_BY_ID[pt.flower].grow });
             else state.pots.push(null);
+          }
+          if (Array.isArray(d.hives)) {
+            state.hives = [];
+            d.hives.forEach(function (hv) {
+              if (state.hives.length < MAX_HIVES) state.hives.push({ grown: Math.max(0, +(hv && hv.grown) || 0) });
+            });
           }
           if (Array.isArray(d.quests) && d.quests.length) {
             state.quests = [];
@@ -1042,6 +1104,8 @@
             var fedTime = Math.max(0, Math.min(now, a.feedUntil) - seen);
             a.grown = Math.min(iv, a.grown + fedTime);
           });
+          // Hives keep filling with honey while you're away (no feeding needed).
+          state.hives.forEach(function (hv) { hv.grown = Math.min(HIVE_MS, hv.grown + away); });
         }
         rollMarket(state, false);
       }
@@ -1051,6 +1115,8 @@
           coins: state.coins, xp: state.xp, level: state.level, sel: state.sel,
           unlocked: state.unlocked, cap: state.cap, barnCap: state.barnCap, stoves: state.stoves,
           potCap: state.potCap, soil: state.soil, sprinkler: state.sprinkler,
+          oven: state.oven, heater: state.heater, trade: state.trade,
+          hives: state.hives.map(function (hv) { return { grown: Math.round(hv.grown) }; }),
           inv: state.inv,
           plots: state.plots.map(function (p) {
             return { crop: p.crop, grown: Math.round(p.grown), water: Math.round(p.water), fert: !!p.fert };
@@ -1058,8 +1124,8 @@
           animals: state.animals.map(function (a) {
             return { type: a.type, grown: Math.round(a.grown), feedUntil: a.feedUntil };
           }),
-          cooks: state.cooks.map(function (c) { return c ? { dish: c.dish, endsAt: c.endsAt } : null; }),
-          pots: state.pots.map(function (p) { return p ? { flower: p.flower, endsAt: p.endsAt } : null; }),
+          cooks: state.cooks.map(function (c) { return c ? { dish: c.dish, endsAt: c.endsAt, total: c.total } : null; }),
+          pots: state.pots.map(function (p) { return p ? { flower: p.flower, endsAt: p.endsAt, total: p.total } : null; }),
           quests: state.quests,
           prices: state.prices, marketUntil: state.marketUntil,
           tab: state.tab,
@@ -1094,13 +1160,14 @@
         if (FLOWER_BY_ID[id]) return isUnlocked(FLOWER_BY_ID[id].lvl, st);
         if (DISH_BY_ID[id]) return isUnlocked(DISH_BY_ID[id].lvl, st);
         if (ANIMAL_FOR_PROD[id]) return isUnlocked(ANIMAL_FOR_PROD[id].lvl, st);
+        if (id === "honey") return isUnlocked(APIARY_LVL, st);
         return true;
       }
 
       function price(id) {
         var base = ITEM[id] ? ITEM[id].sell : 0;
         var m = state.prices[id] || 1;
-        return Math.max(1, Math.round(base * m));
+        return Math.max(1, Math.round(base * m * tradeMul()));
       }
 
       function rollMarket(s, force) {
@@ -1137,6 +1204,7 @@
         FLOWERS.forEach(function (f) { if (f.lvl === level) out.push(f.ico); });
         ANIMALS.forEach(function (a) { if (a.lvl === level) out.push(a.ico); });
         DISHES.forEach(function (d) { if (d.lvl === level) out.push(d.ico); });
+        if (level === APIARY_LVL) out.push("🐝");
         return out.join(" ");
       }
 
@@ -1197,6 +1265,7 @@
         barn:   { ico: "🐄", title: "tabBarn" },
         cook:   { ico: "🍳", title: "tabCook" },
         greenhouse: { ico: "🌻", title: "tabGreenhouse" },
+        apiary: { ico: "🐝", title: "tabApiary" },
         quests: { ico: "📋", title: "tabQuests" }
       };
       var overlayTab = null;
@@ -1236,6 +1305,7 @@
         cook:   { act: "cook",   ico: "🍞", cx: 950, by: 380, w: 140, roof: "#e0962f", roof2: "#bf7c20", wall: "#fdeccb", wall2: "#ecd6a4" },
         barn:   { act: "barn",   ico: "🐄", cx: 240, by: 770, w: 170, roof: "#9a3b2a", roof2: "#7e2e20", wall: "#c4543a", wall2: "#a3422d" },
         greenhouse: { act: "greenhouse", ico: "🌻", cx: 958, by: 588, w: 116, roof: "#7fc3a0", roof2: "#5fa483", wall: "#e7f6ee", wall2: "#c8e6d6" },
+        apiary: { act: "apiary", ico: "🐝", cx: 600, by: 1034, w: 120, roof: "#e0a82f", roof2: "#bf8a20", wall: "#fff0c4", wall2: "#ecd59a" },
         quests: { act: "quests", ico: "🪧", cx: 955, by: 790, w: 130, roof: "#5f8a37", roof2: "#4c7029", wall: "#f3e7c6", wall2: "#dccaa0" }
       };
       // Decorative cottages dotted around the back — just village flavour.
@@ -1409,6 +1479,8 @@
         s += svgHouse(BLD.barn) + svgHouse(BLD.quests);
         // The animal pens and a couple of front trees.
         s += svgPens();
+        // The apiary sits front-and-centre below the pens.
+        s += svgHouse(BLD.apiary);
         s += svgTree(90, 760, 46) + svgTree(1130, 700, 42) + svgTree(1130, 1010, 38) + svgTree(150, 1010, 40);
         return s;
       }
@@ -1579,6 +1651,7 @@
           hotspot(BLD.market, MG.i18n.t("tabMarket"), "🪙 " + state.coins, "") +
           hotspot(BLD.cook, MG.i18n.t("tabCook"), cookStatus(), readyCounts().cook || "") +
           hotspot(BLD.greenhouse, MG.i18n.t("tabGreenhouse"), greenhouseStatus(), readyCounts().pot || "") +
+          hotspot(BLD.apiary, MG.i18n.t("tabApiary"), apiaryStatus(), readyCounts().hive || "") +
           hotspot(BLD.barn, MG.i18n.t("tabBarn"), "🐄 " + state.animals.length + "/" + state.barnCap, readyCounts().pen || "") +
           hotspot(BLD.quests, MG.i18n.t("tabQuests"), "🎁 " + readyCounts().fillable + "/" + state.quests.length, readyCounts().fillable || "") +
           penHotspots() +
@@ -1600,6 +1673,10 @@
         state.pots.forEach(function (p) { if (p && Date.now() < p.endsAt) growing++; });
         return "🌷 " + state.potCap + (growing ? " · ⏲️ " + growing : "");
       }
+      function apiaryStatus() {
+        if (!isUnlocked(APIARY_LVL)) return "🔒 " + tf("lvl", { n: APIARY_LVL });
+        return "🍯 " + state.hives.length + "/" + MAX_HIVES;
+      }
       function readyCounts() {
         var cook = 0;
         state.cooks.forEach(function (c) { if (c && Date.now() >= c.endsAt) cook++; });
@@ -1607,9 +1684,11 @@
         state.pots.forEach(function (p) { if (p && Date.now() >= p.endsAt) pot++; });
         var pen = 0;
         state.animals.forEach(function (a) { if (a.grown >= ANIMAL_BY_ID[a.type].interval) pen++; });
+        var hive = 0;
+        state.hives.forEach(function (hv) { if (hv.grown >= HIVE_MS) hive++; });
         var fillable = 0;
         state.quests.forEach(function (q) { if (q && (state.inv[q.item] || 0) >= q.need) fillable++; });
-        return { cook: cook, pot: pot, pen: pen, fillable: fillable };
+        return { cook: cook, pot: pot, pen: pen, hive: hive, fillable: fillable };
       }
 
       // Mount / refresh the sliding building panel (same behaviour as before).
@@ -1633,6 +1712,7 @@
                  : tab === "barn"   ? renderBarn()
                  : tab === "cook"   ? renderCook()
                  : tab === "greenhouse" ? renderGreenhouse()
+                 : tab === "apiary" ? renderApiary()
                  : renderQuests();
         if (overlayTab !== tab) {
           var p = PANELS[tab];
@@ -1702,7 +1782,7 @@
             return;
           }
           var def = DISH_BY_ID[c.dish];
-          var total = def.cook;
+          var total = c.total || def.cook;
           var left = Math.max(0, c.endsAt - Date.now());
           var ready = left <= 0;
           var pct = Math.min(100, ((total - left) / total) * 100).toFixed(1);
@@ -1756,7 +1836,7 @@
             return;
           }
           var def = FLOWER_BY_ID[p.flower];
-          var total = def.grow;
+          var total = p.total || def.grow;
           var left = Math.max(0, p.endsAt - Date.now());
           var ready = left <= 0;
           var pct = Math.min(100, ((total - left) / total) * 100).toFixed(1);
@@ -1788,6 +1868,34 @@
         return h;
       }
       function potCost() { return 70 + (state.potCap - START_POTS) * 90; }
+
+      /* ------------------------------- APIARY ------------------------------ */
+      // Beehives mirror animals but need no feeding: each fills with honey on a
+      // timer, then you collect a jar. Buy more hives up to MAX_HIVES.
+      function renderApiary() {
+        var h = tipLine("tipApiary");
+        h += '<div class="section-h">' + esc(MG.i18n.t("hives")) + " (" + state.hives.length + "/" + MAX_HIVES + ")</div>";
+        if (!state.hives.length) {
+          h += '<div class="empty-note">🐝🍯<br>' + esc(MG.i18n.t("apiaryEmpty")) + "</div>";
+        }
+        var honey = ITEM.honey;
+        state.hives.forEach(function (hv, i) {
+          var ready = hv.grown >= HIVE_MS;
+          var left = Math.max(0, HIVE_MS - hv.grown);
+          var pct = Math.min(100, (hv.grown / HIVE_MS) * 100).toFixed(1);
+          h += '<div class="card" data-hive="' + i + '"><span class="big">🐝</span><div class="body">' +
+            '<div class="ttl">' + honey.ico + " " + esc(name("honey")) + " " + stk("honey") +
+              (ready ? ' <span class="badge ready">' + honey.ico + "</span>" : ' <span class="badge">' + fmtTime(left) + "</span>") + "</div>" +
+            '<div class="pbar' + (ready ? "" : " warm") + '" data-hivebar="' + i + '"><i style="width:' + pct + '%"></i></div></div>' +
+            '<div class="right"><button class="btn go sm" data-act="collecthive" data-arg="' + i + '"' + (ready ? "" : " disabled") + ">" +
+              esc(MG.i18n.t("collect")) + "</button></div></div>";
+        });
+        if (state.hives.length < MAX_HIVES) {
+          h += upgradeCard("hive", "🐝", MG.i18n.t("buyHive"), state.hives.length + " → " + (state.hives.length + 1), hiveCost());
+        }
+        return h;
+      }
+      function hiveCost() { return 90 + state.hives.length * 120; }
 
       /* ------------------------------- MARKET ------------------------------ */
       function priceHtml(id) {
@@ -1841,6 +1949,12 @@
         h += upgradeCard("soil", "🌱", MG.i18n.t("upSoil"), soilSub, soilCost(), state.soil >= MAX_SOIL);
         var sprSub = MG.i18n.t("upSprinklerSub") + (state.sprinkler ? " · ⚡" + state.sprinkler : "");
         h += upgradeCard("sprinkler", "💧", MG.i18n.t("upSprinkler"), sprSub, sprinklerCost(), state.sprinkler >= MAX_SPRINKLER);
+        var ovenSub = tf("upOvenSub", { n: Math.round((state.oven + 1) * OVEN_STEP * 100) });
+        h += upgradeCard("oven", "🔥", MG.i18n.t("upOven"), ovenSub, ovenCost(), state.oven >= MAX_OVEN);
+        var heaterSub = tf("upHeaterSub", { n: Math.round((state.heater + 1) * HEATER_STEP * 100) });
+        h += upgradeCard("heater", "🌡️", MG.i18n.t("upHeater"), heaterSub, heaterCost(), state.heater >= MAX_HEATER);
+        var tradeSub = tf("upTradeSub", { n: Math.round((state.trade + 1) * TRADE_STEP * 100) });
+        h += upgradeCard("trade", "🤝", MG.i18n.t("upTrade"), tradeSub, tradeCost(), state.trade >= MAX_TRADE);
         return h;
       }
       function upgradeCard(id, ico, ttl, sub, cost, maxed) {
@@ -1857,6 +1971,9 @@
       function stoveCost() { return 90 + (state.stoves - 1) * 110; }
       function soilCost() { return 80 + state.soil * 130; }
       function sprinklerCost() { return 120 + state.sprinkler * 170; }
+      function ovenCost() { return 130 + state.oven * 150; }
+      function heaterCost() { return 130 + state.heater * 150; }
+      function tradeCost() { return 160 + state.trade * 180; }
 
       /* ------------------------------- QUESTS ------------------------------ */
       function renderQuests() {
@@ -1906,17 +2023,24 @@
           state.cooks.forEach(function (c, i) {
             if (!c) return;
             var def = DISH_BY_ID[c.dish];
+            var total = c.total || def.cook;
             var left = Math.max(0, c.endsAt - Date.now());
             var bar = overlay.querySelector('[data-cbar="' + i + '"] > i');
-            if (bar) bar.style.width = Math.min(100, ((def.cook - left) / def.cook) * 100).toFixed(1) + "%";
+            if (bar) bar.style.width = Math.min(100, ((total - left) / total) * 100).toFixed(1) + "%";
           });
         } else if (state.tab === "greenhouse") {
           state.pots.forEach(function (p, i) {
             if (!p) return;
             var def = FLOWER_BY_ID[p.flower];
+            var total = p.total || def.grow;
             var left = Math.max(0, p.endsAt - Date.now());
             var bar = overlay.querySelector('[data-potbar="' + i + '"] > i');
-            if (bar) bar.style.width = Math.min(100, ((def.grow - left) / def.grow) * 100).toFixed(1) + "%";
+            if (bar) bar.style.width = Math.min(100, ((total - left) / total) * 100).toFixed(1) + "%";
+          });
+        } else if (state.tab === "apiary") {
+          state.hives.forEach(function (hv, i) {
+            var bar = overlay.querySelector('[data-hivebar="' + i + '"] > i');
+            if (bar) bar.style.width = Math.min(100, (hv.grown / HIVE_MS) * 100).toFixed(1) + "%";
           });
         }
       }
@@ -2026,7 +2150,10 @@
        *  ACTIONS
        * ==================================================================== */
       function handle(act, arg) {
-        if (act === "open") { state.tab = arg; markDirty(); render(); return; }
+        if (act === "open") {
+          if (arg === "apiary" && !isUnlocked(APIARY_LVL)) { toast(tf("needLevel", { n: APIARY_LVL })); return; }
+          state.tab = arg; markDirty(); render(); return;
+        }
         if (act === "close") { state.tab = "village"; markDirty(); render(); return; }
         if (act === "noop") return;
 
@@ -2064,6 +2191,8 @@
 
         if (act === "plant") { startPlant(arg); return; }
         if (act === "collectpot") { collectPot(+arg); return; }
+
+        if (act === "collecthive") { collectHive(+arg); return; }
 
         if (act === "sell") { sell(arg, 1); return; }
         if (act === "sellall") { sell(arg, state.inv[arg] || 0); return; }
@@ -2211,7 +2340,8 @@
         if (slot < 0) { toast(MG.i18n.t("freeStove")); return; }
         if (!hasRecipe(def.recipe)) { toast(MG.i18n.t("needIngredients")); return; }
         for (var k in def.recipe) takeItem(k, def.recipe[k]);
-        state.cooks[slot] = { dish: id, endsAt: Date.now() + def.cook };
+        var cdur = def.cook / cookMul();
+        state.cooks[slot] = { dish: id, endsAt: Date.now() + cdur, total: cdur };
         toast(tf("cookStarted", { item: def.ico + " " + name(id) }));
         save(); render();
       }
@@ -2235,7 +2365,8 @@
         if (slot < 0) { toast(MG.i18n.t("noFreePot")); return; }
         if (state.coins < def.seed) { toast(MG.i18n.t("needCoins")); return; }
         state.coins -= def.seed;
-        state.pots[slot] = { flower: id, endsAt: Date.now() + def.grow };
+        var fdur = def.grow / flowerMul();
+        state.pots[slot] = { flower: id, endsAt: Date.now() + fdur, total: fdur };
         toast("🌱 " + def.ico + " " + name(id));
         save(); render();
       }
@@ -2248,6 +2379,17 @@
         addXp(def.xp);
         state.pots[i] = null;
         toast(tf("collected", { n: 1, item: def.ico + " " + name(p.flower) }));
+        save(); render();
+      }
+
+      function collectHive(i) {
+        var hv = state.hives[i]; if (!hv) return;
+        if (hv.grown < HIVE_MS) return;
+        if (spaceLeft() < 1) { toast(MG.i18n.t("full")); return; }
+        addItem("honey", 1);
+        addXp((PROD_BY_ID.honey || {}).xp || 0);
+        hv.grown = 0;
+        toast(tf("collected", { n: 1, item: ITEM.honey.ico + " " + name("honey") }));
         save(); render();
       }
 
@@ -2282,6 +2424,22 @@
           if (state.sprinkler >= MAX_SPRINKLER) return;
           var spc = sprinklerCost(); if (state.coins < spc) { toast(MG.i18n.t("needCoins")); return; }
           state.coins -= spc; state.sprinkler += 1;
+        } else if (id === "hive") {
+          if (state.hives.length >= MAX_HIVES) return;
+          var hc = hiveCost(); if (state.coins < hc) { toast(MG.i18n.t("needCoins")); return; }
+          state.coins -= hc; state.hives.push({ grown: 0 });
+        } else if (id === "oven") {
+          if (state.oven >= MAX_OVEN) return;
+          var oc = ovenCost(); if (state.coins < oc) { toast(MG.i18n.t("needCoins")); return; }
+          state.coins -= oc; state.oven += 1;
+        } else if (id === "heater") {
+          if (state.heater >= MAX_HEATER) return;
+          var htc = heaterCost(); if (state.coins < htc) { toast(MG.i18n.t("needCoins")); return; }
+          state.coins -= htc; state.heater += 1;
+        } else if (id === "trade") {
+          if (state.trade >= MAX_TRADE) return;
+          var trc = tradeCost(); if (state.coins < trc) { toast(MG.i18n.t("needCoins")); return; }
+          state.coins -= trc; state.trade += 1;
         }
         save(); render();
       }
@@ -2342,6 +2500,13 @@
             a.grown = Math.min(def.interval, a.grown + dt);
             if (before < def.interval && a.grown >= def.interval) markDirty();
           }
+        });
+        // Hives quietly fill with honey — no feeding required.
+        state.hives.forEach(function (hv) {
+          if (hv.grown >= HIVE_MS) return;
+          var before = hv.grown;
+          hv.grown = Math.min(HIVE_MS, hv.grown + dt);
+          if (before < HIVE_MS && hv.grown >= HIVE_MS) markDirty();
         });
         if (nowMs >= state.marketUntil) rollMarket(state, false);
 
