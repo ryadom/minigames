@@ -84,6 +84,11 @@
       padding: 26px 30px;
       backdrop-filter: blur(3px);
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      /* The overlay itself is click-through (pointer-events: none) so swipes
+         reach the canvas; the panel re-enables pointers so the Play button is
+         clickable with a mouse. */
+      pointer-events: auto;
+      cursor: pointer;
     }
 
     .title {
