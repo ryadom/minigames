@@ -523,6 +523,32 @@ function renderPen(type: string): string {
 function renderCook(): string {
   let h = tipLine("tipCook");
 
+  // Recipes (the menu) render first so that starting a dish — which adds a
+  // card to the stoves queue below — doesn't push the recipe you just tapped
+  // down the screen.
+  h += `<div class="section-h">${esc(MG.i18n.t("recipes"))}</div>`;
+  const freeStove = state.cooks.some((c) => !c);
+  DISHES.forEach((d) => {
+    const lock = !isUnlocked(d.lvl);
+    const can = hasRecipe(d.recipe);
+    let ings = "";
+    for (const k in d.recipe) {
+      const miss = (state.inv[k] || 0) < d.recipe[k];
+      ings += `<span class="ing${miss ? " miss" : ""}">${ITEM[k].ico} ${state.inv[k] || 0}/${d.recipe[k]}</span>`;
+    }
+    h +=
+      `<div class="card${lock ? " locked" : ""}"><span class="big">${d.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(d.id))} ${stk(d.id)} <span class="badge lock">+${d.xp} XP</span></div>` +
+      (lock
+        ? `<div class="sub">🔒 ${esc(tf("needLevel", { n: d.lvl }))}</div>`
+        : `<div class="ingredients">${ings}</div>`) +
+      "</div><div class='right'>" +
+      (lock
+        ? ""
+        : `<button class="btn sm" data-act="cook" data-arg="${d.id}"${can && freeStove ? "" : " disabled"}>${esc(MG.i18n.t("cook"))}</button>`) +
+      "</div></div>";
+  });
+
   h += `<div class="section-h">${esc(MG.i18n.t("stoves"))} (${state.stoves})</div>`;
   h += collectAllBar("cook", readyCounts().cook);
   let freeStoves = 0;
@@ -549,28 +575,6 @@ function renderCook(): string {
   });
   h += freeSlotsCard("🍳", freeStoves);
 
-  h += `<div class="section-h">${esc(MG.i18n.t("recipes"))}</div>`;
-  const freeStove = state.cooks.some((c) => !c);
-  DISHES.forEach((d) => {
-    const lock = !isUnlocked(d.lvl);
-    const can = hasRecipe(d.recipe);
-    let ings = "";
-    for (const k in d.recipe) {
-      const miss = (state.inv[k] || 0) < d.recipe[k];
-      ings += `<span class="ing${miss ? " miss" : ""}">${ITEM[k].ico} ${state.inv[k] || 0}/${d.recipe[k]}</span>`;
-    }
-    h +=
-      `<div class="card${lock ? " locked" : ""}"><span class="big">${d.ico}</span><div class="body">` +
-      `<div class="ttl">${esc(name(d.id))} ${stk(d.id)} <span class="badge lock">+${d.xp} XP</span></div>` +
-      (lock
-        ? `<div class="sub">🔒 ${esc(tf("needLevel", { n: d.lvl }))}</div>`
-        : `<div class="ingredients">${ings}</div>`) +
-      "</div><div class='right'>" +
-      (lock
-        ? ""
-        : `<button class="btn sm" data-act="cook" data-arg="${d.id}"${can && freeStove ? "" : " disabled"}>${esc(MG.i18n.t("cook"))}</button>`) +
-      "</div></div>";
-  });
   return h;
 }
 function fmtTime(ms: number): string {
