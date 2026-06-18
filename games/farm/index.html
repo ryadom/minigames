@@ -683,7 +683,7 @@
       // Growth sprite stages.
       var SEED_SPRITE = "🌰", SPROUT_SPRITE = "🌱", LEAF_SPRITE = "🌿";
 
-      var GRID = 16;            // 4×4 field
+      var GRID = 25;            // 5×5 field
       var START_PLOTS = 6;
       var WATER_BOOST = 2;      // growth multiplier while watered
       var WATER_MS = 12000;     // how long a watering lasts (game-time)
@@ -1140,7 +1140,7 @@
        *  panned with a transform. Overlays are positioned as a percentage
        *  of WORLD_W / WORLD_H so they always sit over their drawing.
        * ==================================================================== */
-      var WORLD_W = 1200, WORLD_H = 900;
+      var WORLD_W = 1200, WORLD_H = 1080;
 
       // Interactive buildings. (cx, by) = front-bottom-center; w = footprint.
       var BLD = {
@@ -1166,8 +1166,8 @@
         { type: "pig",     L: 760, R: 868, T: 745, B: 880 }
       ];
 
-      // The crop field: a 4×4 grid of tilled tiles centred on the map.
-      var FIELD = { cols: 4, rows: 4, tile: 80, gap: 18, cx: 600, cy: 520 };
+      // The crop field: a 5×5 grid of tilled tiles centred on the map.
+      var FIELD = { cols: 5, rows: 5, tile: 72, gap: 14, cx: 600, cy: 500 };
       FIELD.fullW = FIELD.cols * FIELD.tile + (FIELD.cols - 1) * FIELD.gap;
       FIELD.fullH = FIELD.rows * FIELD.tile + (FIELD.rows - 1) * FIELD.gap;
       FIELD.startX = FIELD.cx - FIELD.fullW / 2;
@@ -1291,7 +1291,7 @@
         '<pattern id="pengrass" width="26" height="26" patternUnits="userSpaceOnUse"><rect width="9" height="26" fill="rgba(255,255,255,0.14)"/></pattern>' +
         '</defs>';
 
-      var PATH_D = "M600 902 C 560 800 700 740 600 640 S 500 460 600 320";
+      var PATH_D = "M600 1082 C 560 940 700 800 600 640 S 500 460 600 320";
 
       // Compose the whole scene back-to-front (painter's order = depth).
       function buildScene() {
@@ -1319,7 +1319,7 @@
         s += svgHouse(BLD.barn) + svgHouse(BLD.quests);
         // The animal pens and a couple of front trees.
         s += svgPens();
-        s += svgTree(90, 700, 46) + svgTree(1130, 660, 42) + svgTree(1130, 860, 38);
+        s += svgTree(90, 760, 46) + svgTree(1130, 700, 42) + svgTree(1130, 1010, 38) + svgTree(150, 1010, 40);
         return s;
       }
 
@@ -1393,7 +1393,7 @@
         return LEAF_SPRITE;
       }
 
-      // The 16 crop tiles, laid over the tilled field backing.
+      // The 25 crop tiles, laid over the tilled field backing.
       function renderPlots() {
         var h = "";
         var lw = FIELD.tile / WORLD_W * 100, lh = FIELD.tile / WORLD_H * 100;
@@ -1462,7 +1462,10 @@
       }
       function clampPan() {
         var vw = worldView.clientWidth, vh = worldView.clientHeight;
-        var minX = vw - scaledW, minY = vh - scaledH;
+        // Reserve room at the bottom for the floating toolbar so the lowest
+        // crop tiles and pens can always be panned out from under it.
+        var inset = toolbarEl ? toolbarEl.offsetHeight : 0;
+        var minX = vw - scaledW, minY = vh - scaledH - inset;
         if (tx > 0) tx = 0; if (tx < minX) tx = minX;
         if (ty > 0) ty = 0; if (ty < minY) ty = minY;
       }
