@@ -29,16 +29,24 @@ let panHint: HTMLElement;
  * ==================================================================== */
 let tx = 0;
 let ty = 0;
+// `coverScale` is the smallest scale that still covers the viewport; the player
+// can zoom in on top of it via `userZoom`. `scale` is always their product.
+const MAX_ZOOM = 3;
+let coverScale = 1;
+let userZoom = 1;
 let scale = 1;
 let scaledW = 0;
 let scaledH = 0;
 let centered = false;
 
+const clampZoom = (z: number): number => (z < 1 ? 1 : z > MAX_ZOOM ? MAX_ZOOM : z);
+
 export function ensureScale(): void {
   const vw = worldView.clientWidth;
   const vh = worldView.clientHeight;
   if (!vw || !vh) return;
-  scale = Math.max(vw / WORLD_W, vh / WORLD_H);
+  coverScale = Math.max(vw / WORLD_W, vh / WORLD_H);
+  scale = coverScale * userZoom;
   scaledW = WORLD_W * scale;
   scaledH = WORLD_H * scale;
   if (!centered) {
@@ -47,6 +55,21 @@ export function ensureScale(): void {
     centered = true;
   }
   clampPan();
+}
+
+// Zoom toward a screen point (relative to the world-view), keeping whatever
+// world coordinate sits under it pinned in place.
+function zoomAt(px: number, py: number, nextZoom: number): void {
+  const wx = (px - tx) / scale;
+  const wy = (py - ty) / scale;
+  userZoom = clampZoom(nextZoom);
+  scale = coverScale * userZoom;
+  scaledW = WORLD_W * scale;
+  scaledH = WORLD_H * scale;
+  tx = px - wx * scale;
+  ty = py - wy * scale;
+  clampPan();
+  applyWorld();
 }
 function clampPan(): void {
   const vw = worldView.clientWidth;
@@ -86,10 +109,60 @@ let paintId: number | null = null;
 let paintVisited: Record<string, boolean> | null = null;
 let paintAgg: Agg | null = null;
 
-// Whether the player is mid-pan or mid-sweep — the tick loop uses this to
-// hold off full re-renders so the gesture stays smooth.
+// Two-finger pinch-to-zoom. We track every active pointer; the moment a second
+// one lands we drop any pan / paint gesture and scale around the midpoint.
+const pointers = new Map<number, { x: number; y: number }>();
+let pinching = false;
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+let pinchWX = 0;
+let pinchWY = 0;
+
+// Whether the player is mid-pan / mid-sweep / mid-pinch — the tick loop uses
+// this to hold off full re-renders so the gesture stays smooth.
 export function isInteracting(): boolean {
-  return dragging || painting;
+  return dragging || painting || pinching;
+}
+
+function startPinch(): void {
+  // Abandon any pan / paint gesture in favour of the two-finger zoom.
+  endPaint();
+  endPan();
+  pinching = true;
+  const pts = Array.from(pointers.values());
+  const r = worldView.getBoundingClientRect();
+  pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+  pinchStartZoom = userZoom;
+  const mx = (pts[0].x + pts[1].x) / 2 - r.left;
+  const my = (pts[0].y + pts[1].y) / 2 - r.top;
+  pinchWX = (mx - tx) / scale;
+  pinchWY = (my - ty) / scale;
+  hidePanHint();
+}
+
+function movePinch(): void {
+  const pts = Array.from(pointers.values());
+  const r = worldView.getBoundingClientRect();
+  const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+  const mx = (pts[0].x + pts[1].x) / 2 - r.left;
+  const my = (pts[0].y + pts[1].y) / 2 - r.top;
+  userZoom = clampZoom(pinchStartZoom * (dist / pinchStartDist));
+  scale = coverScale * userZoom;
+  scaledW = WORLD_W * scale;
+  scaledH = WORLD_H * scale;
+  tx = mx - pinchWX * scale;
+  ty = my - pinchWY * scale;
+  clampPan();
+  applyWorld();
+}
+
+function endPinch(): void {
+  pinching = false;
+  // Swallow the click the lifted fingers would otherwise synthesise.
+  suppressClick = true;
+  setTimeout(() => {
+    suppressClick = false;
+  }, 0);
 }
 
 function startPaint(e: PointerEvent): void {
@@ -133,6 +206,11 @@ function endPaint(): void {
 }
 
 function onPointerDown(e: PointerEvent): void {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size >= 2) {
+    startPinch();
+    return;
+  }
   const target = e.target as Element;
   if (target.closest?.("#toolbar")) return; // let the toolbar scroll/tap
   const plotCell = target.closest?.("[data-plotcell]");
@@ -149,6 +227,11 @@ function onPointerDown(e: PointerEvent): void {
   dragging = false;
 }
 function onPointerMove(e: PointerEvent): void {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinching) {
+    movePinch();
+    return;
+  }
   if (painting && e.pointerId === paintId) {
     paintAt(e.clientX, e.clientY);
     return;
@@ -225,16 +308,31 @@ export function initInput(): void {
   overlay = dom.overlay;
   panHint = dom.panHint;
 
+  const onPointerUp = (e: PointerEvent): void => {
+    pointers.delete(e.pointerId);
+    if (pinching) {
+      if (pointers.size < 2) endPinch();
+      return;
+    }
+    endPaint();
+    endPan();
+  };
+
   worldView.addEventListener("pointerdown", onPointerDown);
   worldView.addEventListener("pointermove", onPointerMove);
-  worldView.addEventListener("pointerup", () => {
-    endPaint();
-    endPan();
-  });
-  worldView.addEventListener("pointercancel", () => {
-    endPaint();
-    endPan();
-  });
+  worldView.addEventListener("pointerup", onPointerUp);
+  worldView.addEventListener("pointercancel", onPointerUp);
+  // Desktop parity for pinch-to-zoom: wheel scrolls into / out of the map.
+  worldView.addEventListener(
+    "wheel",
+    (e: WheelEvent) => {
+      e.preventDefault();
+      const r = worldView.getBoundingClientRect();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      zoomAt(e.clientX - r.left, e.clientY - r.top, userZoom * factor);
+    },
+    { passive: false },
+  );
   worldView.addEventListener("click", onWorldClick);
   overlay.addEventListener("click", onOverlayClick);
 }

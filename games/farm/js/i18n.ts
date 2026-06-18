@@ -21,7 +21,7 @@ MG.i18n.register({
     tabQuests: "Orders",
     tabGreenhouse: "Greenhouse",
     tabApiary: "Apiary",
-    dragHint: "Drag to look around · tap 🔨 Build to place soil, shops & pens 🏡",
+    dragHint: "Drag to look around · pinch to zoom · tap 🔨 Build to place soil, shops & pens 🏡",
     // build mode
     modeBuild: "Build",
     modeDone: "Done",
@@ -184,7 +184,8 @@ MG.i18n.register({
     tabQuests: "Заказы",
     tabGreenhouse: "Теплица",
     tabApiary: "Пасека",
-    dragHint: "Тяни, чтобы осмотреться · нажми 🔨 Стройка, чтобы ставить грядки, лавки и загоны 🏡",
+    dragHint:
+      "Тяни, чтобы осмотреться · щипок для зума · нажми 🔨 Стройка, чтобы ставить грядки, лавки и загоны 🏡",
     modeBuild: "Стройка",
     modeDone: "Готово",
     bSoil: "Грядка",
@@ -337,7 +338,8 @@ MG.i18n.register({
     tabQuests: "Pedidos",
     tabGreenhouse: "Invernadero",
     tabApiary: "Apiario",
-    dragHint: "Arrastra para mirar · toca 🔨 Construir para colocar tierra, tiendas y corrales 🏡",
+    dragHint:
+      "Arrastra para mirar · pellizca para acercar · toca 🔨 Construir para colocar tierra, tiendas y corrales 🏡",
     modeBuild: "Construir",
     modeDone: "Listo",
     bSoil: "Tierra",
