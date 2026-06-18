@@ -38,6 +38,17 @@ window.GAMES = [
     },
   },
   {
+    title: "Snake",
+    icon: "🐍",
+    url: "./games/snake/",
+    tags: ["arcade", "action"],
+    description: {
+      en: "Eat the apples, grow longer and don't bite yourself — arrow keys, WASD or swipe.",
+      ru: "Ешь яблоки, расти и не кусай себя — стрелки, WASD или свайп.",
+      es: "Come las manzanas, crece y no te muerdas — flechas, WASD o desliza.",
+    },
+  },
+  {
     title: "Flappy Bird",
     icon: "🐤",
     url: "./games/flappy-bird/",
