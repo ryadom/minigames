@@ -19,9 +19,8 @@ runtime framework. The sources are **TypeScript**, compiled and bundled with
 
 The whole site is **TypeScript ES modules** — the home page, every game, the
 shared runtime and the service worker. Each page imports the shared runtime
-directly and the bundler inlines it into that page's module. (The shared
-runtime is also emitted as a classic IIFE global script, `dist/shared/mg.js`,
-for any classic-`<script>` consumer, but nothing in the site relies on it.)
+directly and the bundler inlines it into that page's module, so there's no
+standalone runtime script to ship.
 
 A small shared runtime gives every page consistent chrome:
 

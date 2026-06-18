@@ -26,9 +26,7 @@ Each page bundles the runtime in via `import { MG } from ".../shared/mg"`.
 
 1. Copies every static asset (HTML, CSS, images, PWA files, `CNAME`, …) into
    `dist/`, skipping tooling and `.ts` sources.
-2. Compiles the shared runtime (`shared/*.ts`) to **classic IIFE scripts** that
-   publish `window.MG` (still emitted for any classic-`<script>` consumer), and
-   the service worker (`sw.ts`) to a root `sw.js`.
+2. Compiles the service worker (`sw.ts`) to a classic root `sw.js`.
 3. Bundles the home page (`app.ts`) and each game (ES modules) into one
    self-contained module script (the shared runtime is inlined into each).
 
@@ -71,9 +69,10 @@ and its `index.html` loads a single `<script type="module" src="js/main.js">`.
 ## The shared runtime (`shared/mg.ts` → `window.MG`)
 
 Games `import { MG } from "../../../shared/mg"` and the bundler inlines the
-runtime into each page's module. The classic IIFE build (`shared/mg.js`,
-exposing the `window.MG` global) is still emitted for any classic-`<script>`
-consumer, but nothing in the site relies on it. The public type surface lives in
+runtime into each page's module — so there's no standalone runtime script to
+load (the `window.MG` global still exists at runtime, set by the inlined
+runtime, but nothing depends on a classic `<script>`). The public type surface
+lives in
 `shared/types.ts` (`MGGlobal`, `I18n`, `MountHeaderOpts`, `HeaderUI`,
 `SaveStore`, …). Pieces:
 
