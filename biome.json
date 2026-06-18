@@ -15,7 +15,8 @@
       "sw.ts",
       "build.ts",
       "global.d.ts",
-      "scripts/**/*.mjs"
+      "scripts/**/*.mjs",
+      "tests/**/*.ts"
     ]
   },
   "formatter": {

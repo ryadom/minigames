@@ -1,0 +1,4 @@
+# Bun configuration. The test runner loads tests/setup.ts first so the shared
+# runtime and games (browser code) have the DOM globals they expect.
+[test]
+preload = ["./tests/setup.ts"]
