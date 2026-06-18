@@ -214,8 +214,8 @@
       MG.i18n.register({
         en: {
           title: "Top Racer",
-          lap: "Lap", time: "Time", best: "Best",
-          hint: "Steer with ◀ ▶ or arrow keys · ▲ gas · ▼ brake\nKeep on the track and chase your best lap!",
+          lap: "Lap", time: "Time", best: "Best", pos: "Pos",
+          hint: "Steer ◀ ▶ · ▲ gas · ▼ brake (hold while turning to drift)\nBeat the bots and chase your best lap!",
           tapStart: "▶ Start engine",
           go: "GO!",
           newBest: "New best lap! 🏁",
@@ -224,8 +224,8 @@
         },
         ru: {
           title: "Top Racer",
-          lap: "Круг", time: "Время", best: "Рекорд",
-          hint: "Руль ◀ ▶ или стрелки · ▲ газ · ▼ тормоз\nДержись трассы и побей свой лучший круг!",
+          lap: "Круг", time: "Время", best: "Рекорд", pos: "Место",
+          hint: "Руль ◀ ▶ · ▲ газ · ▼ тормоз (держи в повороте — занос)\nОбгони ботов и побей свой лучший круг!",
           tapStart: "▶ Завести мотор",
           go: "СТАРТ!",
           newBest: "Новый рекорд круга! 🏁",
@@ -234,8 +234,8 @@
         },
         es: {
           title: "Top Racer",
-          lap: "Vuelta", time: "Tiempo", best: "Mejor",
-          hint: "Gira con ◀ ▶ o flechas · ▲ acelera · ▼ frena\n¡Mantente en pista y bate tu mejor vuelta!",
+          lap: "Vuelta", time: "Tiempo", best: "Mejor", pos: "Pos",
+          hint: "Gira ◀ ▶ · ▲ acelera · ▼ frena (mantén al girar para derrapar)\n¡Gana a los bots y bate tu mejor vuelta!",
           tapStart: "▶ Arrancar motor",
           go: "¡YA!",
           newBest: "¡Mejor vuelta! 🏁",
@@ -257,6 +257,7 @@
         icon: "🏎️",
         titleKey: "title",
         stats: [
+          { key: "pos", labelKey: "pos", value: "1/4" },
           { key: "lap", labelKey: "lap", value: "1" },
           { key: "time", labelKey: "time", variant: "sm", value: "0.00" },
           { key: "best", labelKey: "best", variant: "sm", value: "—" }
@@ -387,46 +388,93 @@
 
       /* ============================ Car ============================
          Heading convention: forward = (sin a, -cos a), so a = 0 points up.
-         The camera rotates by -a so the car always faces screen-up. */
-      var ACCEL = 0.13;
-      var BRAKE = 0.20;
-      var MAX_SPEED = 5.6;
-      var OFF_MAX = 2.3;
+         The camera is FIXED (world-up stays up); the car rotates on screen.
+
+         The car carries a full velocity vector (vx, vy). Each step we split it
+         into a forward and a lateral component relative to the heading: the
+         engine pushes along forward, while lateral velocity is bled off by
+         "grip". High grip snaps the car to where it points; low grip lets the
+         tail slide — that is the drift. Holding the brake at speed acts as a
+         handbrake that drops grip and lets you slide the car through corners. */
+      var ACCEL = 0.15;
+      var BRAKE = 0.22;
+      var MAX_SPEED = 6.0;
+      var OFF_MAX = 2.4;
       var REVERSE_MAX = -2.0;
       var DRAG = 0.992;
-      var ROLL = 0.972;
+      var ROLL = 0.975;
       var OFF_DRAG = 0.90;
-      var STEER = 0.052;
+      var STEER = 0.050;
+      var GRIP = 0.80;          // lateral velocity retained per frame (grippy)
+      var DRIFT_GRIP = 0.95;    // handbrake: tail slides for longer (drift)
+      var SLIP_MARK = 1.3;      // |lateral speed| above which we lay rubber
 
-      var car, input, state, raceStartT, lapStartT, lap, lastLap, best;
-      var prevFrac, passedHalf, skid;
+      var ZOOM = 0.82;          // camera zoom-out so opponents stay in view
+
+      var car, bots, input, state, raceStartT, lapStartT, lap, lastLap, best;
       var STATE_READY = 0, STATE_COUNT = 1, STATE_PLAY = 2;
       var countUntil = 0;
+
+      // Bot personalities: body colours + how hard they push.
+      var BOT_DEFS = [
+        { c1: "#1e6fd9", c2: "#4aa0ff", c3: "#114a91", maxMul: 0.97, look: 9 },
+        { c1: "#149a47", c2: "#46d97e", c3: "#0c6630", maxMul: 0.93, look: 10 },
+        { c1: "#d9a514", c2: "#ffd24a", c3: "#916c0c", maxMul: 0.90, look: 8 }
+      ];
+      var PLAYER_COL = { c1: "#c81f2d", c2: "#ff3b4a", c3: "#9a121d" };
 
       var store = MG.storage("top-racer", { version: 1 });
       best = (store.load() || { best: 0 }).best || 0;
       ui.setStat("best", best ? fmt(best) : "—");
 
-      function startPose() {
-        // Place the car on the start/finish line (centre[0]), facing along
-        // the track tangent (toward increasing index).
+      // Pose on the start/finish line (centre[0]) with a lateral offset across
+      // the track, facing along the tangent (toward increasing index).
+      function gridPose(latOffset) {
         var a = center[0], b = center[1];
         var tx = b.x - a.x, ty = b.y - a.y;
-        return { x: a.x, y: a.y, angle: Math.atan2(tx, -ty) };
+        var len = Math.hypot(tx, ty) || 1;
+        tx /= len; ty /= len;
+        var nx = -ty, ny = tx;      // left normal (across the track)
+        return {
+          x: a.x + nx * latOffset,
+          y: a.y + ny * latOffset,
+          angle: Math.atan2(tx, -ty)
+        };
+      }
+
+      function newCarState(pose, extra) {
+        var c = {
+          x: pose.x, y: pose.y, angle: pose.angle,
+          vx: 0, vy: 0, speed: 0, fwd: 0, lat: 0,
+          onTrack: true, offIdx: 0,
+          lap: 1, prevFrac: 0, passedHalf: false, prog: 1, skid: []
+        };
+        if (extra) for (var k in extra) c[k] = extra[k];
+        return c;
       }
 
       function resetRace() {
-        var p = startPose();
-        car = { x: p.x, y: p.y, angle: p.angle, speed: 0 };
+        // Side-by-side starting grid across the asphalt. The player takes a
+        // centre slot; the three bots line up alongside.
+        car = newCarState(gridPose(-15), { col: PLAYER_COL });
+        bots = [];
+        var lanes = [-48, 18, 48];
+        for (var i = 0; i < BOT_DEFS.length; i++) {
+          var d = BOT_DEFS[i];
+          bots.push(newCarState(gridPose(lanes[i]), {
+            col: { c1: d.c1, c2: d.c2, c3: d.c3 },
+            maxSpeed: MAX_SPEED * d.maxMul,
+            look: d.look,
+            isBot: true
+          }));
+        }
         input = { left: false, right: false, gas: false, brake: false };
         lap = 1;
         lastLap = 0;
-        prevFrac = 0;
-        passedHalf = false;
-        skid = [];
         state = STATE_READY;
         raceStartT = 0;
         lapStartT = 0;
+        ui.setStat("pos", "1/" + (bots.length + 1));
         ui.setStat("lap", "1");
         ui.setStat("time", "0.00");
         flashEl.classList.add("hidden");
@@ -486,6 +534,132 @@
         if (!overlay.classList.contains("hidden")) renderOverlay();
       });
 
+      /* ============================ Physics ============================
+         One step of arcade car physics for any car (player or bot), driven by
+         an input record { left, right, gas, brake }. */
+      function stepCar(c, inp) {
+        var off = distToTrack(c.x, c.y);
+        var onTrack = off.dist <= TRACK_HW;
+
+        var sa = Math.sin(c.angle), ca = Math.cos(c.angle);
+        // Forward speed in the current heading (used to gate steering/handbrake).
+        var fwd0 = c.vx * sa + c.vy * (-ca);
+        var vmag = Math.hypot(c.vx, c.vy);
+        var handbrake = inp.brake && fwd0 > 1.5;
+
+        // Steering rotates the heading first; scales with speed, flips in reverse.
+        var dir = (inp.left ? -1 : 0) + (inp.right ? 1 : 0);
+        if (dir !== 0 && vmag > 0.04) {
+          var auth = STEER * Math.min(1, vmag / 1.5) * (fwd0 < 0 ? -1 : 1);
+          if (handbrake) auth *= 1.5;   // sharper rotation while drifting
+          c.angle += dir * auth;
+        }
+
+        // Re-split velocity into the (possibly rotated) heading frame.
+        sa = Math.sin(c.angle); ca = Math.cos(c.angle);
+        var fwd = c.vx * sa + c.vy * (-ca);
+        var lat = c.vx * ca + c.vy * sa;
+
+        // Engine / brake along forward.
+        if (inp.gas) fwd += ACCEL;
+        if (inp.brake) {
+          if (fwd > 0.15) fwd -= BRAKE;
+          else fwd -= ACCEL * 0.6;       // creep into reverse
+        }
+
+        // Longitudinal resistance + caps.
+        fwd *= DRAG;
+        if (!inp.gas && !inp.brake) fwd *= ROLL;
+        if (!onTrack) fwd *= OFF_DRAG;
+        var cap = onTrack ? (c.maxSpeed || MAX_SPEED) : OFF_MAX;
+        if (fwd > cap) fwd = cap;
+        if (fwd < REVERSE_MAX) fwd = REVERSE_MAX;
+
+        // Lateral grip — this is the drift dial. Handbrake (and being off the
+        // tarmac) lets the tail keep its sideways speed instead of biting.
+        var grip = handbrake ? DRIFT_GRIP : GRIP;
+        if (!onTrack) grip = Math.min(0.96, grip + 0.10);
+        lat *= grip;
+
+        if (Math.abs(fwd) < 0.02 && Math.abs(lat) < 0.02) { fwd = 0; lat = 0; }
+
+        // Recompose the world velocity and integrate.
+        c.vx = sa * fwd + ca * lat;
+        c.vy = -ca * fwd + sa * lat;
+        c.x += c.vx;
+        c.y += c.vy;
+
+        c.fwd = fwd; c.lat = lat; c.speed = fwd;
+        c.onTrack = onTrack; c.offIdx = off.idx;
+
+        // Lay rubber when the tyres are sliding (drift / hard braking).
+        if (Math.abs(lat) > SLIP_MARK && vmag > 1.2) {
+          var rear = 13;
+          c.skid.push({
+            x: c.x - Math.sin(c.angle) * rear,
+            y: c.y + Math.cos(c.angle) * rear,
+            a: c.angle
+          });
+          if (c.skid.length > 140) c.skid.shift();
+        }
+      }
+
+      // Wrap an angle into (-PI, PI].
+      function angNorm(a) {
+        while (a > Math.PI) a -= Math.PI * 2;
+        while (a < -Math.PI) a += Math.PI * 2;
+        return a;
+      }
+
+      // Bot AI: aim at a point further along the centreline, steer toward it,
+      // and ease off / brake into the sharper corners (which makes bots drift
+      // through them too, on the same physics as the player).
+      function botInput(b) {
+        var m = center.length;
+        var target = center[(b.offIdx + (b.look || 9)) % m];
+        var dx = target.x - b.x, dy = target.y - b.y;
+        var desired = Math.atan2(dx, -dy);
+        var diff = angNorm(desired - b.angle);
+        var inp = { left: false, right: false, gas: false, brake: false };
+        if (diff > 0.05) inp.right = true;
+        else if (diff < -0.05) inp.left = true;
+        var sharp = Math.abs(diff);
+        if (sharp > 0.65 && b.fwd > 3.2) inp.brake = true;   // scrub speed (drift)
+        else inp.gas = true;
+        return inp;
+      }
+
+      // Lap / position progress for any car: prog = laps + fraction of a lap.
+      function trackProgress(c) {
+        var frac = c.offIdx / center.length;
+        if (frac > 0.5) c.passedHalf = true;
+        var crossed = c.passedHalf && c.prevFrac > 0.85 && frac < 0.15;
+        c.prevFrac = frac;
+        c.prog = c.lap + frac;
+        return crossed;
+      }
+
+      // Keep cars from stacking: separate any overlapping pair.
+      function resolveCollisions(cars) {
+        var R = 19;
+        for (var i = 0; i < cars.length; i++) {
+          for (var j = i + 1; j < cars.length; j++) {
+            var a = cars[i], b = cars[j];
+            var dx = b.x - a.x, dy = b.y - a.y;
+            var d = Math.hypot(dx, dy);
+            if (d > 0 && d < R * 2) {
+              var nx = dx / d, ny = dy / d;
+              var push = (R * 2 - d) / 2;
+              a.x -= nx * push; a.y -= ny * push;
+              b.x += nx * push; b.y += ny * push;
+              // Damp the closing velocity so hits feel like a nudge.
+              a.vx -= nx * push * 0.4; a.vy -= ny * push * 0.4;
+              b.vx += nx * push * 0.4; b.vy += ny * push * 0.4;
+            }
+          }
+        }
+      }
+
       /* ============================ Update ============================ */
       function update() {
         if (state === STATE_COUNT) {
@@ -499,57 +673,23 @@
         }
         if (state !== STATE_PLAY) return;
 
-        var off = distToTrack(car.x, car.y);
-        var onTrack = off.dist <= TRACK_HW;
+        // Step the player and every bot through the same physics.
+        stepCar(car, input);
+        for (var i = 0; i < bots.length; i++) stepCar(bots[i], botInput(bots[i]));
 
-        // Throttle / brake.
-        if (input.gas) car.speed += ACCEL;
-        if (input.brake) {
-          if (car.speed > 0.15) car.speed -= BRAKE;
-          else car.speed -= ACCEL * 0.6;   // creep into reverse
+        resolveCollisions([car].concat(bots));
+
+        // Lap / progress for everyone (player crossing the line is timed).
+        if (trackProgress(car)) { completeLap(); }
+        for (var k = 0; k < bots.length; k++) {
+          if (trackProgress(bots[k])) bots[k].lap++;
         }
+        car.prog = car.lap + car.offIdx / center.length;  // refresh after lap++
 
-        // Resistance.
-        car.speed *= DRAG;
-        if (!input.gas && !input.brake) car.speed *= ROLL;
-        if (!onTrack) car.speed *= OFF_DRAG;
-
-        var cap = onTrack ? MAX_SPEED : OFF_MAX;
-        if (car.speed > cap) car.speed = cap;
-        if (car.speed < REVERSE_MAX) car.speed = REVERSE_MAX;
-        if (Math.abs(car.speed) < 0.02) car.speed = 0;
-
-        // Steering — scales with speed, reverses when backing up.
-        var dir = (input.left ? -1 : 0) + (input.right ? 1 : 0);
-        if (dir !== 0 && car.speed !== 0) {
-          var grip = Math.min(1, Math.abs(car.speed) / 1.6);
-          car.angle += dir * STEER * grip * (car.speed < 0 ? -1 : 1);
-        }
-
-        // Move.
-        car.x += Math.sin(car.angle) * car.speed;
-        car.y += -Math.cos(car.angle) * car.speed;
-
-        // Skid marks when braking hard or sliding off at speed.
-        var sliding = (input.brake && Math.abs(car.speed) > 2) || (!onTrack && Math.abs(car.speed) > 1.5);
-        if (sliding) {
-          var rear = 13;
-          skid.push({
-            x: car.x - Math.sin(car.angle) * rear,
-            y: car.y + Math.cos(car.angle) * rear,
-            a: car.angle
-          });
-          if (skid.length > 160) skid.shift();
-        }
-
-        // Lap / progress tracking.
-        var frac = off.idx / center.length;
-        if (frac > 0.5) passedHalf = true;
-        if (passedHalf && prevFrac > 0.85 && frac < 0.15) {
-          completeLap();
-          passedHalf = false;
-        }
-        prevFrac = frac;
+        // Standings — rank everyone by total progress around the track.
+        var pos = 1;
+        for (var p = 0; p < bots.length; p++) if (bots[p].prog > car.prog) pos++;
+        ui.setStat("pos", pos + "/" + (bots.length + 1));
 
         // HUD time.
         ui.setStat("time", fmt(now() - lapStartT));
@@ -560,6 +700,7 @@
         lastLap = t - lapStartT;
         lapStartT = t;
         lap++;
+        car.lap = lap;          // keep the player's progress in sync with the HUD
         ui.setStat("lap", String(lap));
         if (best === 0 || lastLap < best) {
           best = lastLap;
@@ -584,16 +725,19 @@
         ctx.fillRect(0, 0, VW, VH);
 
         ctx.save();
-        // Camera: car centred horizontally, a bit below mid so we see ahead.
-        ctx.translate(VW / 2, VH * 0.62);
-        ctx.rotate(-car.angle);
+        // Fixed camera: world-up stays up, we simply track the car (no rotation)
+        // and zoom out a touch so the bots around you stay on screen.
+        ctx.translate(VW / 2, VH / 2);
+        ctx.scale(ZOOM, ZOOM);
         ctx.translate(-car.x, -car.y);
 
         drawPatches();
         drawTrack();
-        drawSkid();
+        drawSkid(car);
+        for (var b = 0; b < bots.length; b++) drawSkid(bots[b]);
         drawStartLine();
-        drawCar();
+        for (var i = 0; i < bots.length; i++) drawCar(bots[i]);
+        drawCar(car);
 
         ctx.restore();
 
@@ -701,10 +845,11 @@
         ctx.restore();
       }
 
-      function drawSkid() {
+      function drawSkid(c) {
+        var marks = c.skid;
         ctx.fillStyle = "rgba(20,20,24,0.35)";
-        for (var i = 0; i < skid.length; i++) {
-          var s = skid[i];
+        for (var i = 0; i < marks.length; i++) {
+          var s = marks[i];
           ctx.save();
           ctx.translate(s.x, s.y);
           ctx.rotate(s.a);
@@ -714,10 +859,11 @@
         }
       }
 
-      function drawCar() {
+      function drawCar(c) {
+        var col = c.col || PLAYER_COL;
         ctx.save();
-        ctx.translate(car.x, car.y);
-        ctx.rotate(car.angle);
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.angle);
 
         // Shadow.
         ctx.fillStyle = "rgba(0,0,0,0.28)";
@@ -726,15 +872,15 @@
 
         // Body.
         var grad = ctx.createLinearGradient(-13, 0, 13, 0);
-        grad.addColorStop(0, "#c81f2d");
-        grad.addColorStop(0.5, "#ff3b4a");
-        grad.addColorStop(1, "#c81f2d");
+        grad.addColorStop(0, col.c1);
+        grad.addColorStop(0.5, col.c2);
+        grad.addColorStop(1, col.c1);
         ctx.fillStyle = grad;
         roundRect(-13, -19, 26, 38, 7);
         ctx.fill();
 
         // Wings.
-        ctx.fillStyle = "#9a121d";
+        ctx.fillStyle = col.c3;
         ctx.fillRect(-16, -12, 4, 9);
         ctx.fillRect(12, -12, 4, 9);
         ctx.fillRect(-17, 9, 5, 8);
