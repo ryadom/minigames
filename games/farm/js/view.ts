@@ -30,7 +30,6 @@ import {
   HEATER_STEP,
   HIVE_MS,
   ITEM,
-  LEAF_SPRITE,
   MAX_HEATER,
   MAX_HIVES,
   MAX_OVEN,
@@ -41,9 +40,7 @@ import {
   MAX_TRADE,
   OVEN_STEP,
   REMOVE_TOOL,
-  SEED_SPRITE,
   SOIL_STEP,
-  SPROUT_SPRITE,
   TRADE_STEP,
 } from "./config";
 import {
@@ -69,6 +66,7 @@ import { itemName as name, tf } from "./i18n";
 import { applyWorld, ensureScale } from "./input";
 import { dom, ui } from "./runtime";
 import { buildScene, cellPos, pf, TILE, WORLD_H, WORLD_W } from "./scene";
+import { buildArtById, buildingArt, cropArt, cropStage } from "./sprites";
 import { ensurePen, need, state } from "./state";
 import type { BuildDef, Tile } from "./types";
 
@@ -123,13 +121,10 @@ function tileIcon(t: Tile): string {
   return BUILD_BY_ID[t.kind]?.ico || "🏠";
 }
 
-function plotSprite(t: Tile): string {
-  const c = CROP_BY_ID[t.crop as string];
-  const f = (t.grown || 0) / c.grow;
-  if (f >= 1) return c.ico;
-  if (f < 0.33) return SEED_SPRITE;
-  if (f < 0.66) return SPROUT_SPRITE;
-  return LEAF_SPRITE;
+// The growth stage (0..3) a crop tile is in, or -1 when the plot is bare.
+function plotStage(t: Tile): number {
+  if (!t.crop) return -1;
+  return cropStage(t.grown || 0, CROP_BY_ID[t.crop].grow);
 }
 
 // A soil plot you can plant / water / harvest (normal play).
@@ -137,18 +132,19 @@ function soilCell(i: number, t: Tile): string {
   let cls = "plot";
   let spr = "";
   let w = "0";
+  const stage = plotStage(t);
   if (t.crop) {
     const c = CROP_BY_ID[t.crop];
     const rdy = (t.grown || 0) >= c.grow;
     cls += rdy ? " ready" : (t.water || 0) > 0 ? " watered" : "";
     if (t.fert) cls += " fert";
-    spr = plotSprite(t);
+    spr = cropArt(t.crop, stage as 0 | 1 | 2 | 3);
     w = Math.min(100, ((t.grown || 0) / c.grow) * 100).toFixed(1);
   } else {
     cls += " empty";
   }
   return (
-    `<button class="${cls}" data-plotcell="${i}" data-act="plot" data-arg="${i}" ${cellStyle(i)}>` +
+    `<button class="${cls}" data-plotcell="${i}" data-stage="${stage}" data-act="plot" data-arg="${i}" ${cellStyle(i)}>` +
     `<span class="sprite">${spr}</span>` +
     `<span class="bar"><i style="width:${w}%"></i></span></button>`
   );
@@ -202,10 +198,18 @@ function buildingCell(i: number, t: Tile): string {
     sub = mine ? `${ITEM[def.prod].ico} ×${mine}` : "🛒";
     badge = ready || "";
   }
+  const art = buildingArt(t);
+  // Pens draw the animal emoji over their barn; other buildings are pure art.
+  const emblem =
+    t.kind === "pen"
+      ? `<span class="bld-art">${art}<span class="bld-pet">${ico}</span></span>`
+      : art
+        ? `<span class="bld-art">${art}</span>`
+        : `<span class="bld-ico">${ico}</span>`;
   return (
     `<button class="hotspot bld" data-act="${act}" data-arg="${arg}" ${cellStyle(i, t.w || 1, t.h || 1)}>` +
     (badge ? `<span class="b-badge">${badge}</span>` : "") +
-    `<span class="bld-ico">${ico}</span>` +
+    emblem +
     `<span class="sign"><span class="st">${esc(title)}</span>` +
     (sub ? `<span class="ss">${esc(sub)}</span>` : "") +
     `</span></button>`
@@ -220,9 +224,14 @@ function buildCell(i: number): string {
   const removing = state.buildSel === REMOVE_TOOL;
   const cw = t?.w || 1;
   const ch = t?.h || 1;
-  const inner = t
-    ? `<span class="bc-ico">${tileIcon(t)}</span>`
-    : `<span class="bc-plus">＋</span>`;
+  let inner = `<span class="bc-plus">＋</span>`;
+  if (t) {
+    const art =
+      t.kind === "soil" ? "" : buildArtById(t.kind === "pen" ? `pen-${t.penType}` : t.kind);
+    inner = art
+      ? `<span class="bc-art">${art}</span>`
+      : `<span class="bc-ico">${tileIcon(t)}</span>`;
+  }
   return (
     `<button class="buildcell${t ? " filled" : " open"}${removing && t ? " rm" : ""}" ` +
     `data-act="buildcell" data-arg="${i}" ${cellStyle(i, cw, ch)}>${inner}</button>`
@@ -844,7 +853,10 @@ export function patch(): void {
     const spr = cell.querySelector(".sprite");
     const bar = cell.querySelector(".bar > i") as HTMLElement | null;
     if (!t.crop) {
-      if (spr?.textContent) spr.textContent = "";
+      if (cell.getAttribute("data-stage") !== "-1") {
+        if (spr) spr.innerHTML = "";
+        cell.setAttribute("data-stage", "-1");
+      }
       cell.className = "plot empty";
       if (bar) bar.style.width = "0%";
       continue;
@@ -853,8 +865,13 @@ export function patch(): void {
     const rdy = (t.grown || 0) >= c.grow;
     const cls = `plot${rdy ? " ready" : (t.water || 0) > 0 ? " watered" : ""}${t.fert ? " fert" : ""}`;
     if (cell.className !== cls) cell.className = cls;
-    const s = plotSprite(t);
-    if (spr && spr.textContent !== s) spr.textContent = s;
+    // The drawn plant only changes when the crop crosses a growth stage, so
+    // reparse its SVG sparingly (per-frame work stays the cheap bar update).
+    const stage = plotStage(t);
+    if (cell.getAttribute("data-stage") !== String(stage)) {
+      if (spr) spr.innerHTML = cropArt(t.crop, stage as 0 | 1 | 2 | 3);
+      cell.setAttribute("data-stage", String(stage));
+    }
     if (bar) bar.style.width = `${Math.min(100, ((t.grown || 0) / c.grow) * 100).toFixed(1)}%`;
   }
   if (state.tab === "cook") {
