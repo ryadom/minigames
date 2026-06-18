@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🃏 Solitaire — Minigames</title>
+  <meta name="description" content="Klondike Solitaire — deal the deck, build the foundations up from Ace to King. Draw 1 or 3, undo, and auto-finish. Play in your browser, no installs." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🃏</text></svg>" />
+
+  <!-- Shared chrome: header bar + language control, and the card runtime. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <link rel="stylesheet" href="../../shared/cards.css" />
+  <script src="../../shared/mg.js"></script>
+  <script src="../../shared/cards.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      background: radial-gradient(120% 120% at 50% 0%, #1d7a4d 0%, #15603c 55%, #0f4d30 100%);
+      color: #eaf3ee;
+      font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* The play surface scrolls vertically if a tall pile overflows. */
+    .mg-game-area {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .wrap {
+      width: 100%;
+      padding: 14px clamp(8px, 2vw, 18px) 28px;
+    }
+
+    .board {
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      --gap: clamp(5px, 1.6vw, 12px);
+      --cardh: 0px; /* set from JS once the layout is measured */
+    }
+
+    .top,
+    .tableau {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: var(--gap);
+    }
+
+    .tableau { margin-top: clamp(10px, 2.4vw, 20px); }
+
+    /* A drop zone (stock / waste / foundation / tableau pile). Cards are
+       absolutely positioned inside; the zone owns the column width. */
+    .slot,
+    .pile {
+      position: relative;
+      border-radius: 8px;
+    }
+
+    .slot { height: var(--cardh); }
+    .pile { min-height: var(--cardh); }
+
+    /* Empty-zone placeholder outline + hint glyph. */
+    .slot.empty::after,
+    .pile.empty::after {
+      content: attr(data-hint);
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed rgba(255, 255, 255, 0.28);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: calc(var(--cardh) * 0.34);
+      pointer-events: none;
+    }
+
+    .spacer { background: none; }
+    .waste { overflow: visible; z-index: 2; }
+
+    /* A positioned card host inside a zone. */
+    .card-pos {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+    .card-pos.dragging { visibility: hidden; }
+    .card-pos.dealt { animation: deal-in 0.18s ease both; }
+    @keyframes deal-in {
+      from { transform: translateY(-8px); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+
+    /* Cards being dragged ride in a fixed layer that follows the pointer. */
+    .drag-layer {
+      position: fixed;
+      z-index: 50;
+      pointer-events: none;
+      left: 0;
+      top: 0;
+    }
+    .drag-layer .card-pos { cursor: grabbing; }
+    .drag-layer .mg-card,
+    .card-pos.lifting .mg-card { box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45); }
+
+    /* Win overlay. */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      text-align: center;
+      padding: 20px;
+      background: rgba(8, 40, 26, 0.72);
+      backdrop-filter: blur(2px);
+      animation: fade 0.3s ease both;
+    }
+    .overlay.hidden { display: none; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .overlay .msg { font-size: clamp(2rem, 9vw, 3rem); font-weight: 800; }
+    .overlay .sub { font-size: 1.05rem; opacity: 0.9; }
+    .ov-btn {
+      padding: 12px 22px;
+      font-weight: 800;
+      font-size: 1rem;
+      color: #114a2f;
+      background: #ffd76a;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .ov-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="mg-app">
+  <div class="mg-game-area">
+    <div class="wrap">
+      <div class="board" id="board">
+        <div class="top">
+          <div class="slot" id="stock"></div>
+          <div class="slot waste" id="waste"></div>
+          <div class="slot spacer"></div>
+          <div class="slot found" data-f="0"></div>
+          <div class="slot found" data-f="1"></div>
+          <div class="slot found" data-f="2"></div>
+          <div class="slot found" data-f="3"></div>
+        </div>
+        <div class="tableau" id="tableau"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="overlay">
+    <div class="msg" id="ov-msg"></div>
+    <div class="sub" id="ov-sub"></div>
+    <button class="ov-btn" id="ov-btn"></button>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var $ = function (id) { return document.getElementById(id); };
+      var C = MG.cards;
+
+      /* ============================ i18n ============================ */
+      MG.i18n.register({
+        en: {
+          title: "Solitaire",
+          moves: "Moves", time: "Time",
+          newGame: "New", undo: "Undo",
+          draw1: "Draw 1", draw3: "Draw 3",
+          win: "You win!",
+          winSub: "Cleared in {m} moves · {t}",
+          playAgain: "Play again",
+          stockHint: "↺"
+        },
+        ru: {
+          title: "Пасьянс",
+          moves: "Ходы", time: "Время",
+          newGame: "Новая", undo: "Отмена",
+          draw1: "Тянуть 1", draw3: "Тянуть 3",
+          win: "Победа!",
+          winSub: "Собрано за {m} ходов · {t}",
+          playAgain: "Ещё раз",
+          stockHint: "↺"
+        },
+        es: {
+          title: "Solitario",
+          moves: "Mov.", time: "Tiempo",
+          newGame: "Nuevo", undo: "Deshacer",
+          draw1: "Roba 1", draw3: "Roba 3",
+          win: "¡Ganaste!",
+          winSub: "Resuelto en {m} movimientos · {t}",
+          playAgain: "Jugar otra vez",
+          stockHint: "↺"
+        }
+      });
+
+      var t = MG.i18n.t;
+
+      // Versioned save: in-progress game + draw preference.
+      var store = MG.storage("solitaire", { version: 1 });
+
+      /* ============================ state =========================== */
+      // A pile entry is { c: cardRecord, up: bool }.
+      var game = null;        // see newGame()
+      var undoStack = [];
+      var elapsed = 0;        // seconds
+      var timer = null;
+      var running = false;    // a game is in progress (timer counts)
+      var autoBusy = false;   // auto-finish animation running
+      var won = false;
+
+      // id -> card record, to rebuild piles from a saved/serialized game.
+      var CARD_BY_ID = {};
+      C.makeDeck().forEach(function (c) { CARD_BY_ID[c.id] = c; });
+
+      /* ----- header ----- */
+      var ui = MG.mountHeader({
+        icon: "🃏",
+        titleKey: "title",
+        stats: [
+          { key: "moves", labelKey: "moves" },
+          { key: "time", labelKey: "time", variant: "sm", value: "0:00" }
+        ],
+        actions: [
+          { key: "draw", labelKey: "draw1", onClick: toggleDraw },
+          { key: "undo", labelKey: "undo", onClick: undo },
+          { key: "new", labelKey: "newGame", onClick: function () { newGame(); } }
+        ]
+      });
+
+      function setDrawLabel() {
+        var btn = ui.action("draw");
+        if (btn) btn.textContent = t(game && game.drawCount === 3 ? "draw3" : "draw1");
+      }
+
+      /* ========================= deal / rules ======================= */
+      function newGame(drawCount) {
+        var dc = drawCount || (game && game.drawCount) || 1;
+        var deal = C.dealDeck();
+        var deck = deal.cards;
+
+        var tableau = [[], [], [], [], [], [], []];
+        var k = 0;
+        for (var col = 0; col < 7; col++) {
+          for (var row = 0; row <= col; row++) {
+            tableau[col].push({ c: deck[k++], up: row === col });
+          }
+        }
+        var stock = [];
+        while (k < deck.length) stock.push({ c: deck[k++], up: false });
+
+        game = {
+          seed: deal.seed,
+          drawCount: dc,
+          stock: stock,
+          waste: [],
+          foundations: [[], [], [], []],
+          tableau: tableau,
+          moves: 0
+        };
+        undoStack = [];
+        elapsed = 0;
+        won = false;
+        autoBusy = false;
+        running = false; // starts on first move
+        hideOverlay();
+        setDrawLabel();
+        ui.setStat("moves", 0);
+        updateTime();
+        layout();
+        render(true);
+        persist();
+      }
+
+      function toggleDraw() {
+        newGame(game && game.drawCount === 3 ? 1 : 3);
+      }
+
+      // Can `card` be placed on a tableau pile (by its top entry)?
+      function fitsTableau(card, pile) {
+        if (!pile.length) return card.rank === 13;          // empty: King only
+        var top = pile[pile.length - 1];
+        if (!top.up) return false;
+        return top.c.color !== card.color && top.c.rank === card.rank - 1;
+      }
+
+      // Can `card` go onto foundation pile `f`?
+      function fitsFoundation(card, pile) {
+        if (!pile.length) return card.rank === 1;            // empty: Ace only
+        var top = pile[pile.length - 1].c;
+        return top.suit === card.suit && card.rank === top.rank + 1;
+      }
+
+      /* --------------------------- moves --------------------------- */
+      function snapshot() {
+        return JSON.stringify(serialize(false));
+      }
+
+      function pushUndo() {
+        undoStack.push(snapshot());
+        if (undoStack.length > 300) undoStack.shift();
+        var btn = ui.action("undo");
+        if (btn) btn.disabled = false;
+      }
+
+      function startIfNeeded() {
+        if (running || won) return;
+        running = true;
+        if (!timer) timer = window.setInterval(tick, 1000);
+      }
+
+      function bumpMove() {
+        game.moves++;
+        ui.setStat("moves", game.moves);
+      }
+
+      // Deal from stock to waste, or recycle the waste back into the stock.
+      function drawStock() {
+        if (autoBusy || won) return;
+        if (!game.stock.length && !game.waste.length) return;
+        pushUndo();
+        if (!game.stock.length) {
+          // Recycle: waste back to stock, face down, original order.
+          while (game.waste.length) {
+            var e = game.waste.pop();
+            e.up = false;
+            game.stock.push(e);
+          }
+        } else {
+          var n = Math.min(game.drawCount, game.stock.length);
+          for (var i = 0; i < n; i++) {
+            var d = game.stock.pop();
+            d.up = true;
+            game.waste.push(d);
+          }
+        }
+        startIfNeeded();
+        bumpMove();
+        render();
+        persist();
+      }
+
+      // Apply a validated move of `entries` from `src` to a destination.
+      // src: {type:'waste'} | {type:'foundation', f} | {type:'tableau', p}
+      // dest: {type:'foundation', f} | {type:'tableau', p}
+      function applyMove(entries, src, dest) {
+        pushUndo();
+
+        // Remove from source.
+        if (src.type === "waste") {
+          game.waste.pop();
+        } else if (src.type === "foundation") {
+          game.foundations[src.f].pop();
+        } else {
+          game.tableau[src.p].splice(game.tableau[src.p].length - entries.length);
+        }
+
+        // Add to destination.
+        if (dest.type === "foundation") {
+          entries.forEach(function (e) { e.up = true; game.foundations[dest.f].push(e); });
+        } else {
+          entries.forEach(function (e) { e.up = true; game.tableau[dest.p].push(e); });
+        }
+
+        // Flip the newly exposed tableau card, if any.
+        if (src.type === "tableau") {
+          var pile = game.tableau[src.p];
+          if (pile.length && !pile[pile.length - 1].up) pile[pile.length - 1].up = true;
+        }
+
+        startIfNeeded();
+        bumpMove();
+        render();
+        persist();
+        checkWin();
+        maybeAutoFinish();
+      }
+
+      // Try to send a single card to any foundation. Returns true if moved.
+      function sendToFoundation(card, src) {
+        for (var f = 0; f < 4; f++) {
+          if (fitsFoundation(card, game.foundations[f])) {
+            applyMove([{ c: card, up: true }], src, { type: "foundation", f: f });
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // Tap on a face-up top card: auto-send to a foundation if it fits.
+      function tapCard(src) {
+        if (autoBusy || won) return;
+        var card = topCardOf(src);
+        if (!card) return;
+        sendToFoundation(card, src);
+      }
+
+      function topCardOf(src) {
+        if (src.type === "waste") {
+          return game.waste.length ? game.waste[game.waste.length - 1].c : null;
+        }
+        if (src.type === "foundation") {
+          var fp = game.foundations[src.f];
+          return fp.length ? fp[fp.length - 1].c : null;
+        }
+        var tp = game.tableau[src.p];
+        return tp.length ? tp[tp.length - 1].c : null;
+      }
+
+      function undo() {
+        if (autoBusy || !undoStack.length) return;
+        var snap = undoStack.pop();
+        deserialize(JSON.parse(snap), false);
+        won = false;
+        hideOverlay();
+        ui.setStat("moves", game.moves);
+        var btn = ui.action("undo");
+        if (btn) btn.disabled = !undoStack.length;
+        render();
+        persist();
+      }
+
+      /* ----------------------- auto finish ------------------------- */
+      function noFaceDown() {
+        for (var p = 0; p < 7; p++) {
+          var pile = game.tableau[p];
+          for (var i = 0; i < pile.length; i++) if (!pile[i].up) return false;
+        }
+        return true;
+      }
+
+      // Once every card is exposed and the stock is empty, the game is solved:
+      // greedily send tops to the foundations until the board clears.
+      function maybeAutoFinish() {
+        if (autoBusy || won) return;
+        if (game.stock.length || !noFaceDown()) return;
+        autoBusy = true;
+        var step = function () {
+          if (won) { autoBusy = false; return; }
+          if (autoStep()) {
+            window.setTimeout(step, 140);
+          } else {
+            autoBusy = false;
+          }
+        };
+        window.setTimeout(step, 160);
+      }
+
+      function autoStep() {
+        // Waste top first, then each tableau top.
+        if (game.waste.length && sendToFoundation(game.waste[game.waste.length - 1].c, { type: "waste" })) return true;
+        for (var p = 0; p < 7; p++) {
+          var pile = game.tableau[p];
+          if (pile.length && sendToFoundation(pile[pile.length - 1].c, { type: "tableau", p: p })) return true;
+        }
+        return false;
+      }
+
+      /* ----------------------------- win --------------------------- */
+      function checkWin() {
+        var total = 0;
+        for (var f = 0; f < 4; f++) total += game.foundations[f].length;
+        if (total === 52 && !won) {
+          won = true;
+          running = false;
+          autoBusy = false;
+          showWin();
+          store.clear(); // fresh game next visit
+        }
+      }
+
+      function showWin() {
+        $("ov-msg").textContent = t("win");
+        $("ov-sub").textContent = t("winSub")
+          .replace("{m}", game.moves)
+          .replace("{t}", fmtTime(elapsed));
+        var b = $("ov-btn");
+        b.textContent = t("playAgain");
+        $("overlay").classList.remove("hidden");
+      }
+
+      function hideOverlay() { $("overlay").classList.add("hidden"); }
+
+      /* ============================ timer =========================== */
+      function tick() {
+        if (!running || won) return;
+        elapsed++;
+        updateTime();
+        if (elapsed % 5 === 0) persist();
+      }
+
+      function fmtTime(s) {
+        var m = Math.floor(s / 60);
+        var ss = s % 60;
+        return m + ":" + (ss < 10 ? "0" + ss : ss);
+      }
+
+      function updateTime() { ui.setStat("time", fmtTime(elapsed)); }
+
+      /* ============================ render ========================== */
+      var metrics = { cardW: 0, cardH: 0, downOff: 0, upOff: 0 };
+
+      function layout() {
+        var stock = $("stock");
+        var w = stock.clientWidth || 60;
+        var h = w * 7 / 5;
+        metrics.cardW = w;
+        metrics.cardH = h;
+        metrics.downOff = Math.round(h * 0.16);
+        metrics.upOff = Math.round(h * 0.30);
+        $("board").style.setProperty("--cardh", h + "px");
+      }
+
+      function makeCardEl(entry, dealt) {
+        var pos = MG.el("div", "card-pos" + (dealt ? " dealt" : ""));
+        pos.appendChild(C.renderCard(entry.c, entry.up));
+        return pos;
+      }
+
+      // Clear a zone's cards (keep its ::after placeholder via class toggles).
+      function clearZone(node) {
+        var kids = node.querySelectorAll(".card-pos");
+        for (var i = kids.length - 1; i >= 0; i--) node.removeChild(kids[i]);
+      }
+
+      function setEmpty(node, empty, hint) {
+        node.classList.toggle("empty", empty);
+        if (hint != null) node.setAttribute("data-hint", hint);
+        else node.removeAttribute("data-hint");
+      }
+
+      function render(dealt) {
+        // --- Stock ---
+        var stock = $("stock");
+        clearZone(stock);
+        setEmpty(stock, game.stock.length === 0, t("stockHint"));
+        if (game.stock.length) {
+          var back = makeCardEl({ c: game.stock[game.stock.length - 1].c, up: false }, false);
+          stock.appendChild(back);
+        }
+        stock.onclick = drawStock;
+
+        // --- Waste (fan up to 3, only the top is draggable) ---
+        var waste = $("waste");
+        clearZone(waste);
+        setEmpty(waste, game.waste.length === 0, "");
+        var ws = game.waste;
+        var show = Math.min(3, ws.length);
+        var fan = Math.round(metrics.cardW * 0.28);
+        for (var wi = 0; wi < show; wi++) {
+          var idx = ws.length - show + wi;
+          var wEntry = ws[idx];
+          var wEl = makeCardEl(wEntry, dealt && idx === ws.length - 1);
+          wEl.style.left = (wi * fan) + "px";
+          if (idx === ws.length - 1) {
+            bindDrag(wEl, { type: "waste" }, [wEntry]);
+          }
+          waste.appendChild(wEl);
+        }
+
+        // --- Foundations ---
+        for (var f = 0; f < 4; f++) {
+          var fNode = document.querySelector('.found[data-f="' + f + '"]');
+          clearZone(fNode);
+          var fp = game.foundations[f];
+          setEmpty(fNode, fp.length === 0, "A");
+          if (fp.length) {
+            var fTop = fp[fp.length - 1];
+            var fEl = makeCardEl(fTop, false);
+            bindDrag(fEl, { type: "foundation", f: f }, [fTop]);
+            fNode.appendChild(fEl);
+          }
+        }
+
+        // --- Tableau ---
+        for (var p = 0; p < 7; p++) {
+          var pNode = document.querySelector('.pile[data-p="' + p + '"]');
+          clearZone(pNode);
+          var pile = game.tableau[p];
+          setEmpty(pNode, pile.length === 0, "K");
+          var top = 0;
+          for (var ci = 0; ci < pile.length; ci++) {
+            var entry = pile[ci];
+            var cEl = makeCardEl(entry, dealt && entry.up);
+            cEl.style.top = top + "px";
+            if (entry.up) {
+              bindDrag(cEl, { type: "tableau", p: p }, pile.slice(ci));
+            }
+            pNode.appendChild(cEl);
+            top += entry.up ? metrics.upOff : metrics.downOff;
+          }
+          pNode.style.height = Math.max(metrics.cardH, top + metrics.cardH) + "px";
+        }
+      }
+
+      // The tableau host is built once; fill it with 7 piles.
+      function buildTableau() {
+        var host = $("tableau");
+        host.innerHTML = "";
+        for (var p = 0; p < 7; p++) {
+          var pile = MG.el("div", "pile");
+          pile.setAttribute("data-p", p);
+          host.appendChild(pile);
+        }
+      }
+
+      /* =========================== drag ============================ */
+      var drag = null;
+
+      function bindDrag(el, src, entries) {
+        el.addEventListener("pointerdown", function (e) {
+          if (autoBusy || won) return;
+          if (e.button != null && e.button !== 0) return;
+          startDrag(e, el, src, entries);
+        });
+      }
+
+      function startDrag(e, el, src, entries) {
+        var rect = el.getBoundingClientRect();
+        drag = {
+          src: src,
+          entries: entries,
+          startX: e.clientX,
+          startY: e.clientY,
+          offX: e.clientX - rect.left,
+          offY: e.clientY - rect.top,
+          started: false,
+          layer: null,
+          sources: []
+        };
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        drag.pointerId = e.pointerId;
+        drag.captureEl = el;
+
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+      }
+
+      function beginVisualDrag() {
+        var layer = MG.el("div", "drag-layer");
+        layer.style.width = metrics.cardW + "px";
+        // Find the DOM elements for the dragged entries (top of their pile) and
+        // hide them; clone faces into the floating layer.
+        var srcNode = zoneNode(drag.src);
+        var posEls = srcNode.querySelectorAll(".card-pos");
+        var first = posEls.length - drag.entries.length;
+        for (var i = 0; i < drag.entries.length; i++) {
+          var orig = posEls[first + i];
+          if (orig) { orig.classList.add("dragging"); drag.sources.push(orig); }
+          var clone = makeCardEl(drag.entries[i], false);
+          clone.style.top = (i * metrics.upOff) + "px";
+          layer.appendChild(clone);
+        }
+        document.body.appendChild(layer);
+        drag.layer = layer;
+        moveLayer(drag.startX, drag.startY);
+      }
+
+      function moveLayer(x, y) {
+        if (!drag.layer) return;
+        drag.layer.style.transform = "translate(" + (x - drag.offX) + "px," + (y - drag.offY) + "px)";
+      }
+
+      function onMove(e) {
+        if (!drag) return;
+        if (!drag.started) {
+          var dx = e.clientX - drag.startX;
+          var dy = e.clientY - drag.startY;
+          if (dx * dx + dy * dy < 36) return; // < 6px: still a tap
+          drag.started = true;
+          beginVisualDrag();
+        }
+        moveLayer(e.clientX, e.clientY);
+        e.preventDefault();
+      }
+
+      function onUp(e) {
+        if (!drag) return;
+        var d = drag;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        try { d.captureEl.releasePointerCapture(d.pointerId); } catch (err) { /* ignore */ }
+
+        if (!d.started) {
+          drag = null;
+          tapCard(d.src);
+          return;
+        }
+
+        // Drop point = center of the dragged card's head.
+        var px = e.clientX - d.offX + metrics.cardW / 2;
+        var py = e.clientY - d.offY + metrics.cardH / 2;
+        var dest = findDrop(px, py, d.entries);
+
+        if (d.layer && d.layer.parentNode) d.layer.parentNode.removeChild(d.layer);
+        drag = null;
+
+        if (dest) {
+          applyMove(d.entries, d.src, dest);
+        } else {
+          render(); // snap back
+        }
+      }
+
+      function zoneNode(src) {
+        if (src.type === "waste") return $("waste");
+        if (src.type === "foundation") return document.querySelector('.found[data-f="' + src.f + '"]');
+        return document.querySelector('.pile[data-p="' + src.p + '"]');
+      }
+
+      // Choose the closest valid drop zone whose rect contains the point.
+      function findDrop(px, py, entries) {
+        var card = entries[0].c;
+        var best = null, bestD = Infinity;
+
+        function consider(node, dest, ok) {
+          if (!ok) return;
+          var r = node.getBoundingClientRect();
+          if (px < r.left - 8 || px > r.right + 8 || py < r.top - 8 || py > r.bottom + 8) return;
+          var cx = r.left + r.width / 2;
+          var cy = r.top + r.height / 2;
+          var dd = (px - cx) * (px - cx) + (py - cy) * (py - cy);
+          if (dd < bestD) { bestD = dd; best = dest; }
+        }
+
+        // Foundations only take a single card.
+        if (entries.length === 1) {
+          for (var f = 0; f < 4; f++) {
+            consider(document.querySelector('.found[data-f="' + f + '"]'),
+              { type: "foundation", f: f }, fitsFoundation(card, game.foundations[f]));
+          }
+        }
+        for (var p = 0; p < 7; p++) {
+          consider(document.querySelector('.pile[data-p="' + p + '"]'),
+            { type: "tableau", p: p }, fitsTableau(card, game.tableau[p]));
+        }
+        return best;
+      }
+
+      /* ========================= serialize ========================= */
+      function serialize(withMeta) {
+        var s = {
+          seed: game.seed,
+          drawCount: game.drawCount,
+          moves: game.moves,
+          stock: game.stock.map(function (e) { return e.c.id; }),
+          waste: game.waste.map(function (e) { return e.c.id; }),
+          foundations: game.foundations.map(function (pile) {
+            return pile.map(function (e) { return e.c.id; });
+          }),
+          tableau: game.tableau.map(function (pile) {
+            return pile.map(function (e) { return e.c.id + (e.up ? "1" : "0"); });
+          })
+        };
+        if (withMeta) s.elapsed = elapsed;
+        return s;
+      }
+
+      function deserialize(s, withMeta) {
+        var up = function (id) { return { c: CARD_BY_ID[id], up: false }; };
+        game = {
+          seed: s.seed,
+          drawCount: s.drawCount || 1,
+          moves: s.moves || 0,
+          stock: s.stock.map(up),
+          waste: s.waste.map(function (id) { return { c: CARD_BY_ID[id], up: true }; }),
+          foundations: s.foundations.map(function (pile) {
+            return pile.map(function (id) { return { c: CARD_BY_ID[id], up: true }; });
+          }),
+          tableau: s.tableau.map(function (pile) {
+            return pile.map(function (code) {
+              var flag = code.charAt(code.length - 1);
+              var id = code.slice(0, -1);
+              return { c: CARD_BY_ID[id], up: flag === "1" };
+            });
+          })
+        };
+        if (withMeta && typeof s.elapsed === "number") elapsed = s.elapsed;
+      }
+
+      function persist() {
+        if (won) return;
+        store.save(serialize(true));
+      }
+
+      /* ============================ boot =========================== */
+      buildTableau();
+
+      $("ov-btn").addEventListener("click", function () { newGame(); });
+
+      // Re-localize live strings on language change.
+      MG.i18n.onChange(function () {
+        setDrawLabel();
+        if (game) {
+          setEmpty($("stock"), game.stock.length === 0, t("stockHint"));
+          if (won) showWin();
+        }
+      });
+
+      // Re-measure and re-render on resize (debounced).
+      var resizeT = null;
+      window.addEventListener("resize", function () {
+        if (resizeT) window.clearTimeout(resizeT);
+        resizeT = window.setTimeout(function () {
+          if (!game) return;
+          layout();
+          render();
+        }, 120);
+      });
+
+      // Resume a saved game, else deal a fresh one.
+      var saved = store.load();
+      if (saved && saved.tableau) {
+        deserialize(saved, true);
+        won = false;
+        setDrawLabel();
+        ui.setStat("moves", game.moves);
+        updateTime();
+        var ub = ui.action("undo");
+        if (ub) ub.disabled = true;
+        layout();
+        render();
+        // Resume the clock only if the player had already moved.
+        if (game.moves > 0) startIfNeeded();
+      } else {
+        newGame();
+        var ub2 = ui.action("undo");
+        if (ub2) ub2.disabled = true;
+      }
+    })();
+  </script>
+</body>
+</html>

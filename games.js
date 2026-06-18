@@ -126,6 +126,16 @@ window.GAMES = [
     },
   },
   {
+    title: "Solitaire",
+    icon: "🃏",
+    url: "./games/solitaire/",
+    description: {
+      en: "Klondike Solitaire — build the foundations up from Ace to King. Draw 1 or 3, undo and auto-finish.",
+      ru: "Косынка (Клондайк) — собирай стопки от туза до короля. Тяни по 1 или 3, отменяй ходы и авто-сбор.",
+      es: "Solitario Klondike — construye las bases del As al Rey. Roba 1 o 3, deshaz y autocompleta.",
+    },
+  },
+  {
     title: "Top Racer",
     icon: "🏁",
     url: "./games/top-racer/",

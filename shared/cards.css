@@ -1,0 +1,66 @@
+/* ==========================================================================
+   Minigames — shared playing-card face
+   --------------------------------------------------------------------------
+   Look of a single card, shared by every card game (built by MG.cards.render-
+   Card). A card sizes to its container (width: 100%; aspect-ratio fixed) and
+   uses container-relative units so it scales cleanly from phone to desktop.
+   Games position the cards; this file only paints them.
+   ========================================================================== */
+
+.mg-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  /* Type scale keyed off the card width so faces stay proportional. */
+  container-type: inline-size;
+  font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif;
+}
+
+.mg-card.is-red { color: #d4374b; }
+.mg-card.is-black { color: #1c2530; }
+
+/* Corner index (rank over suit), top-left and mirrored bottom-right. */
+.mg-card-corner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.92;
+  font-weight: 700;
+}
+.mg-card-rank { font-size: 26cqw; }
+.mg-card-suit { font-size: 20cqw; }
+
+.mg-card-tl { top: 5%; left: 6%; }
+.mg-card-br { bottom: 5%; right: 6%; transform: rotate(180deg); }
+
+/* Big centered suit pip. */
+.mg-card-pip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56cqw;
+  opacity: 0.92;
+}
+
+/* Face-down patterned back. */
+.mg-card-back {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  background-color: #2b4c7e;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.10) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.10) 0 6px, transparent 6px 12px);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+}
