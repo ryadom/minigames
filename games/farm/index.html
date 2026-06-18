@@ -31,7 +31,7 @@
       overflow: hidden;
     }
 
-    /* The game area is a vertical stack: status strip, scrollable view, nav. */
+    /* The game area is a vertical stack: status strip + scrollable view. */
     .mg-game-area {
       display: flex;
       flex-direction: column;
@@ -327,56 +327,74 @@
       text-align: center;
     }
 
-    /* ---- Bottom nav ---- */
-    .nav {
-      flex: 0 0 auto;
-      display: flex;
-      background: linear-gradient(180deg, #3c5a28, #2f4a1f);
-      box-shadow: 0 -4px 14px rgba(0,0,0,0.25);
-      padding-bottom: env(safe-area-inset-bottom, 0);
-    }
-    .nav button {
-      flex: 1 1 0;
-      border: none;
-      background: transparent;
-      color: rgba(255,255,255,0.7);
-      padding: 8px 2px 9px;
-      cursor: pointer;
+    /* ---- Sliding panel (market / kitchen / barn / orders) ----
+     * The village is the only screen; tapping a building slides one of
+     * these sheets up over it. The overlay element itself is the dimmed
+     * backdrop — tapping it (above the sheet) closes the panel. */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
       display: flex;
       flex-direction: column;
+      justify-content: flex-end;
+      background: rgba(20, 30, 14, 0);
+      pointer-events: none;
+      transition: background 0.2s ease;
+    }
+    .overlay.show { pointer-events: auto; background: rgba(20, 30, 14, 0.5); }
+    .sheet {
+      background: linear-gradient(180deg, #bfe79a 0%, #a7d579 100%);
+      border-radius: 20px 20px 0 0;
+      max-height: 88%;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
+      transform: translateY(100%);
+      transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .overlay.show .sheet { transform: translateY(0); }
+    .sheet-head {
+      flex: 0 0 auto;
+      display: flex;
       align-items: center;
-      gap: 2px;
-      font-family: inherit;
-      position: relative;
-      transition: color 0.12s;
+      gap: 10px;
+      padding: 12px 14px;
+      background: linear-gradient(180deg, #3c5a28, #2f4a1f);
+      color: #fff;
+      border-radius: 20px 20px 0 0;
     }
-    .nav button .nico { font-size: 1.35rem; line-height: 1; }
-    .nav button .nlbl { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.02em; }
-    .nav button.on { color: #fff; }
-    .nav button.on::after {
-      content: "";
-      position: absolute;
-      top: 0; left: 22%; right: 22%;
-      height: 3px;
-      border-radius: 0 0 3px 3px;
-      background: #ffd23f;
-    }
-    .nav button .dot {
-      position: absolute;
-      top: 5px;
-      right: 50%;
-      margin-right: -18px;
-      width: 9px; height: 9px;
+    .sheet-head .sh-ico { font-size: 1.4rem; line-height: 1; }
+    .sheet-head .sh-ttl { font-weight: 800; font-size: 1.02rem; flex: 1 1 auto; }
+    .sheet-head .sh-close {
+      flex: 0 0 auto;
+      width: 34px; height: 34px;
+      border: none;
       border-radius: 50%;
-      background: #ff5b5b;
-      box-shadow: 0 0 0 2px #2f4a1f;
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
+    .sheet-head .sh-close:active { transform: scale(0.92); }
+    .sheet-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 14px calc(18px + env(safe-area-inset-bottom, 0));
+    }
+    .sheet-body .wrap { width: 100%; max-width: 480px; margin: 0 auto; }
 
     /* ---- Toast ---- */
     .toast {
       position: fixed;
       left: 50%;
-      bottom: 76px;
+      bottom: 28px;
       transform: translateX(-50%) translateY(12px);
       background: rgba(20, 30, 14, 0.94);
       color: #fff;
@@ -395,136 +413,153 @@
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
     /* ====================================================================
-     *  VILLAGE HUB — the spatial home screen. Each zone is a tappable
-     *  tile that opens its detailed panel (field, barn, kitchen, …).
+     *  VILLAGE — the single, cinematic home screen. A little hamlet scene
+     *  (sky, hills, trees, houses) sits on top; the playable field is
+     *  worked right below it. Tapping a building opens its sliding panel.
      * ================================================================== */
     .village { position: relative; }
 
-    /* A little sky strip with sun, clouds and treetops for village feel. */
-    .vsky {
+    /* ---- The scenery: sky over rolling green with buildings ---- */
+    .vscene {
       position: relative;
-      height: 46px;
-      margin: -4px -2px 10px;
-      border-radius: 16px 16px 0 0;
-      background: linear-gradient(180deg, #bfe9ff 0%, #d8f1ff 70%, #cdeeb4 100%);
+      margin: -4px -2px 14px;
+      border-radius: 18px;
       overflow: hidden;
+      background: linear-gradient(180deg, #aee3ff 0%, #cdefff 30%, #bfe79a 30%, #a7d579 100%);
+      box-shadow: inset 0 0 0 3px rgba(255,255,255,0.45), 0 12px 28px rgba(0,0,0,0.2);
     }
-    .vsky span {
+    .vscene .sky {
       position: absolute;
       line-height: 1;
+      pointer-events: none;
       filter: drop-shadow(0 2px 1px rgba(0,0,0,0.12));
     }
-    .vsky .sun { left: 14px; top: 6px; font-size: 1.7rem; animation: vsun 6s ease-in-out infinite; }
-    .vsky .c1 { left: 38%; top: 8px; font-size: 1.3rem; animation: vfloat 9s ease-in-out infinite; }
-    .vsky .c2 { right: 14%; top: 16px; font-size: 1rem; opacity: 0.9; animation: vfloat 12s ease-in-out infinite reverse; }
-    .vsky .t1 { right: 6px; bottom: -4px; font-size: 1.7rem; }
-    .vsky .t2 { right: 30px; bottom: -6px; font-size: 1.3rem; }
-    @keyframes vsun { 0%,100% { transform: rotate(0); } 50% { transform: rotate(18deg); } }
-    @keyframes vfloat { 0%,100% { transform: translateX(0); } 50% { transform: translateX(10px); } }
+    .vscene .sun { left: 16px; top: 9px; font-size: 1.9rem; animation: vsun 6s ease-in-out infinite; }
+    .vscene .c1 { left: 34%; top: 11px; font-size: 1.4rem; animation: vfloat 9s ease-in-out infinite; }
+    .vscene .c2 { right: 15%; top: 22px; font-size: 1.05rem; opacity: 0.92; animation: vfloat 13s ease-in-out infinite reverse; }
+    .vscene .bird { right: 40%; top: 16px; font-size: 0.85rem; animation: vfloat 7s ease-in-out infinite; }
+    @keyframes vsun { 0%,100% { transform: rotate(0); } 50% { transform: rotate(20deg); } }
+    @keyframes vfloat { 0%,100% { transform: translateX(0); } 50% { transform: translateX(12px); } }
 
-    .vzones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    /* Soft hills peeking up behind the houses. */
+    .vscene .hill {
+      position: absolute;
+      height: 60px;
+      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+      pointer-events: none;
+    }
+    .vscene .hill.l { left: -10%; top: 46px; width: 64%; background: linear-gradient(180deg, #9ccb6f, #86bb59); }
+    .vscene .hill.r { right: -12%; top: 54px; width: 58%; background: linear-gradient(180deg, #a7d479, #8ec264); }
 
-    .zone {
+    .vground { position: relative; padding: 72px 12px 14px; }
+    .vtrees {
+      position: absolute;
+      top: 34px; left: 0; right: 0;
+      text-align: center;
+      font-size: 1.3rem;
+      line-height: 1;
+      pointer-events: none;
+    }
+    .vtrees span { margin: 0 5px; filter: drop-shadow(0 2px 1px rgba(0,0,0,0.15)); }
+
+    /* ---- Houses: each is a tappable building (roof + wall + sign) ---- */
+    .houses { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .house {
       position: relative;
       border: none;
-      border-radius: 16px;
-      padding: 11px 12px 12px;
-      background: rgba(255,255,255,0.94);
-      box-shadow: 0 5px 0 rgba(0,0,0,0.13);
+      background: transparent;
+      padding: 0;
       cursor: pointer;
-      text-align: left;
-      color: #2e3b22;
       font-family: inherit;
+      color: #3a2b1a;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      transition: transform 0.08s ease, box-shadow 0.12s ease;
+      align-items: stretch;
+      transition: transform 0.08s ease;
     }
-    .zone:active { transform: translateY(2px); box-shadow: 0 3px 0 rgba(0,0,0,0.13); }
-    .zone.wide { grid-column: 1 / -1; }
-
-    .zhead { display: flex; align-items: center; gap: 8px; }
-    .zhead .zico { font-size: 1.55rem; line-height: 1; flex: 0 0 auto; }
-    .zhead .ztt { font-weight: 800; font-size: 0.96rem; line-height: 1.1; }
-    .zhead .zsub { font-size: 0.7rem; color: #5a6648; font-weight: 700; }
-
-    .zbadge {
+    .house:active { transform: translateY(2px); }
+    .house .roof {
+      height: 16px;
+      margin: 0 4px;
+      background: #c0512f;
+      clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+    }
+    .house.kitchen .roof { background: #d98b34; }
+    .house.barn .roof { background: #9a3f2a; }
+    .house.orders .roof { background: #6b8f3a; }
+    .house .wall {
+      background: linear-gradient(180deg, #fbeed3, #f0dcb4);
+      border-radius: 3px 3px 13px 13px;
+      box-shadow: inset 0 0 0 2px rgba(150,110,60,0.25), 0 5px 0 rgba(0,0,0,0.14);
+      padding: 9px 8px 11px;
+      min-height: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .house .hico { font-size: 2rem; line-height: 1; filter: drop-shadow(0 2px 1px rgba(0,0,0,0.18)); }
+    .house .htt { font-weight: 800; font-size: 0.9rem; }
+    .house .hsub { font-size: 0.68rem; font-weight: 700; color: #7a5a30; text-align: center; }
+    .hbadge {
       position: absolute;
-      top: 9px; right: 9px;
+      top: 11px; right: 8px;
+      z-index: 2;
       background: #7fd06a;
       color: #14310c;
       font-weight: 800;
-      font-size: 0.74rem;
+      font-size: 0.72rem;
       border-radius: 999px;
-      padding: 2px 9px;
+      padding: 2px 8px;
       box-shadow: 0 2px 0 #4f9b3e;
       animation: pulse 1.2s ease-in-out infinite;
     }
 
-    /* Field zone: a compact preview of the soil plots. */
-    .zfield {
-      display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      gap: 4px;
-      padding: 8px;
-      border-radius: 11px;
-      background: linear-gradient(180deg, #7a4a26 0%, #683d1f 100%);
-      box-shadow: inset 0 0 0 3px #5a3318;
-    }
-    .zfield .mp {
-      aspect-ratio: 1 / 1;
-      border-radius: 5px;
-      background:
-        repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0 4px, transparent 4px 8px),
-        linear-gradient(180deg, #9c6a3e 0%, #8a5a30 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: clamp(0.7rem, 3.4vw, 1rem);
-      line-height: 1;
-    }
-    .zfield .mp.ready { box-shadow: inset 0 0 0 2px #ffd23f; animation: ripe 1.3s ease-in-out infinite; }
-    .zfield .mp.locked {
-      background: linear-gradient(180deg, #5d4530 0%, #4a361f 100%);
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
-    }
-
-    /* Pasture zone: animals milling about a grassy pen. */
-    .zpen {
+    /* ---- Pasture: a grassy pen sitting in the village (opens barn) ---- */
+    .pasture {
+      position: relative;
+      width: 100%;
+      margin-top: 12px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 5px;
-      min-height: 46px;
-      padding: 8px 10px;
-      border-radius: 11px;
+      gap: 6px;
+      min-height: 54px;
+      padding: 10px 12px;
+      border-radius: 14px;
       background:
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.12) 0 3px, transparent 3px 16px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.14) 0 3px, transparent 3px 18px),
         linear-gradient(180deg, #bfe39a 0%, #a6d27e 100%);
-      box-shadow: inset 0 0 0 2px rgba(90,120,50,0.35);
+      box-shadow: inset 0 0 0 2px rgba(90,120,50,0.4), 0 5px 0 rgba(0,0,0,0.12);
+      transition: transform 0.08s ease;
     }
-    .zpen .an { font-size: 1.5rem; line-height: 1; }
-    .zpen .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
-    .zpen .zempty { font-size: 0.74rem; color: #4a5c30; font-weight: 700; opacity: 0.85; }
+    .pasture:active { transform: translateY(2px); }
+    .pasture .pic { font-size: 1.1rem; margin-right: 2px; }
+    .pasture .an { font-size: 1.6rem; line-height: 1; }
+    .pasture .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
+    .pasture .pempty { font-size: 0.76rem; color: #3f5226; font-weight: 700; opacity: 0.9; }
 
-    /* Building zones (kitchen / market / orders): a big icon + status lines. */
-    .zbuild { display: flex; align-items: center; gap: 11px; }
-    .zbuild .b {
-      font-size: 2.5rem;
-      line-height: 1;
-      flex: 0 0 auto;
-      filter: drop-shadow(0 3px 2px rgba(0,0,0,0.18));
+    /* ---- Field section header (inline field lives below it) ---- */
+    .field-h {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 2px 8px;
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: #2e3b22;
     }
-    .zbuild .bcol { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .zbuild .bs { font-size: 0.78rem; font-weight: 700; color: #5a6648; white-space: nowrap; }
-    .zbuild .bs.coin { color: #7a5a00; }
 
     @media (max-width: 380px) {
       .card { padding: 10px 11px; gap: 9px; }
       .card .big { font-size: 1.8rem; }
-      .nav button .nlbl { font-size: 0.54rem; }
-      .nav button .nico { font-size: 1.2rem; }
-      .zbuild .b { font-size: 2.1rem; }
+      .house .hico { font-size: 1.7rem; }
+      .house .wall { min-height: 72px; }
+      .vground { padding-top: 64px; }
     }
   </style>
 </head>
@@ -537,8 +572,8 @@
       <span class="store" id="store">📦 0/40</span>
     </div>
     <div class="view" id="view"></div>
-    <nav class="nav" id="nav"></nav>
   </div>
+  <div class="overlay" id="overlay" aria-hidden="true"></div>
   <div class="toast" id="toast"></div>
 
   <script>
@@ -876,7 +911,9 @@
             });
             while (state.quests.length < 3) state.quests.push(makeQuest(state));
           }
-          if (typeof d.tab === "string") state.tab = d.tab;
+          // The village is the home screen; building panels are transient,
+          // so we always open onto the village rather than a saved panel.
+          state.tab = "village";
         }
 
         // Offline progress.
@@ -1032,17 +1069,19 @@
       });
 
       var view = $("view");
-      var nav = $("nav");
+      var overlay = $("overlay");
       var toastEl = $("toast");
 
-      var TABS = [
-        { id: "village", ico: "🏡", lbl: "tabVillage" },
-        { id: "farm", ico: "🌱", lbl: "tabFarm" },
-        { id: "barn", ico: "🐄", lbl: "tabBarn" },
-        { id: "cook", ico: "🍳", lbl: "tabCook" },
-        { id: "market", ico: "🛒", lbl: "tabMarket" },
-        { id: "quests", ico: "📋", lbl: "tabQuests" }
-      ];
+      // Buildings you can step into. The village ("home") is the only base
+      // screen; each of these opens as a sliding panel over it.
+      var PANELS = {
+        market: { ico: "🛒", title: "tabMarket" },
+        barn:   { ico: "🐄", title: "tabBarn" },
+        cook:   { ico: "🍳", title: "tabCook" },
+        quests: { ico: "📋", title: "tabQuests" }
+      };
+      var overlayTab = null; // which panel's shell is currently mounted
+      var closeTimer = null; // delays clearing a sheet until its slide-out ends
 
       var toastTimer = null;
       function toast(msg) {
@@ -1064,140 +1103,139 @@
       }
 
       /* ======================================================================
-       *  NAV
-       * ==================================================================== */
-      function buildNav() {
-        nav.innerHTML = "";
-        TABS.forEach(function (t) {
-          var b = document.createElement("button");
-          b.dataset.act = "nav";
-          b.dataset.arg = t.id;
-          b.className = (state.tab === t.id ? "on" : "");
-          b.innerHTML = '<span class="nico">' + t.ico + '</span><span class="nlbl">' +
-            esc(MG.i18n.t(t.lbl)) + "</span>" + (navDot(t.id) ? '<span class="dot"></span>' : "");
-          nav.appendChild(b);
-        });
-      }
-      // Show a red dot on a tab when it has something ready to act on.
-      function navDot(tab) {
-        if (tab === "village") return navDot("farm") || navDot("barn") || navDot("cook") || navDot("quests");
-        if (tab === "farm") return state.plots.some(function (p, i) { return i < state.unlocked && p.crop && p.grown >= CROP_BY_ID[p.crop].grow; });
-        if (tab === "barn") return state.animals.some(function (a) { return a.grown >= ANIMAL_BY_ID[a.type].interval; });
-        if (tab === "cook") return state.cooks.some(function (c) { return c && Date.now() >= c.endsAt; });
-        if (tab === "quests") return state.quests.some(function (q) { return (state.inv[q.item] || 0) >= q.need; });
-        return false;
-      }
-
-      /* ======================================================================
-       *  RENDER — dispatches to the active tab
+       *  RENDER — the village is always the base screen; a building panel
+       *  (if open) slides over it.
        * ==================================================================== */
       function render() {
         var scroll = view.scrollTop;
-        var html;
-        if (state.tab === "village") html = renderVillage();
-        else if (state.tab === "farm") html = renderFarm();
-        else if (state.tab === "barn") html = renderBarn();
-        else if (state.tab === "cook") html = renderCook();
-        else if (state.tab === "market") html = renderMarket();
-        else html = renderQuests();
-        view.innerHTML = '<div class="wrap">' + html + "</div>";
+        // Preserve the seed toolbar's horizontal scroll across re-renders.
+        var tb = view.querySelector(".toolbar");
+        var tbScroll = tb ? tb.scrollLeft : 0;
+        view.innerHTML = '<div class="wrap">' + renderVillage() + "</div>";
         view.scrollTop = scroll;
-        buildNav();
+        var tb2 = view.querySelector(".toolbar");
+        if (tb2) tb2.scrollLeft = tbScroll;
+        renderOverlay();
         syncStats();
+      }
+
+      // Mount / refresh the sliding building panel. Building the shell only
+      // when the open panel changes keeps the slide-up animation from
+      // re-triggering on every periodic refresh; otherwise only the body's
+      // inner content is swapped (which preserves its scroll position).
+      function renderOverlay() {
+        var tab = state.tab;
+        if (!PANELS[tab]) {
+          if (overlayTab !== null) {
+            overlay.className = "overlay"; // slide the sheet down + fade backdrop
+            overlay.setAttribute("aria-hidden", "true");
+            overlayTab = null;
+            if (closeTimer) clearTimeout(closeTimer);
+            closeTimer = setTimeout(function () {
+              closeTimer = null;
+              if (!PANELS[state.tab]) overlay.innerHTML = "";
+            }, 260);
+          }
+          return;
+        }
+        if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+        var body = tab === "market" ? renderMarket()
+                 : tab === "barn"   ? renderBarn()
+                 : tab === "cook"   ? renderCook()
+                 : renderQuests();
+        if (overlayTab !== tab) {
+          var p = PANELS[tab];
+          overlay.innerHTML =
+            '<div class="sheet">' +
+              '<div class="sheet-head">' +
+                '<span class="sh-ico">' + p.ico + "</span>" +
+                '<span class="sh-ttl">' + esc(MG.i18n.t(p.title)) + "</span>" +
+                '<button class="sh-close" data-act="close" aria-label="close">✕</button>' +
+              "</div>" +
+              '<div class="sheet-body"><div class="wrap" id="sheetwrap">' + body + "</div></div>" +
+            "</div>";
+          overlay.removeAttribute("aria-hidden");
+          // Force a reflow so the slide-up transition runs from translateY(100%).
+          void overlay.offsetWidth;
+          overlay.className = "overlay show";
+          overlayTab = tab;
+        } else {
+          var w = $("sheetwrap");
+          if (w) w.innerHTML = body;
+        }
       }
 
       function tipLine(key) { return '<div class="tip">' + esc(MG.i18n.t(key)) + "</div>"; }
 
       /* ------------------------------- VILLAGE ----------------------------- */
-      // The home hub: a little scene with the field, the animal pasture and the
-      // village buildings. Each zone is a button that opens its detail tab.
-      function zone(o) {
-        var badge = o.ready ? '<span class="zbadge">' + o.ready + "</span>" : "";
-        return '<button class="zone' + (o.wide ? " wide" : "") + '" data-act="nav" data-arg="' + o.act + '">' +
-          badge +
-          '<div class="zhead"><span class="zico">' + o.ico + "</span><div>" +
-            '<div class="ztt">' + esc(o.title) + "</div>" +
-            '<div class="zsub">' + esc(o.sub) + "</div></div></div>" +
-          o.body +
-          "</button>";
-      }
-      function building(emoji, lines) {
-        var inner = lines.map(function (l) {
-          return '<div class="bs' + (l.coin ? " coin" : "") + '">' + l.text + "</div>";
-        }).join("");
-        return '<div class="zbuild"><span class="b">' + emoji + '</span><div class="bcol">' + inner + "</div></div>";
+      // The one and only screen: a little hamlet you can see at a glance. The
+      // field is worked right here; each house is a button that opens its panel.
+      function house(o) {
+        return '<button class="house ' + (o.cls || "") + '" data-act="open" data-arg="' + o.act + '">' +
+          (o.badge ? '<span class="hbadge">' + o.badge + "</span>" : "") +
+          '<span class="roof"></span>' +
+          '<span class="wall">' +
+            '<span class="hico">' + o.ico + "</span>" +
+            '<span class="htt">' + esc(o.title) + "</span>" +
+            (o.sub ? '<span class="hsub">' + esc(o.sub) + "</span>" : "") +
+          "</span></button>";
       }
 
       function renderVillage() {
-        var h = tipLine("tipVillage");
-        h += '<div class="village">';
-        h += '<div class="vsky"><span class="sun">☀️</span><span class="c1">☁️</span>' +
-          '<span class="c2">☁️</span><span class="t1">🌳</span><span class="t2">🌳</span></div>';
-        h += '<div class="vzones">';
+        // Tally what's ready, for the little badges on each building.
+        var cookReady = 0, cooking = 0;
+        state.cooks.forEach(function (c) { if (c) { if (Date.now() >= c.endsAt) cookReady++; else cooking++; } });
+        var penReady = 0;
+        state.animals.forEach(function (a) { if (a.grown >= ANIMAL_BY_ID[a.type].interval) penReady++; });
+        var fillable = 0, orders = 0;
+        state.quests.forEach(function (q) { if (q) { orders++; if ((state.inv[q.item] || 0) >= q.need) fillable++; } });
 
-        // FIELD — a mini preview of every plot.
-        var readyCrops = 0;
-        var mini = '<div class="zfield">';
-        for (var i = 0; i < GRID; i++) {
-          if (i >= state.unlocked) { mini += '<span class="mp locked"></span>'; continue; }
-          var p = state.plots[i], cls = "mp", spr = "";
-          if (p.crop) {
-            var c = CROP_BY_ID[p.crop];
-            if (p.grown >= c.grow) { cls += " ready"; spr = c.ico; readyCrops++; }
-            else spr = plotSprite(p);
-          }
-          mini += '<span class="' + cls + '">' + spr + "</span>";
-        }
-        mini += "</div>";
-        h += zone({ act: "farm", wide: true, ico: "🌾", title: MG.i18n.t("tabFarm"),
-          sub: MG.i18n.t("vField"), ready: readyCrops, body: mini });
+        var h = '<div class="village">';
 
-        // PASTURE — the animals you own, milling about a pen.
-        var penReady = 0, pen = '<div class="zpen">';
+        // ---- Scenery: sky, hills, trees, then the village buildings. ----
+        h += '<div class="vscene">' +
+          '<span class="sky sun">☀️</span><span class="sky c1">☁️</span>' +
+          '<span class="sky c2">☁️</span><span class="sky bird">🕊️</span>' +
+          '<div class="hill l"></div><div class="hill r"></div>' +
+          '<div class="vground">' +
+            '<div class="vtrees"><span>🌳</span><span>🌲</span><span>🌳</span><span>🌲</span></div>' +
+            '<div class="houses">';
+
+        // MARKET — buy & sell. Tap the shop to trade.
+        h += house({ act: "market", cls: "market", ico: "🏪", title: MG.i18n.t("tabMarket"),
+          sub: "🪙 " + state.coins });
+        // KITCHEN — cook dishes.
+        h += house({ act: "cook", cls: "kitchen", ico: "🍲", title: MG.i18n.t("tabCook"),
+          sub: "🍳 " + state.stoves + " · ⏲️ " + cooking, badge: cookReady || "" });
+        // BARN — raise animals.
+        h += house({ act: "barn", cls: "barn", ico: "🛖", title: MG.i18n.t("tabBarn"),
+          sub: "🐄 " + state.animals.length + "/" + state.barnCap, badge: penReady || "" });
+        // ORDERS — the village notice board.
+        h += house({ act: "quests", cls: "orders", ico: "🪧", title: MG.i18n.t("tabQuests"),
+          sub: "🎁 " + fillable + "/" + orders, badge: fillable || "" });
+
+        h += "</div>"; // .houses
+
+        // PASTURE — your animals milling about; tapping it opens the barn.
+        var pen = '<button class="pasture" data-act="open" data-arg="barn"><span class="pic">🐄</span>';
         if (!state.animals.length) {
-          pen += '<span class="zempty">' + esc(MG.i18n.t("vPastureEmpty")) + "</span>";
+          pen += '<span class="pempty">' + esc(MG.i18n.t("vPastureEmpty")) + "</span>";
         } else {
           state.animals.forEach(function (a) {
             var def = ANIMAL_BY_ID[a.type];
             var rdy = a.grown >= def.interval;
-            if (rdy) penReady++;
             pen += '<span class="an' + (rdy ? " rdy" : "") + '">' + def.ico + "</span>";
           });
         }
-        pen += "</div>";
-        h += zone({ act: "barn", ico: "🐄", title: MG.i18n.t("tabBarn"),
-          sub: MG.i18n.t("vPasture"), ready: penReady, body: pen });
+        pen += "</button>";
+        h += pen;
 
-        // KITCHEN building.
-        var cookReady = 0, cooking = 0;
-        state.cooks.forEach(function (c) {
-          if (c) { if (Date.now() >= c.endsAt) cookReady++; else cooking++; }
-        });
-        h += zone({ act: "cook", ico: "🍳", title: MG.i18n.t("tabCook"),
-          sub: MG.i18n.t("vKitchen"), ready: cookReady,
-          body: building("🏠", [
-            { text: "⏲️ " + cooking + " · ✓ " + cookReady },
-            { text: "🍳 " + state.stoves + " " + esc(MG.i18n.t("stoves")) }
-          ]) });
+        h += "</div></div>"; // .vground .vscene
 
-        // MARKET building.
-        h += zone({ act: "market", ico: "🛒", title: MG.i18n.t("tabMarket"),
-          sub: MG.i18n.t("vMarket"),
-          body: building("🏪", [
-            { text: "📦 " + invCount() + "/" + state.cap },
-            { text: "🪙 " + state.coins, coin: true }
-          ]) });
+        // ---- The playable field, worked right here in the village. ----
+        h += '<div class="field-section">' + renderFieldSection() + "</div>";
 
-        // ORDERS board.
-        var fillable = 0, orders = 0;
-        state.quests.forEach(function (q) {
-          if (q) { orders++; if ((state.inv[q.item] || 0) >= q.need) fillable++; }
-        });
-        h += zone({ act: "quests", ico: "📋", title: MG.i18n.t("tabQuests"),
-          sub: MG.i18n.t("vOrders"), ready: fillable,
-          body: building("🪧", [{ text: "🎁 " + fillable + " / " + orders }]) });
-
-        h += "</div></div>";
+        h += "</div>"; // .village
         return h;
       }
 
@@ -1210,11 +1248,12 @@
         if (f < 0.66) return SPROUT_SPRITE;
         return LEAF_SPRITE;
       }
-      function renderFarm() {
+      function renderFieldSection() {
         var tipKey = state.sel === "water" ? "tipWater" : state.sel === "clear" ? "tipClear" : "tipPlant";
         var ready = state.plots.some(function (p, i) { return i < state.unlocked && p.crop && p.grown >= CROP_BY_ID[p.crop].grow; });
         if (ready) tipKey = "tipReady";
-        var h = tipLine(tipKey);
+        var h = '<div class="field-h">🌾 ' + esc(MG.i18n.t("plantedField")) + "</div>";
+        h += tipLine(tipKey);
 
         // toolbar (seeds + tools)
         h += '<div class="toolbar">';
@@ -1445,9 +1484,10 @@
        *  so scroll position and taps are preserved).
        * ==================================================================== */
       function patch() {
-        if (state.tab === "farm") {
-          var field = $("field");
-          if (!field) return;
+        // The field always lives on the village screen — keep its progress
+        // bars and sprites smooth between full re-renders.
+        var field = $("field");
+        if (field) {
           var cells = field.children;
           for (var i = 0; i < GRID && i < cells.length; i++) {
             if (i >= state.unlocked) continue;
@@ -1463,10 +1503,12 @@
             var s = plotSprite(p); if (spr.textContent !== s) spr.textContent = s;
             if (bar) bar.style.width = Math.min(100, (p.grown / c.grow) * 100).toFixed(1) + "%";
           }
-        } else if (state.tab === "barn") {
+        }
+        // Building panels (barn / kitchen) have ticking bars inside the sheet.
+        if (state.tab === "barn") {
           state.animals.forEach(function (a, i) {
             var def = ANIMAL_BY_ID[a.type];
-            var bar = view.querySelector('[data-pbar="' + i + '"] > i');
+            var bar = overlay.querySelector('[data-pbar="' + i + '"] > i');
             if (bar) bar.style.width = Math.min(100, (a.grown / def.interval) * 100).toFixed(1) + "%";
           });
         } else if (state.tab === "cook") {
@@ -1474,7 +1516,7 @@
             if (!c) return;
             var def = DISH_BY_ID[c.dish];
             var left = Math.max(0, c.endsAt - Date.now());
-            var bar = view.querySelector('[data-cbar="' + i + '"] > i');
+            var bar = overlay.querySelector('[data-cbar="' + i + '"] > i');
             if (bar) bar.style.width = Math.min(100, ((def.cook - left) / def.cook) * 100).toFixed(1) + "%";
           });
         }
@@ -1489,15 +1531,19 @@
         if (!t || t === view) return;
         handle(t.dataset.act, t.dataset.arg);
       });
-      nav.addEventListener("click", function (e) {
+      overlay.addEventListener("click", function (e) {
+        // Tapping the dimmed backdrop (the overlay itself, above the sheet)
+        // closes the panel.
+        if (e.target === overlay) { handle("close"); return; }
         var t = e.target;
-        while (t && t !== nav && !t.dataset.act) t = t.parentNode;
-        if (!t || t === nav) return;
+        while (t && t !== overlay && !t.dataset.act) t = t.parentNode;
+        if (!t || t === overlay) return;
         handle(t.dataset.act, t.dataset.arg);
       });
 
       function handle(act, arg) {
-        if (act === "nav") { state.tab = arg; markDirty(); render(); return; }
+        if (act === "open") { state.tab = arg; markDirty(); render(); return; }
+        if (act === "close") { state.tab = "village"; markDirty(); render(); return; }
         if (act === "noop") return;
 
         if (act === "seed") {
@@ -1653,15 +1699,13 @@
        *  TICK — advance growth / production / cooking in real time
        * ==================================================================== */
       var last = performance.now();
-      var patchAccum = 0, saveAccum = 0, navAccum = 0, viewAccum = 0;
-      var prevDots = "";
+      var patchAccum = 0, saveAccum = 0, viewAccum = 0;
 
       function tick(now) {
         var dt = now - last; last = now;
         if (dt > 2000) dt = 2000;
 
         // crops
-        var changed = false;
         for (var i = 0; i < state.unlocked; i++) {
           var p = state.plots[i];
           if (!p.crop) continue;
@@ -1671,7 +1715,7 @@
           if (p.water > 0) { speed = WATER_BOOST; p.water = Math.max(0, p.water - dt); if (p.water === 0) markDirty(); }
           var before = p.grown;
           p.grown = Math.min(c.grow, p.grown + dt * speed);
-          if (before < c.grow && p.grown >= c.grow) { markDirty(); changed = true; }
+          if (before < c.grow && p.grown >= c.grow) markDirty();
         }
         // animals
         var nowMs = Date.now();
@@ -1681,38 +1725,22 @@
           if (nowMs < a.feedUntil) {
             var before = a.grown;
             a.grown = Math.min(def.interval, a.grown + dt);
-            if (before < def.interval && a.grown >= def.interval) { markDirty(); changed = true; }
+            if (before < def.interval && a.grown >= def.interval) markDirty();
           }
         });
-        // cooking — readiness is timestamp-based; just flag for dot/refresh
-        state.cooks.forEach(function (c) {
-          if (c && nowMs >= c.endsAt) { /* ready */ }
-        });
-        // market re-roll
-        if (nowMs >= state.marketUntil) { rollMarket(state, false); if (state.tab === "market") changed = true; }
+        // market re-roll (re-rendered on the next periodic refresh)
+        if (nowMs >= state.marketUntil) rollMarket(state, false);
 
         // light patch a few times a second (smooth progress bars)
         patchAccum += dt;
         if (patchAccum > 200) { patch(); patchAccum = 0; }
 
-        // Barn & kitchen have ticking countdowns and readiness that flip
-        // button/badge state — a full (scroll-preserving) re-render once a
-        // second keeps them honest without thrashing the DOM.
+        // A full (scroll-preserving) re-render once a second keeps the village
+        // badges, building status lines and any open panel honest — countdowns,
+        // readiness and re-rolled market prices all flip without thrashing the
+        // DOM the rest of the time.
         viewAccum += dt;
-        if (viewAccum > 1000) {
-          viewAccum = 0;
-          if (state.tab === "barn" || state.tab === "cook" || state.tab === "village") render();
-        }
-
-        // nav dots + header stats refresh
-        navAccum += dt;
-        if (navAccum > 500) {
-          navAccum = 0;
-          var dots = TABS.map(function (t) { return navDot(t.id) ? "1" : "0"; }).join("");
-          if (dots !== prevDots) { prevDots = dots; buildNav(); }
-          syncStats();
-          if (changed && state.tab === "market") render();
-        }
+        if (viewAccum > 1000) { viewAccum = 0; render(); }
 
         // throttled save
         saveAccum += dt;
