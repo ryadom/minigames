@@ -182,7 +182,46 @@ body {
   text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 
-/* ---- Building sign: a placard over each drawn cottage. ---- */
+/* ---- A built shop / pen tile: big emblem + a small placard. ---- */
+.bld { display: flex; align-items: center; justify-content: center; }
+.bld .bld-ico {
+  font-size: clamp(1.4rem, 7cqw, 4rem);
+  line-height: 1;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.3));
+  transition: transform 0.08s ease;
+}
+.bld:active .bld-ico { transform: scale(0.92); }
+
+/* ---- Build mode: every grid cell is a placement target. ---- */
+.buildcell {
+  position: absolute;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 9%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.1s ease, box-shadow 0.1s ease;
+}
+.buildcell.open { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28); }
+.buildcell.filled { background: rgba(0, 0, 0, 0.07); }
+.buildcell:active { background: rgba(255, 255, 255, 0.22); }
+.buildcell .bc-ico {
+  font-size: clamp(1.2rem, 6cqw, 3.4rem);
+  line-height: 1;
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.25));
+}
+.buildcell .bc-plus {
+  font-size: clamp(1rem, 5cqw, 2.6rem);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+}
+.buildcell.rm { box-shadow: inset 0 0 0 3px #e05a4a; background: rgba(224, 90, 74, 0.18); }
+.buildcell.rm:active { background: rgba(224, 90, 74, 0.36); }
+
+/* ---- Building sign: a placard over a built shop / pen. ---- */
 .hotspot {
   position: absolute;
   border: none;
@@ -381,6 +420,10 @@ body {
 .tool .cost { font-size: 0.68rem; font-weight: 800; color: #7a5a00; }
 .tool .cost.lock { color: #8a3030; }
 .tool .stk { margin-top: 1px; }
+/* The build-mode toggle that leads the toolbar. */
+.tool.mode { background: #3c5a28; color: #fff; min-width: 64px; justify-content: center; }
+.tool.mode.on { background: #ffd23f; color: #2e3b22; }
+.tool.mode .name { color: inherit; }
 
 /* ---- Stock chip — shows how much of an item you currently hold. ---- */
 .stk {

@@ -76,14 +76,31 @@ export interface Item {
   kind: ItemKind;
 }
 
+/** A placeable build (soil / shop / pen) in the build catalog. */
+export interface BuildDef {
+  id: string;
+  ico: string;
+  cost: number;
+  lvl: number;
+  unique: boolean;
+  pen?: string;
+}
+
 /* ------------------------------- Game state ------------------------------- */
 
-/** A single field tile. */
-export interface Plot {
-  crop: string | null;
-  grown: number;
-  water: number;
-  fert: boolean;
+/** What occupies a grid cell. */
+export type TileKind = "soil" | "market" | "board" | "kitchen" | "greenhouse" | "apiary" | "pen";
+
+/** A single placed tile on the world grid (null cell = empty grass). */
+export interface Tile {
+  kind: TileKind;
+  /* soil */
+  crop?: string | null;
+  grown?: number;
+  water?: number;
+  fert?: boolean;
+  /* pen */
+  penType?: string;
 }
 
 /** A living animal instance out in a pen. */
@@ -136,8 +153,9 @@ export interface State {
   xp: number;
   level: number;
   sel: string;
-  unlocked: number;
-  plots: Plot[];
+  build: boolean;
+  buildSel: string;
+  grid: (Tile | null)[];
   inv: Record<string, number>;
   cap: number;
   animals: AnimalInstance[];

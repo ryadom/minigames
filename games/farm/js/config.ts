@@ -8,7 +8,7 @@
  *  Growth / production / cooking are all time-based (timestamps or accumulated
  *  game-ms) so progress advances across sessions.
  * ========================================================================== */
-import type { Animal, Crop, Dish, Flower, Item, Product } from "./types";
+import type { Animal, BuildDef, Crop, Dish, Flower, Item, Product } from "./types";
 
 // ---- Tiny generic helpers ----
 export function $(id: string): HTMLElement {
@@ -216,9 +216,36 @@ export const SEED_SPRITE = "🌰";
 export const SPROUT_SPRITE = "🌱";
 export const LEAF_SPRITE = "🌿";
 
+/* ======================================================================
+ *  BUILD CATALOG — everything the player can place on the world grid.
+ *  Soil tiles host crops; the shops & pens open their management panels.
+ *  `unique` builds may be placed only once; `pen` ties a build to an animal.
+ * ==================================================================== */
+export const BUILDS: BuildDef[] = [
+  { id: "soil", ico: "🟫", cost: 0, lvl: 1, unique: false },
+  { id: "market", ico: "🏪", cost: 0, lvl: 1, unique: true },
+  { id: "board", ico: "🪧", cost: 50, lvl: 1, unique: true },
+  { id: "kitchen", ico: "🍳", cost: 120, lvl: 2, unique: true },
+  { id: "greenhouse", ico: "🌻", cost: 240, lvl: 5, unique: true },
+  { id: "apiary", ico: "🐝", cost: 300, lvl: 5, unique: true },
+  { id: "pen-chicken", ico: "🐔", cost: 60, lvl: 2, unique: true, pen: "chicken" },
+  { id: "pen-cow", ico: "🐄", cost: 150, lvl: 4, unique: true, pen: "cow" },
+  { id: "pen-sheep", ico: "🐑", cost: 200, lvl: 6, unique: true, pen: "sheep" },
+  { id: "pen-pig", ico: "🐖", cost: 280, lvl: 8, unique: true, pen: "pig" },
+];
+export const BUILD_BY_ID: Record<string, BuildDef> = {};
+BUILDS.forEach((b) => {
+  BUILD_BY_ID[b.id] = b;
+});
+// The special "demolish" tool the build toolbar carries after the catalog.
+export const REMOVE_TOOL = "remove";
+
 // ---- Tuning constants ----
-export const GRID = 25; // 5×5 field
-export const START_PLOTS = 6;
+export const GRID_COLS = 7; // world grid is GRID_COLS × GRID_ROWS cells
+export const GRID_ROWS = 7;
+export const GRID_N = GRID_COLS * GRID_ROWS;
+export const SOIL_BASE_COST = 30; // first extra soil tile
+export const SOIL_STEP_COST = 18; // each further soil tile costs this much more
 export const WATER_BOOST = 2; // growth multiplier while watered
 export const WATER_MS = 12000; // how long a watering lasts (game-time)
 export const FEED_MS = 55000; // how long one feeding keeps an animal producing

@@ -24,8 +24,9 @@ import {
   ITEM,
   MARKET_MS,
   OVEN_STEP,
+  SOIL_BASE_COST,
   SOIL_STEP,
-  START_PLOTS,
+  SOIL_STEP_COST,
   START_POTS,
   TRADE_STEP,
 } from "./config";
@@ -189,8 +190,15 @@ export function feederCost(type: string): number {
 export function collectorCost(type: string): number {
   return Math.round(ANIMAL_BY_ID[type].cost * 1.8);
 }
-export function plotCost(): number {
-  return 40 + (state.unlocked - START_PLOTS) * 40;
+// Number of soil tiles currently placed on the grid.
+export function soilCount(): number {
+  let n = 0;
+  for (const t of state.grid) if (t && t.kind === "soil") n++;
+  return n;
+}
+// Each new soil tile costs a little more than the last.
+export function soilTileCost(): number {
+  return SOIL_BASE_COST + soilCount() * SOIL_STEP_COST;
 }
 export function potCost(): number {
   return 70 + (state.potCap - START_POTS) * 90;

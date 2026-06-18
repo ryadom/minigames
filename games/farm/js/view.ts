@@ -1,10 +1,12 @@
 /* ============================================================================
  *  Farm — the view layer (everything that produces DOM / HTML).
  *
- *  Renders the pannable world (building signs, crop plots, animal pens, the
- *  seed toolbar) and the sliding building panels (market, kitchen, greenhouse,
- *  apiary, pens, orders). `render()` rebuilds the world and refreshes the open
- *  panel; `patch()` does the cheap per-frame updates (progress bars, sprites);
+ *  Renders the pannable world as a tile grid. In normal play each cell shows
+ *  whatever is built on it — a soil plot you tend, or a shop / pen you tap to
+ *  open. In build mode every cell becomes a placement target and the toolbar
+ *  swaps to the build catalog. The sliding building panels (market, kitchen,
+ *  greenhouse, apiary, pens, orders) are unchanged. `render()` rebuilds the
+ *  world and the open panel; `patch()` does the cheap per-frame updates;
  *  `syncStats()` keeps the header / status strip honest; `toast()` shows the
  *  transient message bubble.
  * ========================================================================== */
@@ -12,8 +14,9 @@ import { MG } from "../../../shared/mg";
 import {
   $,
   ANIMAL_BY_ID,
-  ANIMALS,
   APIARY_LVL,
+  BUILD_BY_ID,
+  BUILDS,
   CROP_BY_ID,
   CROPS,
   DISH_BY_ID,
@@ -23,7 +26,7 @@ import {
   FERT_COST,
   FLOWER_BY_ID,
   FLOWERS,
-  GRID,
+  GRID_N,
   HEATER_STEP,
   HIVE_MS,
   ITEM,
@@ -37,6 +40,7 @@ import {
   MAX_SPRINKLER,
   MAX_TRADE,
   OVEN_STEP,
+  REMOVE_TOOL,
   SEED_SPRITE,
   SOIL_STEP,
   SPROUT_SPRITE,
@@ -52,10 +56,10 @@ import {
   invCount,
   isUnlocked,
   ovenCost,
-  plotCost,
   potCost,
   price,
   soilCost,
+  soilTileCost,
   sprinklerCost,
   stk,
   stoveCost,
@@ -64,20 +68,9 @@ import {
 import { itemName as name, tf } from "./i18n";
 import { applyWorld, ensureScale } from "./input";
 import { dom, ui } from "./runtime";
-import {
-  BLD,
-  type Building,
-  buildScene,
-  FIELD,
-  geom,
-  PEN_DEFS,
-  pf,
-  plotPos,
-  WORLD_H,
-  WORLD_W,
-} from "./scene";
-import { countAnimals, ensurePen, need, state } from "./state";
-import type { Plot } from "./types";
+import { buildScene, cellPos, pf, TILE, WORLD_H, WORLD_W } from "./scene";
+import { ensurePen, need, state } from "./state";
+import type { BuildDef, Tile } from "./types";
 
 // Buildings you can step into; each opens as a sliding panel.
 const PANELS: Record<string, { ico: string; title: string }> = {
@@ -112,138 +105,177 @@ export function syncStats(): void {
   dom.store.classList.toggle("full", n >= state.cap);
 }
 
-/* ----------------------------- OVERLAYS ------------------------------ */
-// A transparent tap target over a drawn building, carrying its shop sign
-// (icon + name + a live status line) and an optional ready badge.
-function hotspot(b: Building, title: string, sub: string, badge: string | number): string {
-  const g = geom(b);
-  const left = (g.minX / WORLD_W) * 100;
-  const top = (g.minY / WORLD_H) * 100;
-  const w = ((g.maxX - g.minX) / WORLD_W) * 100;
-  const h = ((g.maxY - g.minY) / WORLD_H) * 100;
-  return (
-    `<button class="hotspot" data-act="open" data-arg="${b.act}" ` +
-    `style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(w)}%;height:${pf(h)}%">` +
-    (badge ? `<span class="b-badge">${badge}</span>` : "") +
-    `<span class="sign"><span class="si">${b.ico}</span>` +
-    `<span class="st">${esc(title)}</span>` +
-    (sub ? `<span class="ss">${esc(sub)}</span>` : "") +
-    `</span></button>`
-  );
+/* ----------------------------- GRID CELLS ---------------------------- */
+function cellStyle(i: number): string {
+  const p = cellPos(i);
+  const left = (p.x / WORLD_W) * 100;
+  const top = (p.y / WORLD_H) * 100;
+  const w = (TILE / WORLD_W) * 100;
+  const h = (TILE / WORLD_H) * 100;
+  return `style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(w)}%;height:${pf(h)}%"`;
 }
 
-// One overlay per animal pen: a label tag plus the animals living there
-// as individual hold-and-sweep cells (data-animcell = index into
-// state.animals). Tapping a pen opens its panel; sweeping the animals
-// collects / feeds by hand. Locked pens show the level gate.
-function penHotspots(): string {
-  let html = "";
-  PEN_DEFS.forEach((pn) => {
-    const def = ANIMAL_BY_ID[pn.type];
-    const pen = state.pens[pn.type] || {};
-    const left = (pn.L / WORLD_W) * 100;
-    const top = (pn.T / WORLD_H) * 100;
-    const w = ((pn.R - pn.L) / WORLD_W) * 100;
-    const h = ((pn.B - pn.T) / WORLD_H) * 100;
-    const locked = !isUnlocked(def.lvl);
-    const mine: { a: (typeof state.animals)[number]; i: number }[] = [];
-    state.animals.forEach((a, i) => {
-      if (a.type === pn.type) mine.push({ a, i });
-    });
-
-    const act = locked ? "penlocked" : "openpen";
-    const arg = pn.type;
-    let inner = "";
-    let ready = 0;
-    if (locked) {
-      inner = `<span class="pen-lock">🔒 ${esc(tf("lvl", { n: def.lvl }))}</span>`;
-    } else if (!mine.length) {
-      inner = `<span class="pen-buy"><span class="pi">${def.ico}</span>🛒</span>`;
-    } else {
-      inner = '<span class="pen-animals">';
-      mine.forEach((m) => {
-        const rdy = m.a.grown >= def.interval;
-        const fed = Date.now() < m.a.feedUntil;
-        if (rdy) ready++;
-        inner +=
-          `<span class="an${rdy ? " rdy" : fed ? " fed" : " hungry"}" data-animcell="${m.i}">${def.ico}` +
-          (rdy ? `<span class="prod">${ITEM[def.prod].ico}</span>` : "") +
-          "</span>";
-      });
-      inner += "</span>";
-    }
-
-    const auto = (pen.feeder ? "🍽️" : "") + (pen.collector ? "🧺" : "");
-    const tag =
-      `<span class="pen-tag">${def.ico} ${esc(name(pn.type))}` +
-      (mine.length ? ` ×${mine.length}` : "") +
-      (auto ? ` ${auto}` : "") +
-      "</span>";
-    html +=
-      `<button class="hotspot pen-hot${locked ? " locked" : ""}" data-act="${act}"` +
-      ` data-arg="${arg}"` +
-      ` style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(w)}%;height:${pf(h)}%">` +
-      (ready ? `<span class="b-badge">${ready}</span>` : "") +
-      tag +
-      inner +
-      "</button>";
-  });
-  return html;
+// The icon a tile shows at a glance (its crop when grown, else its emblem).
+function tileIcon(t: Tile): string {
+  if (t.kind === "soil") return t.crop ? CROP_BY_ID[t.crop].ico : "🟫";
+  if (t.kind === "pen") return ANIMAL_BY_ID[t.penType as string]?.ico || "🐄";
+  return BUILD_BY_ID[t.kind]?.ico || "🏠";
 }
 
-function plotSprite(p: Plot): string {
-  const c = CROP_BY_ID[p.crop as string];
-  const f = p.grown / c.grow;
+function plotSprite(t: Tile): string {
+  const c = CROP_BY_ID[t.crop as string];
+  const f = (t.grown || 0) / c.grow;
   if (f >= 1) return c.ico;
   if (f < 0.33) return SEED_SPRITE;
   if (f < 0.66) return SPROUT_SPRITE;
   return LEAF_SPRITE;
 }
 
-// The 25 crop tiles, laid over the tilled field backing.
-function renderPlots(): string {
-  let h = "";
-  const lw = (FIELD.tile / WORLD_W) * 100;
-  const lh = (FIELD.tile / WORLD_H) * 100;
-  for (let i = 0; i < GRID; i++) {
-    const pos = plotPos(i);
-    const left = (pos.x / WORLD_W) * 100;
-    const top = (pos.y / WORLD_H) * 100;
-    const style = `style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(lw)}%;height:${pf(lh)}%"`;
-    if (i >= state.unlocked) {
-      const canBuy = i === state.unlocked;
-      h +=
-        `<button class="plot locked" data-plotcell="${i}" data-act="${canBuy ? "buyplot" : "noop"}" ${style} aria-label="locked">` +
-        `<span class="sprite">${canBuy ? "🔓" : "🔒"}</span>` +
-        (canBuy ? `<span class="pcost">🪙 ${plotCost()}</span>` : "") +
-        "</button>";
-      continue;
-    }
-    const p = state.plots[i];
-    let cls = "plot";
-    let spr = "";
-    let w = "0";
-    if (p.crop) {
-      const c = CROP_BY_ID[p.crop];
-      const rdy = p.grown >= c.grow;
-      cls += rdy ? " ready" : p.water > 0 ? " watered" : "";
-      if (p.fert) cls += " fert";
-      spr = plotSprite(p);
-      w = Math.min(100, (p.grown / c.grow) * 100).toFixed(1);
-    } else {
-      cls += " empty";
-    }
-    h +=
-      `<button class="${cls}" data-plotcell="${i}" data-act="plot" data-arg="${i}" ${style}>` +
-      `<span class="sprite">${spr}</span>` +
-      `<span class="bar"><i style="width:${w}%"></i></span></button>`;
+// A soil plot you can plant / water / harvest (normal play).
+function soilCell(i: number, t: Tile): string {
+  let cls = "plot";
+  let spr = "";
+  let w = "0";
+  if (t.crop) {
+    const c = CROP_BY_ID[t.crop];
+    const rdy = (t.grown || 0) >= c.grow;
+    cls += rdy ? " ready" : (t.water || 0) > 0 ? " watered" : "";
+    if (t.fert) cls += " fert";
+    spr = plotSprite(t);
+    w = Math.min(100, ((t.grown || 0) / c.grow) * 100).toFixed(1);
+  } else {
+    cls += " empty";
   }
-  return h;
+  return (
+    `<button class="${cls}" data-plotcell="${i}" data-act="plot" data-arg="${i}" ${cellStyle(i)}>` +
+    `<span class="sprite">${spr}</span>` +
+    `<span class="bar"><i style="width:${w}%"></i></span></button>`
+  );
 }
 
-// The seed / tool selector that floats along the bottom of the map.
+// A shop / pen tile: a big emblem + a placard with a live status line.
+function buildingCell(i: number, t: Tile): string {
+  const rc = readyCounts();
+  let act = "open";
+  let arg: string = t.kind;
+  let ico = tileIcon(t);
+  let title = "";
+  let sub = "";
+  let badge: string | number = "";
+  if (t.kind === "market") {
+    title = MG.i18n.t("tabMarket");
+    sub = `🪙 ${state.coins}`;
+  } else if (t.kind === "board") {
+    arg = "quests";
+    title = MG.i18n.t("tabQuests");
+    sub = `🎁 ${rc.fillable}/${state.quests.length}`;
+    badge = rc.fillable || "";
+  } else if (t.kind === "kitchen") {
+    arg = "cook";
+    title = MG.i18n.t("tabCook");
+    sub = cookStatus();
+    badge = rc.cook || "";
+  } else if (t.kind === "greenhouse") {
+    title = MG.i18n.t("tabGreenhouse");
+    sub = greenhouseStatus();
+    badge = rc.pot || "";
+  } else if (t.kind === "apiary") {
+    title = MG.i18n.t("tabApiary");
+    sub = apiaryStatus();
+    badge = rc.hive || "";
+  } else if (t.kind === "pen") {
+    const type = t.penType as string;
+    const def = ANIMAL_BY_ID[type];
+    act = "openpen";
+    arg = type;
+    ico = def.ico;
+    title = name(type);
+    let mine = 0;
+    let ready = 0;
+    state.animals.forEach((a) => {
+      if (a.type === type) {
+        mine++;
+        if (a.grown >= def.interval) ready++;
+      }
+    });
+    sub = mine ? `${ITEM[def.prod].ico} ×${mine}` : "🛒";
+    badge = ready || "";
+  }
+  return (
+    `<button class="hotspot bld" data-act="${act}" data-arg="${arg}" ${cellStyle(i)}>` +
+    (badge ? `<span class="b-badge">${badge}</span>` : "") +
+    `<span class="bld-ico">${ico}</span>` +
+    `<span class="sign"><span class="st">${esc(title)}</span>` +
+    (sub ? `<span class="ss">${esc(sub)}</span>` : "") +
+    `</span></button>`
+  );
+}
+
+// A build-mode placement target: shows what (if anything) is on the cell.
+function buildCell(i: number): string {
+  const t = state.grid[i];
+  const removing = state.buildSel === REMOVE_TOOL;
+  const inner = t
+    ? `<span class="bc-ico">${tileIcon(t)}</span>`
+    : `<span class="bc-plus">＋</span>`;
+  return (
+    `<button class="buildcell${t ? " filled" : " open"}${removing && t ? " rm" : ""}" ` +
+    `data-act="buildcell" data-arg="${i}" ${cellStyle(i)}>${inner}</button>`
+  );
+}
+
+// Has this unique build already been placed somewhere on the grid?
+function isPlaced(b: BuildDef): boolean {
+  if (b.pen) return state.grid.some((t) => t && t.kind === "pen" && t.penType === b.pen);
+  return state.grid.some((t) => t && t.kind === b.id);
+}
+
+function buildName(b: BuildDef): string {
+  if (b.pen) return name(b.pen);
+  if (b.id === "soil") return MG.i18n.t("bSoil");
+  if (b.id === "market") return MG.i18n.t("tabMarket");
+  if (b.id === "board") return MG.i18n.t("tabQuests");
+  if (b.id === "kitchen") return MG.i18n.t("tabCook");
+  if (b.id === "greenhouse") return MG.i18n.t("tabGreenhouse");
+  if (b.id === "apiary") return MG.i18n.t("tabApiary");
+  return b.id;
+}
+
+/* ----------------------------- TOOLBARS ------------------------------ */
+// The seed / tool selector (normal play) or the build catalog (build mode),
+// always led by the build-mode toggle.
 function renderToolbar(): string {
-  let h = "";
+  let h =
+    `<button class="tool mode${state.build ? " on" : ""}" data-act="mode">` +
+    `<span class="ico">${state.build ? "✅" : "🔨"}</span>` +
+    `<span class="name">${esc(MG.i18n.t(state.build ? "modeDone" : "modeBuild"))}</span></button>`;
+
+  if (state.build) {
+    BUILDS.forEach((b) => {
+      const lock = !isUnlocked(b.lvl);
+      const placed = b.unique && isPlaced(b);
+      const sel = state.buildSel === b.id ? " selected" : "";
+      const cost = b.id === "soil" ? soilTileCost() : b.cost;
+      const costLabel = lock
+        ? `🔒 ${tf("lvl", { n: b.lvl })}`
+        : placed
+          ? esc(MG.i18n.t("placed"))
+          : cost > 0
+            ? `🪙 ${cost}`
+            : "·";
+      h +=
+        `<button class="tool${sel}${lock || placed ? " locked" : ""}" data-act="buildsel" data-arg="${b.id}">` +
+        `<span class="ico">${b.ico}</span>` +
+        `<span class="name">${esc(buildName(b))}</span>` +
+        `<span class="cost${lock ? " lock" : ""}">${costLabel}</span></button>`;
+    });
+    h +=
+      `<button class="tool${state.buildSel === REMOVE_TOOL ? " selected" : ""}" data-act="buildsel" data-arg="${REMOVE_TOOL}">` +
+      `<span class="ico">🚮</span><span class="name">${esc(MG.i18n.t("bRemove"))}</span>` +
+      `<span class="cost">·</span></button>`;
+    return h;
+  }
+
   CROPS.forEach((c) => {
     const lock = !isUnlocked(c.lvl);
     const sel = state.sel === c.id ? " selected" : "";
@@ -275,21 +307,21 @@ function renderToolbar(): string {
 export function render(): void {
   ensureScale();
   const tbScroll = dom.toolbar.scrollLeft;
-  const rc = readyCounts();
+  let cells = "";
+  for (let i = 0; i < GRID_N; i++) {
+    if (state.build) {
+      cells += buildCell(i);
+      continue;
+    }
+    const t = state.grid[i];
+    if (!t) continue;
+    if (t.kind === "soil") cells += soilCell(i, t);
+    else cells += buildingCell(i, t);
+  }
   dom.world.innerHTML =
     `<svg viewBox="0 0 ${WORLD_W} ${WORLD_H}" preserveAspectRatio="none" aria-hidden="true">${buildScene()}</svg>` +
-    hotspot(BLD.market, MG.i18n.t("tabMarket"), `🪙 ${state.coins}`, "") +
-    hotspot(BLD.cook, MG.i18n.t("tabCook"), cookStatus(), rc.cook || "") +
-    hotspot(BLD.greenhouse, MG.i18n.t("tabGreenhouse"), greenhouseStatus(), rc.pot || "") +
-    hotspot(BLD.apiary, MG.i18n.t("tabApiary"), apiaryStatus(), rc.hive || "") +
-    hotspot(
-      BLD.quests,
-      MG.i18n.t("tabQuests"),
-      `🎁 ${rc.fillable}/${state.quests.length}`,
-      rc.fillable || "",
-    ) +
-    penHotspots() +
-    renderPlots();
+    cells;
+  dom.world.classList.toggle("building", state.build);
   applyWorld();
   dom.toolbar.innerHTML = renderToolbar();
   dom.toolbar.scrollLeft = tbScroll;
@@ -711,27 +743,6 @@ function renderMarket(): string {
     });
   }
 
-  h += `<div class="section-h">${esc(MG.i18n.t("mAnimals"))}</div>`;
-  ANIMALS.forEach((a) => {
-    const lock = !isUnlocked(a.lvl);
-    const owned = countAnimals(a.id);
-    const full = owned >= MAX_PER_ANIMAL;
-    const can = !lock && !full && state.coins >= a.cost;
-    h +=
-      `<div class="card${lock ? " locked" : ""}"><span class="big">${a.ico}</span><div class="body">` +
-      `<div class="ttl">${esc(name(a.id))} <span class="badge lock">${esc(tf("owned", { n: owned, max: MAX_PER_ANIMAL }))}</span></div>` +
-      (lock
-        ? `<div class="sub">🔒 ${esc(tf("needLevel", { n: a.lvl }))}</div>`
-        : `<div class="sub">${ITEM[a.prod].ico} ${esc(name(a.prod))} ${stk(a.prod)} · 🍽️ ${ITEM[a.feed].ico} ${esc(name(a.feed))} ${stk(a.feed)}</div>`) +
-      "</div><div class='right'>" +
-      (lock
-        ? ""
-        : full
-          ? `<span class="badge lock">${esc(tf("penFull", { n: MAX_PER_ANIMAL }))}</span>`
-          : `<button class="btn sm" data-act="buyanimal" data-arg="${a.id}"${can ? "" : " disabled"}>🪙 ${a.cost}</button>`) +
-      "</div></div>";
-  });
-
   h += `<div class="section-h">${esc(MG.i18n.t("mUpgrades"))}</div>`;
   h += upgradeCard("cap", "📦", MG.i18n.t("upCap"), `${state.cap} → ${state.cap + 20}`, capCost());
   h += upgradeCard(
@@ -820,24 +831,23 @@ export function patch(): void {
   for (let ci = 0; ci < cells.length; ci++) {
     const cell = cells[ci];
     const i = +(cell.getAttribute("data-plotcell") as string);
-    if (i >= state.unlocked) continue;
-    const p = state.plots[i];
-    if (cell.classList.contains("locked")) continue;
+    const t = state.grid[i];
+    if (t?.kind !== "soil") continue;
     const spr = cell.querySelector(".sprite");
     const bar = cell.querySelector(".bar > i") as HTMLElement | null;
-    if (!p.crop) {
+    if (!t.crop) {
       if (spr?.textContent) spr.textContent = "";
       cell.className = "plot empty";
       if (bar) bar.style.width = "0%";
       continue;
     }
-    const c = CROP_BY_ID[p.crop];
-    const rdy = p.grown >= c.grow;
-    const cls = `plot${rdy ? " ready" : p.water > 0 ? " watered" : ""}${p.fert ? " fert" : ""}`;
+    const c = CROP_BY_ID[t.crop];
+    const rdy = (t.grown || 0) >= c.grow;
+    const cls = `plot${rdy ? " ready" : (t.water || 0) > 0 ? " watered" : ""}${t.fert ? " fert" : ""}`;
     if (cell.className !== cls) cell.className = cls;
-    const s = plotSprite(p);
+    const s = plotSprite(t);
     if (spr && spr.textContent !== s) spr.textContent = s;
-    if (bar) bar.style.width = `${Math.min(100, (p.grown / c.grow) * 100).toFixed(1)}%`;
+    if (bar) bar.style.width = `${Math.min(100, ((t.grown || 0) / c.grow) * 100).toFixed(1)}%`;
   }
   if (state.tab === "cook") {
     state.cooks.forEach((c, i) => {
@@ -862,19 +872,5 @@ export function patch(): void {
       const bar = dom.overlay.querySelector(`[data-hivebar="${i}"] > i`) as HTMLElement | null;
       if (bar) bar.style.width = `${Math.min(100, (hv.grown / HIVE_MS) * 100).toFixed(1)}%`;
     });
-  }
-}
-
-// Refresh one animal cell's look in place during a pen sweep.
-export function updateAnimCell(el: Element, i: number): void {
-  const a = state.animals[i];
-  if (!a) return;
-  const def = ANIMAL_BY_ID[a.type];
-  const rdy = a.grown >= def.interval;
-  const fed = Date.now() < a.feedUntil;
-  el.className = `an${rdy ? " rdy" : fed ? " fed" : " hungry"}`;
-  if (!rdy) {
-    const prod = el.querySelector(".prod");
-    if (prod?.parentNode) prod.parentNode.removeChild(prod);
   }
 }

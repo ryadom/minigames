@@ -6,6 +6,10 @@
  *  reassigned), so every other module can import a stable reference to it.
  *  `load()` rebuilds it from a save (with offline-progress catch-up and
  *  defensive validation); `reset()` returns it to a fresh farm.
+ *
+ *  The world is a tile grid: soil plots, shops and pens are *placed* onto it
+ *  in build mode, so the canonical state carries a `grid` of tiles rather than
+ *  a fixed field. (The grid rework intentionally drops pre-grid saves.)
  * ========================================================================== */
 import { MG } from "../../../shared/mg";
 import {
@@ -16,7 +20,8 @@ import {
   FEED_MS,
   FEEDER_CAP,
   FLOWER_BY_ID,
-  GRID,
+  GRID_COLS,
+  GRID_N,
   HIVE_MS,
   ITEM,
   MAX_HEATER,
@@ -27,26 +32,28 @@ import {
   MAX_SOIL,
   MAX_SPRINKLER,
   MAX_TRADE,
-  START_PLOTS,
   START_POTS,
 } from "./config";
 import { makeQuest, rollMarket, soilMul } from "./economy";
-import type { Pen, State } from "./types";
+import type { Pen, State, Tile, TileKind } from "./types";
+
+const VALID_KINDS: Record<string, boolean> = {
+  soil: true,
+  market: true,
+  board: true,
+  kitchen: true,
+  greenhouse: true,
+  apiary: true,
+  pen: true,
+};
 
 const store = MG.storage<Record<string, any>>("farm", {
-  version: 5,
+  version: 6,
   migrations: {
-    2: (d) => ({ coins: d?.coins || 25 }),
-    // 2 → 3: greenhouse, fertiliser and the soil/sprinkler upgrades arrive.
-    // Defaults are filled in by load(), so the old save passes through.
-    3: (d) => d || {},
-    // 3 → 4: apiary (honey), workshop upgrades and the new crops/dishes
-    // arrive. load() fills the new defaults, so the old save passes through.
-    4: (d) => d || {},
-    // 4 → 5: the barn is gone — animals live in per-type pens (up to 9 each)
-    // with optional feeders/collectors. The old global barnCap is dropped;
-    // load() fills the new per-pen defaults, so the old save passes through.
-    5: (d) => d || {},
+    // 6: the farm becomes a buildable tile grid (soil, shops and pens are all
+    // placed on a grid). The old fixed-field layout is incompatible, so any
+    // pre-grid save is dropped and the player starts fresh.
+    6: () => null,
   },
 });
 
@@ -91,18 +98,40 @@ export function countAnimals(type: string): number {
   return n;
 }
 
+// A fresh soil tile ready to plant.
+function freshSoil(): Tile {
+  return { kind: "soil", crop: null, grown: 0, water: 0, fert: false };
+}
+
+// A brand-new farm: an empty grid with a market, an orders board and a small
+// cluster of starter soil tiles already placed near the centre.
+function freshGrid(): (Tile | null)[] {
+  const grid: (Tile | null)[] = new Array(GRID_N).fill(null);
+  const at = (col: number, row: number) => row * GRID_COLS + col;
+  grid[at(2, 1)] = { kind: "market" };
+  grid[at(4, 1)] = { kind: "board" };
+  [
+    [2, 3],
+    [3, 3],
+    [4, 3],
+    [3, 4],
+  ].forEach(([c, r]) => {
+    grid[at(c, r)] = freshSoil();
+  });
+  return grid;
+}
+
 export function freshState(): State {
-  const plots = [];
-  for (let i = 0; i < GRID; i++) plots.push({ crop: null, grown: 0, water: 0, fert: false });
   const pots = [];
   for (let j = 0; j < START_POTS; j++) pots.push(null);
   const s: State = {
-    coins: 25,
+    coins: 30,
     xp: 0,
     level: 1,
     sel: "wheat",
-    unlocked: START_PLOTS,
-    plots,
+    build: false,
+    buildSel: "soil",
+    grid: freshGrid(),
     inv: {},
     cap: 40,
     animals: [],
@@ -128,6 +157,28 @@ export function freshState(): State {
   return s;
 }
 
+// Rebuild one tile from saved data, dropping anything that no longer validates.
+function loadTile(raw: any): Tile | null {
+  if (!raw || typeof raw !== "object") return null;
+  const kind = raw.kind as TileKind;
+  if (!VALID_KINDS[kind]) return null;
+  if (kind === "soil") {
+    const crop = CROP_BY_ID[raw.crop] ? raw.crop : null;
+    return {
+      kind: "soil",
+      crop,
+      grown: crop ? Math.max(0, +raw.grown || 0) : 0,
+      water: crop ? Math.max(0, +raw.water || 0) : 0,
+      fert: crop ? !!raw.fert : false,
+    };
+  }
+  if (kind === "pen") {
+    if (!ANIMAL_BY_ID[raw.penType]) return null;
+    return { kind: "pen", penType: raw.penType };
+  }
+  return { kind };
+}
+
 export function load(): void {
   assignInto(state, freshState());
   const d = store.load();
@@ -135,8 +186,6 @@ export function load(): void {
     if (typeof d.coins === "number" && d.coins >= 0) state.coins = d.coins;
     if (typeof d.xp === "number" && d.xp >= 0) state.xp = d.xp;
     if (typeof d.level === "number" && d.level >= 1) state.level = d.level;
-    if (typeof d.unlocked === "number")
-      state.unlocked = Math.max(START_PLOTS, Math.min(GRID, d.unlocked));
     if (typeof d.cap === "number" && d.cap > 0) state.cap = d.cap;
     if (typeof d.stoves === "number" && d.stoves >= 1) state.stoves = d.stoves;
     if (typeof d.potCap === "number" && d.potCap >= START_POTS)
@@ -153,22 +202,14 @@ export function load(): void {
       state.trade = Math.min(MAX_TRADE, Math.floor(d.trade));
     if (CROP_BY_ID[d.sel] || d.sel === "water" || d.sel === "clear" || d.sel === "fert")
       state.sel = d.sel;
+    if (typeof d.buildSel === "string") state.buildSel = d.buildSel;
 
     if (d.inv && typeof d.inv === "object") {
       state.inv = {};
       for (const k in d.inv) if (ITEM[k] && d.inv[k] > 0) state.inv[k] = Math.floor(d.inv[k]);
     }
-    if (Array.isArray(d.plots)) {
-      for (let i = 0; i < GRID; i++) {
-        const p = d.plots[i] || {};
-        const crop = CROP_BY_ID[p.crop] ? p.crop : null;
-        state.plots[i] = {
-          crop,
-          grown: crop ? Math.max(0, +p.grown || 0) : 0,
-          water: crop ? Math.max(0, +p.water || 0) : 0,
-          fert: crop ? !!p.fert : false,
-        };
-      }
+    if (Array.isArray(d.grid)) {
+      for (let i = 0; i < GRID_N; i++) state.grid[i] = loadTile(d.grid[i]);
     }
     if (Array.isArray(d.animals)) {
       state.animals = [];
@@ -239,8 +280,9 @@ export function load(): void {
       });
       while (state.quests.length < 3) state.quests.push(makeQuest(state));
     }
-    // The village is the home screen; building panels are transient.
+    // The village (no panel) is the home screen; building panels are transient.
     state.tab = "village";
+    state.build = false;
   }
 
   // Offline progress.
@@ -248,11 +290,11 @@ export function load(): void {
   const away = now - (+d?.lastSeen || now);
   if (away > 0) {
     const offMul = soilMul();
-    state.plots.forEach((pl) => {
-      if (pl.crop) {
-        const g = CROP_BY_ID[pl.crop].grow;
-        pl.grown = Math.min(g, pl.grown + away * offMul); // no water bonus offline
-        pl.water = 0;
+    state.grid.forEach((t) => {
+      if (t && t.kind === "soil" && t.crop) {
+        const g = CROP_BY_ID[t.crop].grow;
+        t.grown = Math.min(g, (t.grown || 0) + away * offMul); // no water bonus offline
+        t.water = 0;
       }
     });
     const seen = +d?.lastSeen || now;
@@ -286,7 +328,7 @@ export function save(): void {
     xp: state.xp,
     level: state.level,
     sel: state.sel,
-    unlocked: state.unlocked,
+    buildSel: state.buildSel,
     cap: state.cap,
     stoves: state.stoves,
     potCap: state.potCap,
@@ -297,12 +339,19 @@ export function save(): void {
     trade: state.trade,
     hives: state.hives.map((hv) => ({ grown: Math.round(hv.grown) })),
     inv: state.inv,
-    plots: state.plots.map((p) => ({
-      crop: p.crop,
-      grown: Math.round(p.grown),
-      water: Math.round(p.water),
-      fert: !!p.fert,
-    })),
+    grid: state.grid.map((t) => {
+      if (!t) return null;
+      if (t.kind === "soil")
+        return {
+          kind: "soil",
+          crop: t.crop,
+          grown: Math.round(t.grown || 0),
+          water: Math.round(t.water || 0),
+          fert: !!t.fert,
+        };
+      if (t.kind === "pen") return { kind: "pen", penType: t.penType };
+      return { kind: t.kind };
+    }),
     animals: state.animals.map((a) => ({
       type: a.type,
       grown: Math.round(a.grown),
