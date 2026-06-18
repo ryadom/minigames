@@ -20,7 +20,7 @@
    ========================================================================== */
 "use strict";
 
-var CACHE = "mg-cache-v1";
+var CACHE = "mg-cache-v2";
 
 // App shell — resolved relative to this script's location (the site root).
 var SHELL = [
