@@ -367,6 +367,73 @@
     storage.list().forEach(function (s) { storage.remove(s.name); });
   };
 
+  /* ----------------------------------------------------------------- pwa -- */
+  /*
+   * Turn the site into an installable, offline-capable PWA. Because every page
+   * and game loads this script, doing it here means each one gets the manifest,
+   * the right install metadata and the registered service worker without having
+   * to touch its HTML. Paths are resolved relative to this script's own URL, so
+   * they stay correct whether the page lives at the root or under games/<name>/.
+   */
+  function siteRoot() {
+    try {
+      var s = document.currentScript;
+      if (!s || !/shared\/mg\.js/.test(s.src || "")) {
+        var all = document.getElementsByTagName("script");
+        for (var i = all.length - 1; i >= 0; i--) {
+          if (/shared\/mg\.js(\?|$)/.test(all[i].src)) { s = all[i]; break; }
+        }
+      }
+      if (s && s.src) return s.src.replace(/shared\/mg\.js.*$/, "");
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function setupPWA() {
+    // Service workers (and most install machinery) only work over http(s);
+    // opening a game from the filesystem (file://) is fine, just not offline.
+    if (location.protocol !== "http:" && location.protocol !== "https:") return;
+
+    var root = siteRoot();
+    if (!root) return;
+    var head = document.head || document.getElementsByTagName("head")[0];
+    if (!head) return;
+
+    function ensureLink(rel, href) {
+      if (document.querySelector('link[rel="' + rel + '"]')) return;
+      var link = el("link");
+      link.rel = rel;
+      link.href = href;
+      head.appendChild(link);
+    }
+
+    function ensureMeta(name, content) {
+      if (document.querySelector('meta[name="' + name + '"]')) return;
+      var meta = el("meta");
+      meta.name = name;
+      meta.content = content;
+      head.appendChild(meta);
+    }
+
+    ensureLink("manifest", root + "manifest.webmanifest");
+    ensureLink("apple-touch-icon", root + "icon.svg");
+    ensureMeta("theme-color", "#0f1020");
+    ensureMeta("mobile-web-app-capable", "yes");
+    ensureMeta("apple-mobile-web-app-capable", "yes");
+    ensureMeta("apple-mobile-web-app-status-bar-style", "black-translucent");
+    ensureMeta("apple-mobile-web-app-title", "Minigames");
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker
+          .register(root + "sw.js", { scope: root })
+          .catch(function () { /* offline support is best-effort */ });
+      });
+    }
+  }
+
+  try { setupPWA(); } catch (e) { /* never let PWA setup break a page */ }
+
   /* --------------------------------------------------------------- expose -- */
   var MG = global.MG || {};
   MG.i18n = i18n;

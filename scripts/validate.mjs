@@ -52,6 +52,30 @@ for (const f of ["shared/mg.js", "shared/mg.css"]) {
   if (!existsSync(join(ROOT, f))) errors.push(`missing shared file: ${f}`);
 }
 
+// --- PWA assets must exist, and the manifest must be valid JSON with icons. ---
+for (const f of ["manifest.webmanifest", "sw.js", "icon.svg"]) {
+  if (!existsSync(join(ROOT, f))) errors.push(`missing PWA file: ${f}`);
+}
+if (existsSync(join(ROOT, "manifest.webmanifest"))) {
+  try {
+    const manifest = JSON.parse(readFileSync(join(ROOT, "manifest.webmanifest"), "utf8"));
+    if (!manifest.name) errors.push("manifest.webmanifest: missing name");
+    if (!manifest.start_url) errors.push("manifest.webmanifest: missing start_url");
+    if (!Array.isArray(manifest.icons) || manifest.icons.length === 0) {
+      errors.push("manifest.webmanifest: needs at least one icon");
+    } else {
+      manifest.icons.forEach((icon) => {
+        const src = icon && icon.src && icon.src.replace(/^\.\//, "");
+        if (!src || !existsSync(join(ROOT, src))) {
+          errors.push(`manifest.webmanifest: icon "${icon && icon.src}" not found`);
+        }
+      });
+    }
+  } catch (e) {
+    errors.push(`manifest.webmanifest: invalid JSON (${e.message})`);
+  }
+}
+
 if (errors.length) {
   console.error("✗ Validation failed:");
   for (const e of errors) console.error("  - " + e);

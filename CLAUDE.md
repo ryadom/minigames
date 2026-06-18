@@ -26,8 +26,11 @@ depends on to run.
 ├── styles.css              # Home page styles
 ├── games.js                # Registry: window.GAMES (title, icon, url, description)
 ├── app.js                  # Renders the game list + home language control
+├── manifest.webmanifest    # PWA manifest (installable app metadata)
+├── sw.js                   # Service worker (offline cache, scope "/")
+├── icon.svg                # PWA / app icon (maskable)
 ├── shared/
-│   ├── mg.js               # Shared runtime: window.MG (i18n + header)
+│   ├── mg.js               # Shared runtime: window.MG (i18n + header + PWA)
 │   └── mg.css              # Shared chrome styles (header bar, theme tokens)
 ├── games/
 │   ├── minesweeper/index.html
@@ -119,6 +122,25 @@ store.clear();                             // wipe this game's save
 Use a distinct `name` per game (the game's folder name is the convention).
 A save written by a *newer* build than the current one is returned as-is rather
 than downgraded.
+
+## PWA / offline support
+
+The site is an installable, offline-capable PWA, and it stays **zero-build**:
+
+- `manifest.webmanifest` + `icon.svg` (root) describe the installable app.
+- `sw.js` (root) is the service worker. Its scope is the whole site (`/`); it
+  precaches the app shell and uses **stale-while-revalidate** for everything
+  else, so each game is cached the first time it's visited and works offline
+  after that. Bump `CACHE` in `sw.js` when the precached shell changes.
+- `shared/mg.js` does the wiring for **every** page: since every game already
+  loads it, it injects the `<link rel="manifest">` + install metadata and
+  registers the service worker — no per-game HTML changes needed. Paths are
+  resolved relative to `mg.js`'s own URL, so they work from any depth. Setup is
+  a no-op on `file://` (service workers need http/https), so games still open
+  directly from disk.
+
+When adding a game you get PWA support for free (it loads `mg.js`). `npm run
+check` validates the manifest and that its icons exist.
 
 ## Adding a game
 
