@@ -58,7 +58,16 @@ import {
   tradeCost,
 } from "./economy";
 import { itemName as name, tf } from "./i18n";
-import { countAnimals, ensurePen, markDirty, save, state } from "./state";
+import {
+  buildFits,
+  clearBuild,
+  countAnimals,
+  ensurePen,
+  markDirty,
+  save,
+  stampBuild,
+  state,
+} from "./state";
 import type { Agg, BuildDef, Tile } from "./types";
 import { render, toast } from "./view";
 
@@ -338,15 +347,15 @@ function isPlaced(b: BuildDef): boolean {
 }
 function makeTile(b: BuildDef): Tile {
   if (b.id === "soil") return { kind: "soil", crop: null, grown: 0, water: 0, fert: false };
-  if (b.pen) return { kind: "pen", penType: b.pen };
-  return { kind: b.id as Tile["kind"] };
+  if (b.pen) return { kind: "pen", penType: b.pen, w: b.w, h: b.h };
+  return { kind: b.id as Tile["kind"], w: b.w, h: b.h };
 }
 // Place the selected build (or demolish) on grid cell `i`.
 function buildCell(i: number): void {
   if (i < 0 || i >= GRID_N) return;
   if (state.buildSel === REMOVE_TOOL) {
     if (!state.grid[i]) return;
-    state.grid[i] = null;
+    clearBuild(i); // removes the whole footprint, not just the tapped cell
     toast(MG.i18n.t("removed"));
     save();
     render();
@@ -354,10 +363,6 @@ function buildCell(i: number): void {
   }
   const b = BUILD_BY_ID[state.buildSel];
   if (!b) return;
-  if (state.grid[i]) {
-    toast(MG.i18n.t("occupied"));
-    return;
-  }
   if (!isUnlocked(b.lvl)) {
     toast(tf("needLevel", { n: b.lvl }));
     return;
@@ -366,13 +371,18 @@ function buildCell(i: number): void {
     toast(MG.i18n.t("placed"));
     return;
   }
+  // The whole footprint must be free and inside the grid.
+  if (!buildFits(state.grid, i, b.w, b.h)) {
+    toast(MG.i18n.t("occupied"));
+    return;
+  }
   const cost = b.id === "soil" ? soilTileCost() : b.cost;
   if (state.coins < cost) {
     toast(MG.i18n.t("needCoins"));
     return;
   }
   state.coins -= cost;
-  state.grid[i] = makeTile(b);
+  stampBuild(state.grid, i, makeTile(b));
   if (b.pen) ensurePen(b.pen);
   toast(MG.i18n.t("built"));
   save();

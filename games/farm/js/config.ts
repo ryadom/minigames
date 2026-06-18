@@ -221,17 +221,20 @@ export const LEAF_SPRITE = "🌿";
  *  Soil tiles host crops; the shops & pens open their management panels.
  *  `unique` builds may be placed only once; `pen` ties a build to an animal.
  * ==================================================================== */
+// Each build carries a footprint (`w` × `h` grid cells). Soil and the little
+// orders board are single tiles; shops and pens take 2×2; the greenhouse is a
+// roomy 3×3. The build system reserves every cell of the footprint.
 export const BUILDS: BuildDef[] = [
-  { id: "soil", ico: "🟫", cost: 0, lvl: 1, unique: false },
-  { id: "market", ico: "🏪", cost: 0, lvl: 1, unique: true },
-  { id: "board", ico: "🪧", cost: 50, lvl: 1, unique: true },
-  { id: "kitchen", ico: "🍳", cost: 120, lvl: 2, unique: true },
-  { id: "greenhouse", ico: "🌻", cost: 240, lvl: 5, unique: true },
-  { id: "apiary", ico: "🐝", cost: 300, lvl: 5, unique: true },
-  { id: "pen-chicken", ico: "🐔", cost: 60, lvl: 2, unique: true, pen: "chicken" },
-  { id: "pen-cow", ico: "🐄", cost: 150, lvl: 4, unique: true, pen: "cow" },
-  { id: "pen-sheep", ico: "🐑", cost: 200, lvl: 6, unique: true, pen: "sheep" },
-  { id: "pen-pig", ico: "🐖", cost: 280, lvl: 8, unique: true, pen: "pig" },
+  { id: "soil", ico: "🟫", cost: 0, lvl: 1, unique: false, w: 1, h: 1 },
+  { id: "board", ico: "🪧", cost: 50, lvl: 1, unique: true, w: 2, h: 2 },
+  { id: "market", ico: "🏪", cost: 0, lvl: 1, unique: true, w: 2, h: 2 },
+  { id: "kitchen", ico: "🍳", cost: 120, lvl: 2, unique: true, w: 2, h: 2 },
+  { id: "apiary", ico: "🐝", cost: 300, lvl: 5, unique: true, w: 2, h: 2 },
+  { id: "greenhouse", ico: "🌻", cost: 240, lvl: 5, unique: true, w: 3, h: 3 },
+  { id: "pen-chicken", ico: "🐔", cost: 60, lvl: 2, unique: true, pen: "chicken", w: 2, h: 2 },
+  { id: "pen-cow", ico: "🐄", cost: 150, lvl: 4, unique: true, pen: "cow", w: 2, h: 2 },
+  { id: "pen-sheep", ico: "🐑", cost: 200, lvl: 6, unique: true, pen: "sheep", w: 2, h: 2 },
+  { id: "pen-pig", ico: "🐖", cost: 280, lvl: 8, unique: true, pen: "pig", w: 2, h: 2 },
 ];
 export const BUILD_BY_ID: Record<string, BuildDef> = {};
 BUILDS.forEach((b) => {
@@ -241,9 +244,28 @@ BUILDS.forEach((b) => {
 export const REMOVE_TOOL = "remove";
 
 // ---- Tuning constants ----
-export const GRID_COLS = 7; // world grid is GRID_COLS × GRID_ROWS cells
-export const GRID_ROWS = 7;
+// A finer, smaller-celled grid (was 7×7 with chunky tiles): more, smaller
+// cells so multi-cell buildings (2×2 shops, a 3×3 greenhouse) have room.
+export const GRID_COLS = 10; // world grid is GRID_COLS × GRID_ROWS cells
+export const GRID_ROWS = 10;
 export const GRID_N = GRID_COLS * GRID_ROWS;
+
+// ---- Grid footprint geometry (pure helpers shared by build / view) ----
+/** Indices of every cell in the `w` × `h` rectangle rooted at cell `i`. */
+export function footprintCells(i: number, w: number, h: number): number[] {
+  const col = i % GRID_COLS;
+  const row = Math.floor(i / GRID_COLS);
+  const out: number[] = [];
+  for (let dr = 0; dr < h; dr++)
+    for (let dc = 0; dc < w; dc++) out.push((row + dr) * GRID_COLS + (col + dc));
+  return out;
+}
+/** Does a `w` × `h` footprint rooted at cell `i` stay inside the grid? */
+export function inBounds(i: number, w: number, h: number): boolean {
+  const col = i % GRID_COLS;
+  const row = Math.floor(i / GRID_COLS);
+  return col + w <= GRID_COLS && row + h <= GRID_ROWS;
+}
 export const SOIL_BASE_COST = 30; // first extra soil tile
 export const SOIL_STEP_COST = 18; // each further soil tile costs this much more
 export const WATER_BOOST = 2; // growth multiplier while watered

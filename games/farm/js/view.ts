@@ -106,12 +106,13 @@ export function syncStats(): void {
 }
 
 /* ----------------------------- GRID CELLS ---------------------------- */
-function cellStyle(i: number): string {
+// Absolute-position a cell (or a `cw`×`ch` building footprint) over the world.
+function cellStyle(i: number, cw = 1, ch = 1): string {
   const p = cellPos(i);
   const left = (p.x / WORLD_W) * 100;
   const top = (p.y / WORLD_H) * 100;
-  const w = (TILE / WORLD_W) * 100;
-  const h = (TILE / WORLD_H) * 100;
+  const w = ((cw * TILE) / WORLD_W) * 100;
+  const h = ((ch * TILE) / WORLD_H) * 100;
   return `style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(w)}%;height:${pf(h)}%"`;
 }
 
@@ -202,7 +203,7 @@ function buildingCell(i: number, t: Tile): string {
     badge = ready || "";
   }
   return (
-    `<button class="hotspot bld" data-act="${act}" data-arg="${arg}" ${cellStyle(i)}>` +
+    `<button class="hotspot bld" data-act="${act}" data-arg="${arg}" ${cellStyle(i, t.w || 1, t.h || 1)}>` +
     (badge ? `<span class="b-badge">${badge}</span>` : "") +
     `<span class="bld-ico">${ico}</span>` +
     `<span class="sign"><span class="st">${esc(title)}</span>` +
@@ -211,16 +212,20 @@ function buildingCell(i: number, t: Tile): string {
   );
 }
 
-// A build-mode placement target: shows what (if anything) is on the cell.
+// A build-mode placement target. Occupied roots render across their whole
+// footprint (so a 2×2 / 3×3 building reads as one block); empty cells are a
+// single-cell "＋". Link cells are covered by their root and skipped upstream.
 function buildCell(i: number): string {
   const t = state.grid[i];
   const removing = state.buildSel === REMOVE_TOOL;
+  const cw = t?.w || 1;
+  const ch = t?.h || 1;
   const inner = t
     ? `<span class="bc-ico">${tileIcon(t)}</span>`
     : `<span class="bc-plus">＋</span>`;
   return (
     `<button class="buildcell${t ? " filled" : " open"}${removing && t ? " rm" : ""}" ` +
-    `data-act="buildcell" data-arg="${i}" ${cellStyle(i)}>${inner}</button>`
+    `data-act="buildcell" data-arg="${i}" ${cellStyle(i, cw, ch)}>${inner}</button>`
   );
 }
 
@@ -309,11 +314,14 @@ export function render(): void {
   const tbScroll = dom.toolbar.scrollLeft;
   let cells = "";
   for (let i = 0; i < GRID_N; i++) {
+    const t = state.grid[i];
+    // Link cells are part of a larger building's footprint — its root renders
+    // them, so skip them in both modes.
+    if (t && t.kind === "link") continue;
     if (state.build) {
       cells += buildCell(i);
       continue;
     }
-    const t = state.grid[i];
     if (!t) continue;
     if (t.kind === "soil") cells += soilCell(i, t);
     else cells += buildingCell(i, t);

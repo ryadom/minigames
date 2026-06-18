@@ -83,17 +83,38 @@ export interface BuildDef {
   cost: number;
   lvl: number;
   unique: boolean;
+  /** Footprint in grid cells (defaults to 1×1). */
+  w: number;
+  h: number;
   pen?: string;
 }
 
 /* ------------------------------- Game state ------------------------------- */
 
-/** What occupies a grid cell. */
-export type TileKind = "soil" | "market" | "board" | "kitchen" | "greenhouse" | "apiary" | "pen";
+/** What occupies a grid cell. A `link` cell is part of a larger building's
+ *  footprint and points back to its root (top-left) cell. */
+export type TileKind =
+  | "soil"
+  | "market"
+  | "board"
+  | "kitchen"
+  | "greenhouse"
+  | "apiary"
+  | "pen"
+  | "link";
 
-/** A single placed tile on the world grid (null cell = empty grass). */
+/** A single placed tile on the world grid (null cell = empty grass).
+ *
+ *  Buildings larger than 1×1 occupy a rectangle of cells: the top-left cell is
+ *  the "root" (carrying the real `kind` plus its `w`/`h` footprint) and every
+ *  other covered cell is a `link` tile whose `root` is the root cell's index. */
 export interface Tile {
   kind: TileKind;
+  /* footprint (root tile; defaults to 1×1) */
+  w?: number;
+  h?: number;
+  /* link tile → index of the root cell it belongs to */
+  root?: number;
   /* soil */
   crop?: string | null;
   grown?: number;
