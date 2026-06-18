@@ -10,8 +10,8 @@
  * ========================================================================== */
 import { GRID_COLS, GRID_N, GRID_ROWS } from "./config";
 
-export const TILE = 150; // world units per grid cell
-export const PAD = 48; // grassy border around the grid
+export const TILE = 96; // world units per grid cell (smaller, finer grid)
+export const PAD = 40; // grassy border around the grid
 export const WORLD_W = GRID_COLS * TILE + PAD * 2;
 export const WORLD_H = GRID_ROWS * TILE + PAD * 2;
 

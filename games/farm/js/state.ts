@@ -20,10 +20,12 @@ import {
   FEED_MS,
   FEEDER_CAP,
   FLOWER_BY_ID,
+  footprintCells,
   GRID_COLS,
   GRID_N,
   HIVE_MS,
   ITEM,
+  inBounds,
   MAX_HEATER,
   MAX_HIVES,
   MAX_OVEN,
@@ -45,15 +47,19 @@ const VALID_KINDS: Record<string, boolean> = {
   greenhouse: true,
   apiary: true,
   pen: true,
+  link: true,
 };
 
 const store = MG.storage<Record<string, any>>("farm", {
-  version: 6,
+  version: 7,
   migrations: {
     // 6: the farm becomes a buildable tile grid (soil, shops and pens are all
-    // placed on a grid). The old fixed-field layout is incompatible, so any
-    // pre-grid save is dropped and the player starts fresh.
+    // placed on a grid). The old fixed-field layout is incompatible.
     6: () => null,
+    // 7: the grid is rescaled (more, smaller cells) and buildings gained
+    // multi-cell footprints (2×2 shops, a 3×3 greenhouse). Old single-cell
+    // grids no longer line up, so any pre-footprint save is dropped.
+    7: () => null,
   },
 });
 
@@ -103,18 +109,52 @@ function freshSoil(): Tile {
   return { kind: "soil", crop: null, grown: 0, water: 0, fert: false };
 }
 
+/** The root (top-left) cell of whatever building covers cell `i`. */
+export function rootOf(i: number): number {
+  const t = state.grid[i];
+  if (t && t.kind === "link" && typeof t.root === "number") return t.root;
+  return i;
+}
+
+/** Can a `w` × `h` footprint be placed rooted at cell `i`? */
+export function buildFits(grid: (Tile | null)[], i: number, w: number, h: number): boolean {
+  if (!inBounds(i, w, h)) return false;
+  return footprintCells(i, w, h).every((c) => !grid[c]);
+}
+
+/** Stamp a building (root + its `link` cells) onto `grid` rooted at cell `i`. */
+export function stampBuild(grid: (Tile | null)[], i: number, tile: Tile): void {
+  const w = tile.w || 1;
+  const h = tile.h || 1;
+  footprintCells(i, w, h).forEach((c) => {
+    grid[c] = c === i ? tile : { kind: "link", root: i };
+  });
+}
+
+/** Clear the whole footprint of the building covering cell `i`. */
+export function clearBuild(i: number): void {
+  const root = rootOf(i);
+  const rt = state.grid[root];
+  if (!rt) return;
+  footprintCells(root, rt.w || 1, rt.h || 1).forEach((c) => {
+    state.grid[c] = null;
+  });
+}
+
 // A brand-new farm: an empty grid with a market, an orders board and a small
 // cluster of starter soil tiles already placed near the centre.
 function freshGrid(): (Tile | null)[] {
   const grid: (Tile | null)[] = new Array(GRID_N).fill(null);
   const at = (col: number, row: number) => row * GRID_COLS + col;
-  grid[at(2, 1)] = { kind: "market" };
-  grid[at(4, 1)] = { kind: "board" };
+  stampBuild(grid, at(2, 1), { kind: "market", w: 2, h: 2 });
+  stampBuild(grid, at(6, 1), { kind: "board", w: 2, h: 2 });
   [
-    [2, 3],
-    [3, 3],
-    [4, 3],
-    [3, 4],
+    [4, 4],
+    [5, 4],
+    [6, 4],
+    [4, 5],
+    [5, 5],
+    [6, 5],
   ].forEach(([c, r]) => {
     grid[at(c, r)] = freshSoil();
   });
@@ -157,11 +197,21 @@ export function freshState(): State {
   return s;
 }
 
+// Clamp a saved footprint dimension to a sane cell count.
+function dim(v: any): number {
+  return Math.max(1, Math.min(GRID_COLS, Math.floor(+v || 1)));
+}
+
 // Rebuild one tile from saved data, dropping anything that no longer validates.
 function loadTile(raw: any): Tile | null {
   if (!raw || typeof raw !== "object") return null;
   const kind = raw.kind as TileKind;
   if (!VALID_KINDS[kind]) return null;
+  if (kind === "link") {
+    const root = +raw.root;
+    if (!(root >= 0 && root < GRID_N)) return null;
+    return { kind: "link", root };
+  }
   if (kind === "soil") {
     const crop = CROP_BY_ID[raw.crop] ? raw.crop : null;
     return {
@@ -174,9 +224,9 @@ function loadTile(raw: any): Tile | null {
   }
   if (kind === "pen") {
     if (!ANIMAL_BY_ID[raw.penType]) return null;
-    return { kind: "pen", penType: raw.penType };
+    return { kind: "pen", penType: raw.penType, w: dim(raw.w), h: dim(raw.h) };
   }
-  return { kind };
+  return { kind, w: dim(raw.w), h: dim(raw.h) };
 }
 
 export function load(): void {
@@ -341,6 +391,7 @@ export function save(): void {
     inv: state.inv,
     grid: state.grid.map((t) => {
       if (!t) return null;
+      if (t.kind === "link") return { kind: "link", root: t.root };
       if (t.kind === "soil")
         return {
           kind: "soil",
@@ -349,8 +400,8 @@ export function save(): void {
           water: Math.round(t.water || 0),
           fert: !!t.fert,
         };
-      if (t.kind === "pen") return { kind: "pen", penType: t.penType };
-      return { kind: t.kind };
+      if (t.kind === "pen") return { kind: "pen", penType: t.penType, w: t.w, h: t.h };
+      return { kind: t.kind, w: t.w, h: t.h };
     }),
     animals: state.animals.map((a) => ({
       type: a.type,
