@@ -10,12 +10,12 @@
  *  `initInput()` wires the listeners at boot (called from main.ts).
  * ========================================================================== */
 import { MG } from "../../../shared/mg";
-import { actAnimal, actPlot, flushAgg, freshAgg, handle } from "./actions";
+import { actPlot, flushAgg, freshAgg, handle } from "./actions";
 import { dom } from "./runtime";
 import { WORLD_H, WORLD_W } from "./scene";
-import { markDirty, save, state } from "./state";
+import { save } from "./state";
 import type { Agg } from "./types";
-import { patch, render, syncStats, updateAnimCell } from "./view";
+import { patch, render, syncStats } from "./view";
 
 // DOM refs, resolved at init.
 let worldView: HTMLElement;
@@ -78,26 +78,22 @@ let panTy0 = 0;
 let dragging = false;
 let suppressClick = false;
 
-// A "paint" gesture: holding on a field tile or an animal and sweeping
-// across more of them performs the action on each one entered — no
-// per-tile clicking. Pressing on open land pans the map as before.
-let paintMode: "field" | "pen" | null = null;
+// A "paint" gesture: holding on a soil tile and sweeping across more of them
+// tends each one entered — no per-tile clicking. Pressing on open land (or in
+// build mode) pans the map instead.
+let painting = false;
 let paintId: number | null = null;
 let paintVisited: Record<string, boolean> | null = null;
 let paintAgg: Agg | null = null;
-// A pen press waits to see what it is: a tap opens that pen's panel, a
-// sweep tends the animals by hand. We don't act until movement crosses a
-// small threshold, so a clean tap never collects/feeds by accident.
-let penGesture: { type: string | null; x: number; y: number; moved: boolean } | null = null;
 
 // Whether the player is mid-pan or mid-sweep — the tick loop uses this to
 // hold off full re-renders so the gesture stays smooth.
 export function isInteracting(): boolean {
-  return dragging || paintMode !== null;
+  return dragging || painting;
 }
 
-function startPaint(mode: "field" | "pen", e: PointerEvent): void {
-  paintMode = mode;
+function startPaint(e: PointerEvent): void {
+  painting = true;
   paintId = e.pointerId;
   paintVisited = {};
   paintAgg = freshAgg();
@@ -106,56 +102,31 @@ function startPaint(mode: "field" | "pen", e: PointerEvent): void {
   } catch (_err) {}
   hidePanHint();
 }
-// Act on whatever interactive cell sits under the pointer, once per cell.
+// Tend whatever soil tile sits under the pointer, once per cell.
 function paintAt(cx: number, cy: number): void {
   const el = document.elementFromPoint(cx, cy);
   if (!el?.closest) return;
-  if (paintMode === "field") {
-    const cell = el.closest("[data-plotcell]");
-    if (cell?.getAttribute("data-act") !== "plot") return;
-    const i = +(cell.getAttribute("data-plotcell") as string);
-    if ((paintVisited as Record<string, boolean>)[`f${i}`]) return;
-    (paintVisited as Record<string, boolean>)[`f${i}`] = true;
-    if (actPlot(i, paintAgg as Agg)) {
-      patch();
-      syncStats();
-    }
-  } else if (paintMode === "pen") {
-    const ac = el.closest("[data-animcell]");
-    if (!ac) return;
-    const j = +(ac.getAttribute("data-animcell") as string);
-    if ((paintVisited as Record<string, boolean>)[`a${j}`]) return;
-    (paintVisited as Record<string, boolean>)[`a${j}`] = true;
-    if (actAnimal(j, paintAgg as Agg)) {
-      updateAnimCell(ac, j);
-      syncStats();
-    }
+  const cell = el.closest("[data-plotcell]");
+  if (cell?.getAttribute("data-act") !== "plot") return;
+  const i = +(cell.getAttribute("data-plotcell") as string);
+  if ((paintVisited as Record<string, boolean>)[`f${i}`]) return;
+  (paintVisited as Record<string, boolean>)[`f${i}`] = true;
+  if (actPlot(i, paintAgg as Agg)) {
+    patch();
+    syncStats();
   }
 }
 function endPaint(): void {
-  if (paintMode === null) return;
+  if (!painting) return;
   const agg = paintAgg;
-  const mode = paintMode;
-  const pg = penGesture;
-  paintMode = null;
+  painting = false;
   paintId = null;
   paintVisited = null;
   paintAgg = null;
-  penGesture = null;
   suppressClick = true;
   setTimeout(() => {
     suppressClick = false;
   }, 0);
-  // A pen press that never moved is a tap → open that pen's panel.
-  if (mode === "pen" && pg && !pg.moved) {
-    if (pg.type) {
-      state.tab = "pen";
-      state.penType = pg.type;
-      markDirty();
-      render();
-    }
-    return;
-  }
   flushAgg(agg);
   save();
   render();
@@ -165,17 +136,9 @@ function onPointerDown(e: PointerEvent): void {
   const target = e.target as Element;
   if (target.closest?.("#toolbar")) return; // let the toolbar scroll/tap
   const plotCell = target.closest?.("[data-plotcell]");
-  const animCell = target.closest?.("[data-animcell]");
   if (plotCell && plotCell.getAttribute("data-act") === "plot") {
-    startPaint("field", e);
+    startPaint(e);
     paintAt(e.clientX, e.clientY);
-    return;
-  }
-  if (animCell) {
-    const aIdx = +(animCell.getAttribute("data-animcell") as string);
-    const animal = state.animals[aIdx];
-    penGesture = { type: animal ? animal.type : null, x: e.clientX, y: e.clientY, moved: false };
-    startPaint("pen", e); // defer: act only once a sweep is detected
     return;
   }
   panId = e.pointerId;
@@ -186,12 +149,7 @@ function onPointerDown(e: PointerEvent): void {
   dragging = false;
 }
 function onPointerMove(e: PointerEvent): void {
-  if (paintMode !== null && e.pointerId === paintId) {
-    if (paintMode === "pen" && penGesture && !penGesture.moved) {
-      if (Math.abs(e.clientX - penGesture.x) + Math.abs(e.clientY - penGesture.y) <= 6) return;
-      penGesture.moved = true;
-      paintAt(penGesture.x, penGesture.y); // tend the cell the press started on
-    }
+  if (painting && e.pointerId === paintId) {
     paintAt(e.clientX, e.clientY);
     return;
   }

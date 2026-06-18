@@ -124,9 +124,9 @@ export const GAMES: Game[] = [
     url: "./games/farm/",
     tags: ["simulation", "casual"],
     description: {
-      en: "Grow crops & greenhouse flowers, raise animals, keep bees, cook dishes, fill orders, trade and upgrade — level up your farm.",
-      ru: "Выращивай урожай и цветы в теплице, держи животных и пчёл, готовь блюда, выполняй заказы, торгуй и улучшай — прокачивай ферму.",
-      es: "Cultiva campos e invernadero, cría animales, cuida abejas, cocina platos, completa pedidos, comercia y mejora — sube de nivel tu granja.",
+      en: "Build a farm on a tile grid — place soil, shops & pens, grow crops, raise animals, cook dishes, fill orders, trade and level up.",
+      ru: "Строй ферму на сетке — ставь грядки, лавки и загоны, выращивай урожай, держи животных, готовь блюда, выполняй заказы и качай уровень.",
+      es: "Construye una granja en una cuadrícula — coloca tierra, tiendas y corrales, cultiva, cría animales, cocina, completa pedidos y sube de nivel.",
     },
   },
   {

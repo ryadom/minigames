@@ -88,9 +88,14 @@ function tick(now: number): void {
     sprinkleAccum += dt;
     if (sprinkleAccum >= sprinkleEvery()) {
       sprinkleAccum = 0;
-      for (let si = 0; si < state.unlocked; si++) {
-        const sp = state.plots[si];
-        if (sp.crop && sp.water <= 0 && sp.grown < CROP_BY_ID[sp.crop].grow) {
+      for (const sp of state.grid) {
+        if (
+          sp &&
+          sp.kind === "soil" &&
+          sp.crop &&
+          (sp.water || 0) <= 0 &&
+          (sp.grown || 0) < CROP_BY_ID[sp.crop].grow
+        ) {
           sp.water = WATER_MS;
           markDirty();
         }
@@ -99,20 +104,19 @@ function tick(now: number): void {
   }
 
   const gmul = soilMul();
-  for (let i = 0; i < state.unlocked; i++) {
-    const p = state.plots[i];
-    if (!p.crop) continue;
+  for (const p of state.grid) {
+    if (p?.kind !== "soil" || !p.crop) continue;
     const c = CROP_BY_ID[p.crop];
-    if (p.grown >= c.grow) continue;
+    const grown = p.grown || 0;
+    if (grown >= c.grow) continue;
     let speed = gmul;
-    if (p.water > 0) {
+    if ((p.water || 0) > 0) {
       speed = WATER_BOOST * gmul;
-      p.water = Math.max(0, p.water - dt);
+      p.water = Math.max(0, (p.water || 0) - dt);
       if (p.water === 0) markDirty();
     }
-    const before = p.grown;
-    p.grown = Math.min(c.grow, p.grown + dt * speed);
-    if (before < c.grow && p.grown >= c.grow) markDirty();
+    p.grown = Math.min(c.grow, grown + dt * speed);
+    if (grown < c.grow && p.grown >= c.grow) markDirty();
   }
   const nowMs = Date.now();
   state.animals.forEach((a) => {

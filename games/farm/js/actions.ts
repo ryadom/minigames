@@ -11,13 +11,14 @@ import { MG } from "../../../shared/mg";
 import {
   ANIMAL_BY_ID,
   APIARY_LVL,
+  BUILD_BY_ID,
   CROP_BY_ID,
   DISH_BY_ID,
   FEED_MS,
   FEEDER_CAP,
   FERT_COST,
   FLOWER_BY_ID,
-  GRID,
+  GRID_N,
   HIVE_MS,
   ITEM,
   MAX_HEATER,
@@ -29,6 +30,7 @@ import {
   MAX_SPRINKLER,
   MAX_TRADE,
   PROD_BY_ID,
+  REMOVE_TOOL,
   WATER_MS,
 } from "./config";
 import {
@@ -45,10 +47,10 @@ import {
   isUnlocked,
   makeQuest,
   ovenCost,
-  plotCost,
   potCost,
   price,
   soilCost,
+  soilTileCost,
   spaceLeft,
   sprinklerCost,
   stoveCost,
@@ -57,7 +59,7 @@ import {
 } from "./economy";
 import { itemName as name, tf } from "./i18n";
 import { countAnimals, ensurePen, markDirty, save, state } from "./state";
-import type { Agg } from "./types";
+import type { Agg, BuildDef, Tile } from "./types";
 import { render, toast } from "./view";
 
 /* ======================================================================
@@ -82,6 +84,23 @@ export function handle(act: string, arg?: string): void {
   }
   if (act === "noop") return;
 
+  if (act === "mode") {
+    state.build = !state.build;
+    markDirty();
+    render();
+    return;
+  }
+  if (act === "buildsel") {
+    state.buildSel = arg as string;
+    markDirty();
+    render();
+    return;
+  }
+  if (act === "buildcell") {
+    buildCell(+(arg as string));
+    return;
+  }
+
   if (act === "seed") {
     if (CROP_BY_ID[arg as string] && !isUnlocked(CROP_BY_ID[arg as string].lvl)) {
       toast(tf("needLevel", { n: CROP_BY_ID[arg as string].lvl }));
@@ -103,11 +122,6 @@ export function handle(act: string, arg?: string): void {
     return;
   }
 
-  if (act === "penlocked") {
-    const ad = ANIMAL_BY_ID[arg as string];
-    if (ad) toast(tf("needLevel", { n: ad.lvl }));
-    return;
-  }
   if (act === "openpen") {
     const pd = ANIMAL_BY_ID[arg as string];
     if (!pd) return;
@@ -118,20 +132,6 @@ export function handle(act: string, arg?: string): void {
     state.tab = "pen";
     state.penType = arg as string;
     markDirty();
-    render();
-    return;
-  }
-
-  if (act === "buyplot") {
-    if (state.unlocked >= GRID) return;
-    const pc = plotCost();
-    if (state.coins < pc) {
-      toast(MG.i18n.t("needCoins"));
-      return;
-    }
-    state.coins -= pc;
-    state.unlocked++;
-    save();
     render();
     return;
   }
@@ -222,8 +222,9 @@ export function freshAgg(): Agg {
 // (whatever the tool), otherwise plants / waters / clears. Returns true
 // when something actually changed.
 export function actPlot(i: number, agg: Agg): boolean {
-  const p = state.plots[i];
-  if (!p) return false;
+  const p = state.grid[i];
+  if (p?.kind !== "soil") return false;
+  if (p.grown == null) p.grown = 0;
   if (p.crop && p.grown >= CROP_BY_ID[p.crop].grow) {
     if (spaceLeft() < 1) {
       agg.full = true;
@@ -254,7 +255,7 @@ export function actPlot(i: number, agg: Agg): boolean {
     return false;
   }
   if (state.sel === "water") {
-    if (p.crop && p.water <= 0) {
+    if (p.crop && (p.water || 0) <= 0) {
       p.water = WATER_MS;
       agg.water++;
       markDirty();
@@ -298,34 +299,6 @@ export function actPlot(i: number, agg: Agg): boolean {
   return false;
 }
 
-// Tend one animal: collect its product if ready, else feed it if it's
-// hungry and we have the feed crop. Returns true when something changed.
-export function actAnimal(i: number, agg: Agg): boolean {
-  const a = state.animals[i];
-  if (!a) return false;
-  const def = ANIMAL_BY_ID[a.type];
-  if (a.grown >= def.interval) {
-    if (spaceLeft() < 1) {
-      agg.full = true;
-      return false;
-    }
-    addItem(def.prod, 1);
-    addXp(PROD_BY_ID[def.prod]?.xp || 0);
-    a.grown = 0;
-    agg.collect[def.prod] = (agg.collect[def.prod] || 0) + 1;
-    markDirty();
-    return true;
-  }
-  if (Date.now() >= a.feedUntil && (state.inv[def.feed] || 0) >= 1) {
-    takeItem(def.feed, 1);
-    a.feedUntil = Date.now() + FEED_MS;
-    agg.fed++;
-    markDirty();
-    return true;
-  }
-  return false;
-}
-
 // Boil a finished sweep down to a single, language-light summary toast.
 export function flushAgg(agg: Agg | null): void {
   if (!agg) return;
@@ -354,6 +327,56 @@ export function flushAgg(agg: Agg | null): void {
     toast(tf("needLevel", { n: agg.needLevel }));
     return;
   }
+}
+
+/* ======================================================================
+ *  BUILD MODE — place soil / shops / pens onto the world grid (or remove).
+ * ==================================================================== */
+function isPlaced(b: BuildDef): boolean {
+  if (b.pen) return state.grid.some((t) => t && t.kind === "pen" && t.penType === b.pen);
+  return state.grid.some((t) => t && t.kind === b.id);
+}
+function makeTile(b: BuildDef): Tile {
+  if (b.id === "soil") return { kind: "soil", crop: null, grown: 0, water: 0, fert: false };
+  if (b.pen) return { kind: "pen", penType: b.pen };
+  return { kind: b.id as Tile["kind"] };
+}
+// Place the selected build (or demolish) on grid cell `i`.
+function buildCell(i: number): void {
+  if (i < 0 || i >= GRID_N) return;
+  if (state.buildSel === REMOVE_TOOL) {
+    if (!state.grid[i]) return;
+    state.grid[i] = null;
+    toast(MG.i18n.t("removed"));
+    save();
+    render();
+    return;
+  }
+  const b = BUILD_BY_ID[state.buildSel];
+  if (!b) return;
+  if (state.grid[i]) {
+    toast(MG.i18n.t("occupied"));
+    return;
+  }
+  if (!isUnlocked(b.lvl)) {
+    toast(tf("needLevel", { n: b.lvl }));
+    return;
+  }
+  if (b.unique && isPlaced(b)) {
+    toast(MG.i18n.t("placed"));
+    return;
+  }
+  const cost = b.id === "soil" ? soilTileCost() : b.cost;
+  if (state.coins < cost) {
+    toast(MG.i18n.t("needCoins"));
+    return;
+  }
+  state.coins -= cost;
+  state.grid[i] = makeTile(b);
+  if (b.pen) ensurePen(b.pen);
+  toast(MG.i18n.t("built"));
+  save();
+  render();
 }
 
 function buyAnimal(id: string): void {
