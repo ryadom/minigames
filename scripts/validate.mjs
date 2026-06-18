@@ -7,9 +7,9 @@
 // Run with `npm run check`. Exits non-zero on the first batch of failures,
 // so it can be used as a CI / pre-commit gate.
 
-import { readFileSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,14 +41,19 @@ if (!Array.isArray(games)) {
       return;
     }
     const html = readFileSync(indexPath, "utf8");
-    if (!html.includes("shared/mg.js")) {
-      errors.push(`game ${label}: ${game.url}index.html does not load shared/mg.js`);
+    // A game loads the shared runtime either the legacy way (a classic
+    // <script src=".../shared/mg.js">) or, once migrated to TypeScript, as a
+    // bundled ES module that imports it (a <script type="module">).
+    const loadsRuntime =
+      html.includes("shared/mg.js") || /<script[^>]*\btype=["']module["']/.test(html);
+    if (!loadsRuntime) {
+      errors.push(`game ${label}: ${game.url}index.html does not load the shared runtime`);
     }
   });
 }
 
-// --- Shared runtime must exist. ---
-for (const f of ["shared/mg.js", "shared/mg.css"]) {
+// --- Shared runtime must exist (TypeScript source + its stylesheet). ---
+for (const f of ["shared/mg.ts", "shared/mg.css"]) {
   if (!existsSync(join(ROOT, f))) errors.push(`missing shared file: ${f}`);
 }
 

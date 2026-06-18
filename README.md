@@ -7,34 +7,50 @@ A collection of free browser minigames. No installs, no sign-ups — just play.
 > New games get added to the registry and show up on the home page
 > automatically.
 >
-> **Games:** 💣 [Minesweeper](./games/minesweeper/) — infinite, pannable,
-> zoomable Minesweeper · 🐤 [Flappy Bird](./games/flappy-bird/) — flap
-> through the pipes.
+> **Games:** 💣 [Minesweeper](./games/minesweeper/) · 🐤 [Flappy
+> Bird](./games/flappy-bird/) · 🚜 [Farm](./games/farm/) · 🐍
+> [Snake](./games/snake/) · 🃏 [Solitaire](./games/solitaire/) … and more.
 
 ## How it works
 
-This is a **zero-build static site** — no bundler, no framework. The repository
-root *is* the site, served straight from GitHub Pages. A game is a single
-self-contained `index.html` you can even open directly from disk.
+The site is a **static site** served straight from GitHub Pages — there is no
+runtime framework. The sources are **TypeScript**, compiled and bundled with
+[Bun](https://bun.sh) into a `dist/` folder that *is* the deployed site.
+
+The migration to TypeScript is incremental:
+
+- **Migrated** code (the shared runtime and the 🚜 Farm game) is written as
+  TypeScript **ES modules** and bundled per page.
+- **Not-yet-migrated** games are still plain JS and load the shared runtime the
+  classic way, via a `<script src=".../shared/mg.js">` tag that publishes
+  `window.MG`.
+
+The build (`build.ts`) supports both at once: it emits the shared runtime as a
+classic IIFE global script (`dist/shared/mg.js`) for legacy games, and inlines
+it into the module bundles of migrated games. So nothing breaks while games are
+ported one at a time.
 
 A small shared runtime gives every page consistent chrome:
 
-- **`shared/mg.js`** (`window.MG`) — a shared language control and a common
-  game header.
+- **`shared/mg.ts`** (`window.MG`) — language control, a common game header, and
+  a versioned save store.
 - **`shared/mg.css`** — the header-bar styles and shared theme tokens.
 
-| Path                | Purpose                                                     |
-| ------------------- | ----------------------------------------------------------- |
-| `index.html`        | Home page shell                                             |
-| `styles.css`        | Home page styles                                            |
-| `games.js`          | Registry of games (`window.GAMES`)                          |
-| `app.js`            | Renders the game list + home language switch                |
-| `shared/mg.js`      | Shared runtime: i18n + header (`window.MG`)                 |
-| `shared/mg.css`     | Shared chrome styles                                        |
-| `games/*/index.html`| Self-contained games                                        |
-| `scripts/`          | Node dev server + structure validator                       |
-| `CNAME`             | Custom domain (`minigames.ryadom.me`)                       |
-| `.github/workflows/deploy.yml` | Deploys to GitHub Pages on push to `main`        |
+| Path                            | Purpose                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| `index.html`                    | Home page shell                                      |
+| `games.js`                      | Registry of games (`window.GAMES`)                   |
+| `app.js`                        | Renders the game list + home language switch         |
+| `shared/mg.ts`                  | Shared runtime: i18n + header + save store (`MG`)    |
+| `shared/cards.ts`               | Shared playing-card runtime (`MG.cards`)             |
+| `shared/types.ts`               | Public TypeScript types for the shared runtime       |
+| `shared/*.css`                  | Shared chrome / card styles                          |
+| `games/*/index.html`            | The games (TS modules or legacy JS)                  |
+| `build.ts`                      | Bun build → `dist/`                                  |
+| `tsconfig.json` / `biome.json`  | TypeScript + Biome (lint/format) config              |
+| `scripts/`                      | Dev server + structure validator                     |
+| `CNAME`                         | Custom domain (`minigames.ryadom.me`)                |
+| `.github/workflows/`            | `ci.yml` (checks) + `deploy.yml` (build & deploy)    |
 
 ## Language control
 
@@ -44,7 +60,7 @@ player across the home page and every game**. Each page registers its own
 strings and the shared header + content re-render live when the language
 changes.
 
-```js
+```ts
 MG.i18n.register({
   en: { title: "My Game", play: "Play" },
   ru: { title: "Моя игра", play: "Играть" },
@@ -59,8 +75,8 @@ MG.i18n.onChange(render);   // re-render on language change
 `MG.mountHeader(...)` renders a consistent header bar — a brand link back to the
 games home, optional live stat chips, the language selector and action buttons:
 
-```js
-var ui = MG.mountHeader({
+```ts
+const ui = MG.mountHeader({
   icon: "💣",
   titleKey: "title",
   stats: [{ key: "score", labelKey: "score" }],
@@ -71,19 +87,31 @@ ui.setStat("score", 42);
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full API.
 
-## Adding a game
+## Adding a game (TypeScript)
 
-1. Create `games/<name>/index.html` and load the shared runtime in `<head>`:
+1. Create `games/<name>/index.html`. Load the shared stylesheet and a single
+   module entry point (the bundler emits the `.js`):
 
    ```html
    <link rel="stylesheet" href="../../shared/mg.css" />
-   <script src="../../shared/mg.js"></script>
+   ...
+   <script type="module" src="js/main.js"></script>
+   ```
+
+   Write your game as TypeScript ES modules (e.g. `games/<name>/js/main.ts`),
+   importing the shared runtime directly:
+
+   ```ts
+   import { MG } from "../../../shared/mg";
+   import type { HeaderUI } from "../../../shared/types";
    ```
 
    Use `<body class="mg-app">` with a `<div class="mg-game-area">` host, then
    `MG.i18n.register(...)` and `MG.mountHeader(...)`.
 
-2. Register it in `games.js`:
+2. Add the game's entry point to `build.ts` so it gets bundled.
+
+3. Register it in `games.js`:
 
    ```js
    window.GAMES = [
@@ -100,24 +128,28 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full API.
    ];
    ```
 
-3. Run `npm run check`, then commit and push to `main`.
+4. Run `bun run lint && bun run typecheck && bun run check && bun run build`,
+   then commit and push to `main`.
 
 ## Local development
 
-No dependencies to install — the tooling uses only Node's standard library
-(Node ≥ 18):
+[Bun](https://bun.sh) ≥ 1.3 is the only prerequisite.
 
 ```sh
-npm run dev      # serve at http://localhost:8000
-npm run check    # validate the registry + project structure
+bun install      # install dev tooling (TypeScript, Biome)
+bun run dev      # build, then serve dist/ at http://localhost:8000
+bun run build    # build the site into dist/
+bun run lint     # Biome lint + format check
+bun run format   # Biome auto-fix
+bun run typecheck# tsc --noEmit
+bun run check    # validate the registry + project structure
 ```
-
-(Any static file server works too, e.g. `python3 -m http.server 8000`.)
 
 ## Deployment
 
-Pushes to `main` trigger the **Deploy to GitHub Pages** workflow, which uploads
-the repository root as-is.
+Pushes to `main` trigger the **Deploy to GitHub Pages** workflow, which builds
+the site with Bun and uploads `dist/`. A separate **CI** workflow runs lint,
+type-check, structure validation and a build on every push and pull request.
 
 One-time setup in the repo: **Settings → Pages → Build and deployment → Source:
 GitHub Actions**. The custom domain `minigames.ryadom.me` is set via the `CNAME`

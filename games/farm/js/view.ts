@@ -1,0 +1,876 @@
+/* ============================================================================
+ *  Farm — the view layer (everything that produces DOM / HTML).
+ *
+ *  Renders the pannable world (building signs, crop plots, animal pens, the
+ *  seed toolbar) and the sliding building panels (market, kitchen, greenhouse,
+ *  apiary, pens, orders). `render()` rebuilds the world and refreshes the open
+ *  panel; `patch()` does the cheap per-frame updates (progress bars, sprites);
+ *  `syncStats()` keeps the header / status strip honest; `toast()` shows the
+ *  transient message bubble.
+ * ========================================================================== */
+import { MG } from "../../../shared/mg";
+import {
+  $,
+  ANIMAL_BY_ID,
+  ANIMALS,
+  APIARY_LVL,
+  CROP_BY_ID,
+  CROPS,
+  DISH_BY_ID,
+  DISHES,
+  esc,
+  FEEDER_CAP,
+  FERT_COST,
+  FLOWER_BY_ID,
+  FLOWERS,
+  GRID,
+  HEATER_STEP,
+  HIVE_MS,
+  ITEM,
+  LEAF_SPRITE,
+  MAX_HEATER,
+  MAX_HIVES,
+  MAX_OVEN,
+  MAX_PER_ANIMAL,
+  MAX_POTS,
+  MAX_SOIL,
+  MAX_SPRINKLER,
+  MAX_TRADE,
+  OVEN_STEP,
+  SEED_SPRITE,
+  SOIL_STEP,
+  SPROUT_SPRITE,
+  TRADE_STEP,
+} from "./config";
+import {
+  capCost,
+  collectorCost,
+  feederCost,
+  hasRecipe,
+  heaterCost,
+  hiveCost,
+  invCount,
+  isUnlocked,
+  ovenCost,
+  plotCost,
+  potCost,
+  price,
+  soilCost,
+  sprinklerCost,
+  stk,
+  stoveCost,
+  tradeCost,
+} from "./economy";
+import { itemName as name, tf } from "./i18n";
+import { applyWorld, ensureScale } from "./input";
+import { dom, ui } from "./runtime";
+import {
+  BLD,
+  type Building,
+  buildScene,
+  FIELD,
+  geom,
+  PEN_DEFS,
+  pf,
+  plotPos,
+  WORLD_H,
+  WORLD_W,
+} from "./scene";
+import { countAnimals, ensurePen, need, state } from "./state";
+import type { Plot } from "./types";
+
+// Buildings you can step into; each opens as a sliding panel.
+const PANELS: Record<string, { ico: string; title: string }> = {
+  market: { ico: "🏪", title: "tabMarket" },
+  pen: { ico: "🐄", title: "" },
+  cook: { ico: "🍳", title: "tabCook" },
+  greenhouse: { ico: "🌻", title: "tabGreenhouse" },
+  apiary: { ico: "🐝", title: "tabApiary" },
+  quests: { ico: "📋", title: "tabQuests" },
+};
+let overlayTab: string | null = null;
+let overlayPenType: string | undefined;
+let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+export function toast(msg: string): void {
+  dom.toast.textContent = msg;
+  dom.toast.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    dom.toast.classList.remove("show");
+  }, 1500);
+}
+
+export function syncStats(): void {
+  ui.setStat("coins", state.coins);
+  ui.setStat("level", state.level);
+  dom.lvl.textContent = `⭐ ${state.level}`;
+  dom.xpfill.style.width = `${Math.min(100, (state.xp / need(state.level)) * 100)}%`;
+  const n = invCount();
+  dom.store.textContent = `📦 ${n}/${state.cap}`;
+  dom.store.classList.toggle("full", n >= state.cap);
+}
+
+/* ----------------------------- OVERLAYS ------------------------------ */
+// A transparent tap target over a drawn building, carrying its shop sign
+// (icon + name + a live status line) and an optional ready badge.
+function hotspot(b: Building, title: string, sub: string, badge: string | number): string {
+  const g = geom(b);
+  const left = (g.minX / WORLD_W) * 100;
+  const top = (g.minY / WORLD_H) * 100;
+  const w = ((g.maxX - g.minX) / WORLD_W) * 100;
+  const h = ((g.maxY - g.minY) / WORLD_H) * 100;
+  return (
+    `<button class="hotspot" data-act="open" data-arg="${b.act}" ` +
+    `style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(w)}%;height:${pf(h)}%">` +
+    (badge ? `<span class="b-badge">${badge}</span>` : "") +
+    `<span class="sign"><span class="si">${b.ico}</span>` +
+    `<span class="st">${esc(title)}</span>` +
+    (sub ? `<span class="ss">${esc(sub)}</span>` : "") +
+    `</span></button>`
+  );
+}
+
+// One overlay per animal pen: a label tag plus the animals living there
+// as individual hold-and-sweep cells (data-animcell = index into
+// state.animals). Tapping a pen opens its panel; sweeping the animals
+// collects / feeds by hand. Locked pens show the level gate.
+function penHotspots(): string {
+  let html = "";
+  PEN_DEFS.forEach((pn) => {
+    const def = ANIMAL_BY_ID[pn.type];
+    const pen = state.pens[pn.type] || {};
+    const left = (pn.L / WORLD_W) * 100;
+    const top = (pn.T / WORLD_H) * 100;
+    const w = ((pn.R - pn.L) / WORLD_W) * 100;
+    const h = ((pn.B - pn.T) / WORLD_H) * 100;
+    const locked = !isUnlocked(def.lvl);
+    const mine: { a: (typeof state.animals)[number]; i: number }[] = [];
+    state.animals.forEach((a, i) => {
+      if (a.type === pn.type) mine.push({ a, i });
+    });
+
+    const act = locked ? "penlocked" : "openpen";
+    const arg = pn.type;
+    let inner = "";
+    let ready = 0;
+    if (locked) {
+      inner = `<span class="pen-lock">🔒 ${esc(tf("lvl", { n: def.lvl }))}</span>`;
+    } else if (!mine.length) {
+      inner = `<span class="pen-buy"><span class="pi">${def.ico}</span>🛒</span>`;
+    } else {
+      inner = '<span class="pen-animals">';
+      mine.forEach((m) => {
+        const rdy = m.a.grown >= def.interval;
+        const fed = Date.now() < m.a.feedUntil;
+        if (rdy) ready++;
+        inner +=
+          `<span class="an${rdy ? " rdy" : fed ? " fed" : " hungry"}" data-animcell="${m.i}">${def.ico}` +
+          (rdy ? `<span class="prod">${ITEM[def.prod].ico}</span>` : "") +
+          "</span>";
+      });
+      inner += "</span>";
+    }
+
+    const auto = (pen.feeder ? "🍽️" : "") + (pen.collector ? "🧺" : "");
+    const tag =
+      `<span class="pen-tag">${def.ico} ${esc(name(pn.type))}` +
+      (mine.length ? ` ×${mine.length}` : "") +
+      (auto ? ` ${auto}` : "") +
+      "</span>";
+    html +=
+      `<button class="hotspot pen-hot${locked ? " locked" : ""}" data-act="${act}"` +
+      ` data-arg="${arg}"` +
+      ` style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(w)}%;height:${pf(h)}%">` +
+      (ready ? `<span class="b-badge">${ready}</span>` : "") +
+      tag +
+      inner +
+      "</button>";
+  });
+  return html;
+}
+
+function plotSprite(p: Plot): string {
+  const c = CROP_BY_ID[p.crop as string];
+  const f = p.grown / c.grow;
+  if (f >= 1) return c.ico;
+  if (f < 0.33) return SEED_SPRITE;
+  if (f < 0.66) return SPROUT_SPRITE;
+  return LEAF_SPRITE;
+}
+
+// The 25 crop tiles, laid over the tilled field backing.
+function renderPlots(): string {
+  let h = "";
+  const lw = (FIELD.tile / WORLD_W) * 100;
+  const lh = (FIELD.tile / WORLD_H) * 100;
+  for (let i = 0; i < GRID; i++) {
+    const pos = plotPos(i);
+    const left = (pos.x / WORLD_W) * 100;
+    const top = (pos.y / WORLD_H) * 100;
+    const style = `style="left:${pf(left)}%;top:${pf(top)}%;width:${pf(lw)}%;height:${pf(lh)}%"`;
+    if (i >= state.unlocked) {
+      const canBuy = i === state.unlocked;
+      h +=
+        `<button class="plot locked" data-plotcell="${i}" data-act="${canBuy ? "buyplot" : "noop"}" ${style} aria-label="locked">` +
+        `<span class="sprite">${canBuy ? "🔓" : "🔒"}</span>` +
+        (canBuy ? `<span class="pcost">🪙 ${plotCost()}</span>` : "") +
+        "</button>";
+      continue;
+    }
+    const p = state.plots[i];
+    let cls = "plot";
+    let spr = "";
+    let w = "0";
+    if (p.crop) {
+      const c = CROP_BY_ID[p.crop];
+      const rdy = p.grown >= c.grow;
+      cls += rdy ? " ready" : p.water > 0 ? " watered" : "";
+      if (p.fert) cls += " fert";
+      spr = plotSprite(p);
+      w = Math.min(100, (p.grown / c.grow) * 100).toFixed(1);
+    } else {
+      cls += " empty";
+    }
+    h +=
+      `<button class="${cls}" data-plotcell="${i}" data-act="plot" data-arg="${i}" ${style}>` +
+      `<span class="sprite">${spr}</span>` +
+      `<span class="bar"><i style="width:${w}%"></i></span></button>`;
+  }
+  return h;
+}
+
+// The seed / tool selector that floats along the bottom of the map.
+function renderToolbar(): string {
+  let h = "";
+  CROPS.forEach((c) => {
+    const lock = !isUnlocked(c.lvl);
+    const sel = state.sel === c.id ? " selected" : "";
+    h +=
+      `<button class="tool${sel}${lock ? " locked" : ""}" data-act="seed" data-arg="${c.id}">` +
+      `<span class="ico">${c.ico}</span>` +
+      `<span class="name">${esc(name(c.id))}</span>` +
+      (lock
+        ? `<span class="cost lock">🔒 ${tf("lvl", { n: c.lvl })}</span>`
+        : `<span class="cost">🪙 ${c.seed}</span>`) +
+      stk(c.id) +
+      "</button>";
+  });
+  h +=
+    `<button class="tool${state.sel === "water" ? " selected" : ""}" data-act="seed" data-arg="water">` +
+    `<span class="ico">💧</span><span class="name">${esc(MG.i18n.t("water"))}</span><span class="cost">·</span></button>`;
+  h +=
+    `<button class="tool${state.sel === "fert" ? " selected" : ""}" data-act="seed" data-arg="fert">` +
+    `<span class="ico">💩</span><span class="name">${esc(MG.i18n.t("fert"))}</span><span class="cost">🪙 ${FERT_COST}</span></button>`;
+  h +=
+    `<button class="tool${state.sel === "clear" ? " selected" : ""}" data-act="seed" data-arg="clear">` +
+    `<span class="ico">🧺</span><span class="name">${esc(MG.i18n.t("clear"))}</span><span class="cost">·</span></button>`;
+  return h;
+}
+
+/* ======================================================================
+ *  RENDER — the world is always the base; a building panel may slide up.
+ * ==================================================================== */
+export function render(): void {
+  ensureScale();
+  const tbScroll = dom.toolbar.scrollLeft;
+  const rc = readyCounts();
+  dom.world.innerHTML =
+    `<svg viewBox="0 0 ${WORLD_W} ${WORLD_H}" preserveAspectRatio="none" aria-hidden="true">${buildScene()}</svg>` +
+    hotspot(BLD.market, MG.i18n.t("tabMarket"), `🪙 ${state.coins}`, "") +
+    hotspot(BLD.cook, MG.i18n.t("tabCook"), cookStatus(), rc.cook || "") +
+    hotspot(BLD.greenhouse, MG.i18n.t("tabGreenhouse"), greenhouseStatus(), rc.pot || "") +
+    hotspot(BLD.apiary, MG.i18n.t("tabApiary"), apiaryStatus(), rc.hive || "") +
+    hotspot(
+      BLD.quests,
+      MG.i18n.t("tabQuests"),
+      `🎁 ${rc.fillable}/${state.quests.length}`,
+      rc.fillable || "",
+    ) +
+    penHotspots() +
+    renderPlots();
+  applyWorld();
+  dom.toolbar.innerHTML = renderToolbar();
+  dom.toolbar.scrollLeft = tbScroll;
+  renderOverlay();
+  syncStats();
+}
+
+function cookStatus(): string {
+  let cooking = 0;
+  state.cooks.forEach((c) => {
+    if (c && Date.now() < c.endsAt) cooking++;
+  });
+  return `🍳 ${state.stoves}${cooking ? ` · ⏲️ ${cooking}` : ""}`;
+}
+function greenhouseStatus(): string {
+  let growing = 0;
+  state.pots.forEach((p) => {
+    if (p && Date.now() < p.endsAt) growing++;
+  });
+  return `🌷 ${state.potCap}${growing ? ` · ⏲️ ${growing}` : ""}`;
+}
+function apiaryStatus(): string {
+  if (!isUnlocked(APIARY_LVL)) return `🔒 ${tf("lvl", { n: APIARY_LVL })}`;
+  return `🍯 ${state.hives.length}/${MAX_HIVES}`;
+}
+export function readyCounts(): {
+  cook: number;
+  pot: number;
+  pen: number;
+  hive: number;
+  fillable: number;
+} {
+  let cook = 0;
+  state.cooks.forEach((c) => {
+    if (c && Date.now() >= c.endsAt) cook++;
+  });
+  let pot = 0;
+  state.pots.forEach((p) => {
+    if (p && Date.now() >= p.endsAt) pot++;
+  });
+  let pen = 0;
+  state.animals.forEach((a) => {
+    if (a.grown >= ANIMAL_BY_ID[a.type].interval) pen++;
+  });
+  let hive = 0;
+  state.hives.forEach((hv) => {
+    if (hv.grown >= HIVE_MS) hive++;
+  });
+  let fillable = 0;
+  state.quests.forEach((q) => {
+    if (q && (state.inv[q.item] || 0) >= q.need) fillable++;
+  });
+  return { cook, pot, pen, hive, fillable };
+}
+
+// Mount / refresh the sliding building panel (same behaviour as before).
+function renderOverlay(): void {
+  const tab = state.tab;
+  if (!PANELS[tab]) {
+    if (overlayTab !== null) {
+      dom.overlay.className = "overlay";
+      dom.overlay.setAttribute("aria-hidden", "true");
+      overlayTab = null;
+      if (closeTimer) clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => {
+        closeTimer = null;
+        if (!PANELS[state.tab]) dom.overlay.innerHTML = "";
+      }, 260);
+    }
+    return;
+  }
+  if (closeTimer) {
+    clearTimeout(closeTimer);
+    closeTimer = null;
+  }
+  const body =
+    tab === "market"
+      ? renderMarket()
+      : tab === "pen"
+        ? renderPen(state.penType as string)
+        : tab === "cook"
+          ? renderCook()
+          : tab === "greenhouse"
+            ? renderGreenhouse()
+            : tab === "apiary"
+              ? renderApiary()
+              : renderQuests();
+  // The pen panel's icon / title depend on which animal you tapped, so a
+  // change of pen type counts as a fresh panel even when the tab is "pen".
+  const fresh = overlayTab !== tab || (tab === "pen" && overlayPenType !== state.penType);
+  if (fresh) {
+    const p = PANELS[tab];
+    const ico = tab === "pen" ? ANIMAL_BY_ID[state.penType as string].ico : p.ico;
+    const ttl = tab === "pen" ? name(state.penType as string) : MG.i18n.t(p.title);
+    dom.overlay.innerHTML =
+      '<div class="sheet">' +
+      '<div class="sheet-head">' +
+      `<span class="sh-ico">${ico}</span>` +
+      `<span class="sh-ttl">${esc(ttl)}</span>` +
+      '<button class="sh-close" data-act="close" aria-label="close">✕</button>' +
+      "</div>" +
+      `<div class="sheet-body"><div class="wrap" id="sheetwrap">${body}</div></div>` +
+      "</div>";
+    dom.overlay.removeAttribute("aria-hidden");
+    void dom.overlay.offsetWidth;
+    dom.overlay.className = "overlay show";
+    overlayTab = tab;
+    overlayPenType = state.penType;
+  } else {
+    const w = $("sheetwrap");
+    if (w) w.innerHTML = body;
+  }
+}
+
+function tipLine(key: string): string {
+  return `<div class="tip">${esc(MG.i18n.t(key))}</div>`;
+}
+
+// A full-width "Collect all" button shown above a building's slots when
+// anything is ready to gather; `kind` routes the action (cook/pot/hive/pen).
+function collectAllBar(kind: string, count: number): string {
+  if (!count) return "";
+  return (
+    `<div class="collect-all"><button class="btn go" data-act="collectall" data-arg="${kind}">` +
+    `${esc(MG.i18n.t("collectAll"))} (${count})</button></div>`
+  );
+}
+// A slim summary card standing in for N empty slots, so panels don't grow
+// a long tail of blank stoves / pots to scroll past.
+function freeSlotsCard(ico: string, n: number): string {
+  if (!n) return "";
+  return (
+    `<div class="card slim"><span class="big">${ico}</span>` +
+    `<div class="body"><div class="sub">${esc(tf("freeSlots", { n }))}</div></div></div>`
+  );
+}
+
+/* -------------------------------- PEN -------------------------------- */
+// Per-animal management: buy more (up to MAX_PER_ANIMAL), run the pen with
+// a feeder (auto-feeds from a loaded food stock) and a collector
+// (auto-gathers produce), or collect ripe produce by hand in one tap.
+function renderPen(type: string): string {
+  const def = ANIMAL_BY_ID[type];
+  if (!def) return tipLine("tipPen");
+  const pen = ensurePen(type);
+  const mine: (typeof state.animals)[number][] = [];
+  state.animals.forEach((a) => {
+    if (a.type === type) mine.push(a);
+  });
+  const count = mine.length;
+  let ready = 0;
+  let fedN = 0;
+  let prog = 0;
+  mine.forEach((a) => {
+    if (a.grown >= def.interval) ready++;
+    if (Date.now() < a.feedUntil) fedN++;
+    prog += Math.min(1, a.grown / def.interval);
+  });
+
+  let h = tipLine("tipPen");
+
+  // ---- Summary + collect-all -------------------------------------------
+  if (!count) {
+    h += `<div class="empty-note">${def.ico}<br>${esc(MG.i18n.t("penEmpty"))}</div>`;
+  } else {
+    const statusBadge = ready
+      ? `<span class="badge ready">${ITEM[def.prod].ico} ×${ready}</span>`
+      : `<span class="badge ${fedN === count ? "" : "lock"}">${fedN}/${count} ${esc(MG.i18n.t("fed"))}</span>`;
+    const pct = ((prog / count) * 100).toFixed(1);
+    h +=
+      `<div class="card"><span class="big">${def.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(type))} <span class="badge lock">${esc(tf("owned", { n: count, max: MAX_PER_ANIMAL }))}</span> ${statusBadge}</div>` +
+      `<div class="sub">${ITEM[def.prod].ico} ${esc(name(def.prod))} ${stk(def.prod)}</div>` +
+      `<div class="pbar"><i style="width:${pct}%"></i></div></div>` +
+      `<div class="right"><button class="btn go sm" data-act="collectall" data-arg="pen"${ready ? "" : " disabled"}>` +
+      `${esc(MG.i18n.t("collectAll"))}</button></div></div>`;
+  }
+
+  // ---- Buy more --------------------------------------------------------
+  if (count < MAX_PER_ANIMAL) {
+    h +=
+      `<div class="card"><span class="big">🛒</span><div class="body">` +
+      `<div class="ttl">${esc(MG.i18n.t("buyAnimal"))} ${def.ico} ${esc(name(type))}</div>` +
+      `<div class="sub">${ITEM[def.prod].ico} ${esc(name(def.prod))} · 🍽️ ${ITEM[def.feed].ico} ${esc(name(def.feed))}</div></div>` +
+      `<div class="right"><button class="btn sm" data-act="buyanimal" data-arg="${type}"${state.coins >= def.cost ? "" : " disabled"}>🪙 ${def.cost}</button></div></div>`;
+  } else {
+    h +=
+      `<div class="card"><span class="big">🛒</span><div class="body">` +
+      `<div class="ttl">${esc(name(type))}</div></div>` +
+      `<div class="right"><span class="badge lock">${esc(tf("penFull", { n: MAX_PER_ANIMAL }))}</span></div></div>`;
+  }
+
+  // ---- Feeder (load food → animals auto-feed) --------------------------
+  if (!pen.feeder) {
+    const fc = feederCost(type);
+    h +=
+      `<div class="card"><span class="big">🍽️</span><div class="body">` +
+      `<div class="ttl">${esc(MG.i18n.t("feeder"))}</div>` +
+      `<div class="sub">${esc(tf("feederSub", { item: ITEM[def.feed].ico, name: name(def.feed) }))}</div></div>` +
+      `<div class="right"><button class="btn sm" data-act="buyfeeder" data-arg="${type}"${state.coins >= fc ? "" : " disabled"}>🪙 ${fc}</button></div></div>`;
+  } else {
+    const feedHave = state.inv[def.feed] || 0;
+    const fpct = ((pen.feed / FEEDER_CAP) * 100).toFixed(1);
+    h +=
+      `<div class="card"><span class="big">🍽️</span><div class="body">` +
+      `<div class="ttl">${esc(MG.i18n.t("feeder"))} <span class="badge ready">${esc(MG.i18n.t("autoFeed"))}</span></div>` +
+      `<div class="sub">${ITEM[def.feed].ico} ${pen.feed}/${FEEDER_CAP} · 📦 ${feedHave}</div>` +
+      `<div class="pbar"><i style="width:${fpct}%"></i></div></div>` +
+      `<div class="right"><button class="btn alt sm" data-act="loadfeed" data-arg="${type}"${feedHave > 0 && pen.feed < FEEDER_CAP ? "" : " disabled"}>` +
+      `${esc(MG.i18n.t("loadFeed"))} ${ITEM[def.feed].ico}</button></div></div>`;
+  }
+
+  // ---- Collector (auto-gathers produce) --------------------------------
+  if (!pen.collector) {
+    const cc = collectorCost(type);
+    h +=
+      `<div class="card"><span class="big">🧺</span><div class="body">` +
+      `<div class="ttl">${esc(MG.i18n.t("collector"))}</div>` +
+      `<div class="sub">${esc(MG.i18n.t("collectorSub"))}</div></div>` +
+      `<div class="right"><button class="btn sm" data-act="buycollector" data-arg="${type}"${state.coins >= cc ? "" : " disabled"}>🪙 ${cc}</button></div></div>`;
+  } else {
+    h +=
+      `<div class="card"><span class="big">🧺</span><div class="body">` +
+      `<div class="ttl">${esc(MG.i18n.t("collector"))} <span class="badge ready">${esc(MG.i18n.t("autoCollect"))}</span></div>` +
+      `<div class="sub">${esc(MG.i18n.t("collectorSub"))}</div></div></div>`;
+  }
+  return h;
+}
+
+/* ------------------------------- KITCHEN ----------------------------- */
+function renderCook(): string {
+  let h = tipLine("tipCook");
+
+  h += `<div class="section-h">${esc(MG.i18n.t("stoves"))} (${state.stoves})</div>`;
+  h += collectAllBar("cook", readyCounts().cook);
+  let freeStoves = 0;
+  state.cooks.forEach((c, i) => {
+    if (!c) {
+      freeStoves++;
+      return;
+    }
+    const def = DISH_BY_ID[c.dish];
+    const total = c.total || def.cook;
+    const left = Math.max(0, c.endsAt - Date.now());
+    const ready = left <= 0;
+    const pct = Math.min(100, ((total - left) / total) * 100).toFixed(1);
+    h +=
+      `<div class="card" data-cook="${i}"><span class="big">${def.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(c.dish))} ${stk(c.dish)}` +
+      (ready
+        ? ' <span class="badge ready">✓</span>'
+        : ` <span class="badge">${fmtTime(left)}</span>`) +
+      "</div>" +
+      `<div class="pbar${ready ? "" : " warm"}" data-cbar="${i}"><i style="width:${pct}%"></i></div></div>` +
+      `<div class="right"><button class="btn go sm" data-act="collectcook" data-arg="${i}"${ready ? "" : " disabled"}>` +
+      `${esc(MG.i18n.t("collect"))}</button></div></div>`;
+  });
+  h += freeSlotsCard("🍳", freeStoves);
+
+  h += `<div class="section-h">${esc(MG.i18n.t("recipes"))}</div>`;
+  const freeStove = state.cooks.some((c) => !c);
+  DISHES.forEach((d) => {
+    const lock = !isUnlocked(d.lvl);
+    const can = hasRecipe(d.recipe);
+    let ings = "";
+    for (const k in d.recipe) {
+      const miss = (state.inv[k] || 0) < d.recipe[k];
+      ings += `<span class="ing${miss ? " miss" : ""}">${ITEM[k].ico} ${state.inv[k] || 0}/${d.recipe[k]}</span>`;
+    }
+    h +=
+      `<div class="card${lock ? " locked" : ""}"><span class="big">${d.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(d.id))} ${stk(d.id)} <span class="badge lock">+${d.xp} XP</span></div>` +
+      (lock
+        ? `<div class="sub">🔒 ${esc(tf("needLevel", { n: d.lvl }))}</div>`
+        : `<div class="ingredients">${ings}</div>`) +
+      "</div><div class='right'>" +
+      (lock
+        ? ""
+        : `<button class="btn sm" data-act="cook" data-arg="${d.id}"${can && freeStove ? "" : " disabled"}>${esc(MG.i18n.t("cook"))}</button>`) +
+      "</div></div>";
+  });
+  return h;
+}
+function fmtTime(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}:${`0${s % 60}`.slice(-2)}`;
+}
+
+/* ----------------------------- GREENHOUSE ---------------------------- */
+// Flower pots mirror the kitchen's stoves: plant a flower into a free pot,
+// it grows on a timer, then you collect the bloom into storage.
+function renderGreenhouse(): string {
+  let h = tipLine("tipGreenhouse");
+
+  h += `<div class="section-h">${esc(MG.i18n.t("pots"))} (${state.potCap})</div>`;
+  h += collectAllBar("pot", readyCounts().pot);
+  let freePots = 0;
+  state.pots.forEach((p, i) => {
+    if (!p) {
+      freePots++;
+      return;
+    }
+    const def = FLOWER_BY_ID[p.flower];
+    const total = p.total || def.grow;
+    const left = Math.max(0, p.endsAt - Date.now());
+    const ready = left <= 0;
+    const pct = Math.min(100, ((total - left) / total) * 100).toFixed(1);
+    h +=
+      `<div class="card" data-pot="${i}"><span class="big">${def.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(p.flower))} ${stk(p.flower)}` +
+      (ready
+        ? ' <span class="badge ready">✓</span>'
+        : ` <span class="badge">${fmtTime(left)}</span>`) +
+      "</div>" +
+      `<div class="pbar${ready ? "" : " warm"}" data-potbar="${i}"><i style="width:${pct}%"></i></div></div>` +
+      `<div class="right"><button class="btn go sm" data-act="collectpot" data-arg="${i}"${ready ? "" : " disabled"}>` +
+      `${esc(MG.i18n.t("collect"))}</button></div></div>`;
+  });
+  h += freeSlotsCard("🪴", freePots);
+  if (state.potCap < MAX_POTS) {
+    h += upgradeCard(
+      "pot",
+      "🪴",
+      MG.i18n.t("buyPot"),
+      `${state.potCap} → ${state.potCap + 1}`,
+      potCost(),
+    );
+  }
+
+  h += `<div class="section-h">${esc(MG.i18n.t("flowers"))}</div>`;
+  const freePot = state.pots.some((p) => !p);
+  FLOWERS.forEach((f) => {
+    const lock = !isUnlocked(f.lvl);
+    const canPay = state.coins >= f.seed;
+    h +=
+      `<div class="card${lock ? " locked" : ""}"><span class="big">${f.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(f.id))} ${stk(f.id)} <span class="badge lock">+${f.xp} XP</span></div>` +
+      (lock
+        ? `<div class="sub">🔒 ${esc(tf("needLevel", { n: f.lvl }))}</div>`
+        : `<div class="sub">🪙 ${f.seed} · ⏲️ ${fmtTime(f.grow)} · ${priceHtml(f.id)}</div>`) +
+      "</div><div class='right'>" +
+      (lock
+        ? ""
+        : `<button class="btn sm" data-act="plant" data-arg="${f.id}"${canPay && freePot ? "" : " disabled"}>${esc(MG.i18n.t("plant"))}</button>`) +
+      "</div></div>";
+  });
+  return h;
+}
+
+/* ------------------------------- APIARY ------------------------------ */
+// Beehives mirror animals but need no feeding: each fills with honey on a
+// timer, then you collect a jar. Buy more hives up to MAX_HIVES.
+function renderApiary(): string {
+  let h = tipLine("tipApiary");
+  h += `<div class="section-h">${esc(MG.i18n.t("hives"))} (${state.hives.length}/${MAX_HIVES})</div>`;
+  if (!state.hives.length) {
+    h += `<div class="empty-note">🐝🍯<br>${esc(MG.i18n.t("apiaryEmpty"))}</div>`;
+  }
+  h += collectAllBar("hive", readyCounts().hive);
+  const honey = ITEM.honey;
+  state.hives.forEach((hv, i) => {
+    const ready = hv.grown >= HIVE_MS;
+    const left = Math.max(0, HIVE_MS - hv.grown);
+    const pct = Math.min(100, (hv.grown / HIVE_MS) * 100).toFixed(1);
+    h +=
+      `<div class="card" data-hive="${i}"><span class="big">🐝</span><div class="body">` +
+      `<div class="ttl">${honey.ico} ${esc(name("honey"))} ${stk("honey")}` +
+      (ready
+        ? ` <span class="badge ready">${honey.ico}</span>`
+        : ` <span class="badge">${fmtTime(left)}</span>`) +
+      "</div>" +
+      `<div class="pbar${ready ? "" : " warm"}" data-hivebar="${i}"><i style="width:${pct}%"></i></div></div>` +
+      `<div class="right"><button class="btn go sm" data-act="collecthive" data-arg="${i}"${ready ? "" : " disabled"}>` +
+      `${esc(MG.i18n.t("collect"))}</button></div></div>`;
+  });
+  if (state.hives.length < MAX_HIVES) {
+    h += upgradeCard(
+      "hive",
+      "🐝",
+      MG.i18n.t("buyHive"),
+      `${state.hives.length} → ${state.hives.length + 1}`,
+      hiveCost(),
+    );
+  }
+  return h;
+}
+
+/* ------------------------------- MARKET ------------------------------ */
+function priceHtml(id: string): string {
+  const m = state.prices[id] || 1;
+  const arrow =
+    m > 1.08 ? '<span class="up">▲</span>' : m < 0.92 ? '<span class="down">▼</span>' : "";
+  return `<span class="price">🪙 ${price(id)} ${arrow}</span>`;
+}
+function renderMarket(): string {
+  let h = tipLine("tipMarket");
+
+  h += `<div class="section-h">${esc(MG.i18n.t("mSell"))}</div>`;
+  const ids: string[] = [];
+  for (const id in ITEM) if (state.inv[id]) ids.push(id);
+  ids.sort((a, b) => price(b) - price(a));
+  if (!ids.length) {
+    h += `<div class="empty-note">${esc(MG.i18n.t("emptyStore"))}</div>`;
+  } else {
+    ids.forEach((id) => {
+      h +=
+        `<div class="card"><span class="big">${ITEM[id].ico}</span><div class="body">` +
+        `<div class="ttl">${esc(name(id))} ${stk(id)}</div>` +
+        `<div class="sub">${priceHtml(id)}</div></div>` +
+        `<div class="right" style="flex-direction:row">` +
+        `<button class="btn alt sm" data-act="sell" data-arg="${id}">${esc(MG.i18n.t("sell"))}</button>` +
+        `<button class="btn sm" data-act="sellall" data-arg="${id}">${esc(MG.i18n.t("sellAll"))}</button>` +
+        "</div></div>";
+    });
+  }
+
+  h += `<div class="section-h">${esc(MG.i18n.t("mAnimals"))}</div>`;
+  ANIMALS.forEach((a) => {
+    const lock = !isUnlocked(a.lvl);
+    const owned = countAnimals(a.id);
+    const full = owned >= MAX_PER_ANIMAL;
+    const can = !lock && !full && state.coins >= a.cost;
+    h +=
+      `<div class="card${lock ? " locked" : ""}"><span class="big">${a.ico}</span><div class="body">` +
+      `<div class="ttl">${esc(name(a.id))} <span class="badge lock">${esc(tf("owned", { n: owned, max: MAX_PER_ANIMAL }))}</span></div>` +
+      (lock
+        ? `<div class="sub">🔒 ${esc(tf("needLevel", { n: a.lvl }))}</div>`
+        : `<div class="sub">${ITEM[a.prod].ico} ${esc(name(a.prod))} ${stk(a.prod)} · 🍽️ ${ITEM[a.feed].ico} ${esc(name(a.feed))} ${stk(a.feed)}</div>`) +
+      "</div><div class='right'>" +
+      (lock
+        ? ""
+        : full
+          ? `<span class="badge lock">${esc(tf("penFull", { n: MAX_PER_ANIMAL }))}</span>`
+          : `<button class="btn sm" data-act="buyanimal" data-arg="${a.id}"${can ? "" : " disabled"}>🪙 ${a.cost}</button>`) +
+      "</div></div>";
+  });
+
+  h += `<div class="section-h">${esc(MG.i18n.t("mUpgrades"))}</div>`;
+  h += upgradeCard("cap", "📦", MG.i18n.t("upCap"), `${state.cap} → ${state.cap + 20}`, capCost());
+  h += upgradeCard(
+    "stove",
+    "🍳",
+    MG.i18n.t("upStove"),
+    `${state.stoves} → ${state.stoves + 1}`,
+    stoveCost(),
+  );
+  const soilSub = tf("upSoilSub", { n: Math.round((state.soil + 1) * SOIL_STEP * 100) });
+  h += upgradeCard("soil", "🌱", MG.i18n.t("upSoil"), soilSub, soilCost(), state.soil >= MAX_SOIL);
+  const sprSub = MG.i18n.t("upSprinklerSub") + (state.sprinkler ? ` · ⚡${state.sprinkler}` : "");
+  h += upgradeCard(
+    "sprinkler",
+    "💧",
+    MG.i18n.t("upSprinkler"),
+    sprSub,
+    sprinklerCost(),
+    state.sprinkler >= MAX_SPRINKLER,
+  );
+  const ovenSub = tf("upOvenSub", { n: Math.round((state.oven + 1) * OVEN_STEP * 100) });
+  h += upgradeCard("oven", "🔥", MG.i18n.t("upOven"), ovenSub, ovenCost(), state.oven >= MAX_OVEN);
+  const heaterSub = tf("upHeaterSub", { n: Math.round((state.heater + 1) * HEATER_STEP * 100) });
+  h += upgradeCard(
+    "heater",
+    "🌡️",
+    MG.i18n.t("upHeater"),
+    heaterSub,
+    heaterCost(),
+    state.heater >= MAX_HEATER,
+  );
+  const tradeSub = tf("upTradeSub", { n: Math.round((state.trade + 1) * TRADE_STEP * 100) });
+  h += upgradeCard(
+    "trade",
+    "🤝",
+    MG.i18n.t("upTrade"),
+    tradeSub,
+    tradeCost(),
+    state.trade >= MAX_TRADE,
+  );
+  return h;
+}
+function upgradeCard(
+  id: string,
+  ico: string,
+  ttl: string,
+  sub: string,
+  cost: number,
+  maxed?: boolean,
+): string {
+  const right = maxed
+    ? `<span class="badge lock">${esc(MG.i18n.t("maxed"))}</span>`
+    : `<button class="btn sm" data-act="upgrade" data-arg="${id}"${state.coins < cost ? " disabled" : ""}>🪙 ${cost}</button>`;
+  return (
+    `<div class="card"><span class="big">${ico}</span><div class="body">` +
+    `<div class="ttl">${esc(ttl)}</div><div class="sub">${esc(sub)}</div></div>` +
+    `<div class="right">${right}</div></div>`
+  );
+}
+
+/* ------------------------------- QUESTS ------------------------------ */
+function renderQuests(): string {
+  let h = tipLine("tipQuests");
+  state.quests.forEach((q, i) => {
+    if (!q) {
+      h += `<div class="card"><div class="body"><div class="sub">${esc(MG.i18n.t("newOrder"))}</div></div></div>`;
+      return;
+    }
+    const have = state.inv[q.item] || 0;
+    const can = have >= q.need;
+    h +=
+      `<div class="card"><span class="big">${ITEM[q.item].ico}</span><div class="body">` +
+      `<div class="ttl">${esc(MG.i18n.t("wants"))} ${q.need}× ${esc(name(q.item))}` +
+      ` <span class="badge ${can ? "ready" : "lock"}">${have}/${q.need}</span></div>` +
+      `<div class="sub">${stk(q.item)} · 🎁 🪙 ${q.coins} · +${q.xp} XP</div></div>` +
+      `<div class="right"><button class="btn go sm" data-act="quest" data-arg="${i}"${can ? "" : " disabled"}>${esc(MG.i18n.t("deliver"))}</button></div></div>`;
+  });
+  return h;
+}
+
+/* ======================================================================
+ *  LIVE PATCH — cheap per-frame update of volatile bits.
+ * ==================================================================== */
+export function patch(): void {
+  const cells = dom.world.querySelectorAll("[data-plotcell]");
+  for (let ci = 0; ci < cells.length; ci++) {
+    const cell = cells[ci];
+    const i = +(cell.getAttribute("data-plotcell") as string);
+    if (i >= state.unlocked) continue;
+    const p = state.plots[i];
+    if (cell.classList.contains("locked")) continue;
+    const spr = cell.querySelector(".sprite");
+    const bar = cell.querySelector(".bar > i") as HTMLElement | null;
+    if (!p.crop) {
+      if (spr?.textContent) spr.textContent = "";
+      cell.className = "plot empty";
+      if (bar) bar.style.width = "0%";
+      continue;
+    }
+    const c = CROP_BY_ID[p.crop];
+    const rdy = p.grown >= c.grow;
+    const cls = `plot${rdy ? " ready" : p.water > 0 ? " watered" : ""}${p.fert ? " fert" : ""}`;
+    if (cell.className !== cls) cell.className = cls;
+    const s = plotSprite(p);
+    if (spr && spr.textContent !== s) spr.textContent = s;
+    if (bar) bar.style.width = `${Math.min(100, (p.grown / c.grow) * 100).toFixed(1)}%`;
+  }
+  if (state.tab === "cook") {
+    state.cooks.forEach((c, i) => {
+      if (!c) return;
+      const def = DISH_BY_ID[c.dish];
+      const total = c.total || def.cook;
+      const left = Math.max(0, c.endsAt - Date.now());
+      const bar = dom.overlay.querySelector(`[data-cbar="${i}"] > i`) as HTMLElement | null;
+      if (bar) bar.style.width = `${Math.min(100, ((total - left) / total) * 100).toFixed(1)}%`;
+    });
+  } else if (state.tab === "greenhouse") {
+    state.pots.forEach((p, i) => {
+      if (!p) return;
+      const def = FLOWER_BY_ID[p.flower];
+      const total = p.total || def.grow;
+      const left = Math.max(0, p.endsAt - Date.now());
+      const bar = dom.overlay.querySelector(`[data-potbar="${i}"] > i`) as HTMLElement | null;
+      if (bar) bar.style.width = `${Math.min(100, ((total - left) / total) * 100).toFixed(1)}%`;
+    });
+  } else if (state.tab === "apiary") {
+    state.hives.forEach((hv, i) => {
+      const bar = dom.overlay.querySelector(`[data-hivebar="${i}"] > i`) as HTMLElement | null;
+      if (bar) bar.style.width = `${Math.min(100, (hv.grown / HIVE_MS) * 100).toFixed(1)}%`;
+    });
+  }
+}
+
+// Refresh one animal cell's look in place during a pen sweep.
+export function updateAnimCell(el: Element, i: number): void {
+  const a = state.animals[i];
+  if (!a) return;
+  const def = ANIMAL_BY_ID[a.type];
+  const rdy = a.grown >= def.interval;
+  const fed = Date.now() < a.feedUntil;
+  el.className = `an${rdy ? " rdy" : fed ? " fed" : " hungry"}`;
+  if (!rdy) {
+    const prod = el.querySelector(".prod");
+    if (prod?.parentNode) prod.parentNode.removeChild(prod);
+  }
+}

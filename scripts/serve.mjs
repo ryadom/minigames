@@ -6,12 +6,15 @@
 // This is *only* a dev convenience. The site itself has no build step and is
 // deployed as-is (see CLAUDE.md / .github/workflows/deploy.yml).
 
-import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { createServer } from "node:http";
+import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { dirname, join, normalize, extname } from "node:path";
 
-const ROOT = normalize(join(dirname(fileURLToPath(import.meta.url)), ".."));
+// Serve the build output (dist/) when SERVE_ROOT is set, else the repo root.
+const ROOT = process.env.SERVE_ROOT
+  ? normalize(resolve(process.env.SERVE_ROOT))
+  : normalize(join(dirname(fileURLToPath(import.meta.url)), ".."));
 const PORT = Number(process.env.PORT || 8000);
 
 const MIME = {
@@ -34,7 +37,7 @@ const MIME = {
 const server = createServer(async (req, res) => {
   try {
     // Strip query string and decode, then resolve safely under ROOT.
-    let pathname = decodeURIComponent((req.url || "/").split("?")[0]);
+    const pathname = decodeURIComponent((req.url || "/").split("?")[0]);
     let filePath = normalize(join(ROOT, pathname));
 
     // Prevent path traversal outside the project root.
