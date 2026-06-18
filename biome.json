@@ -7,7 +7,16 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["shared/**/*.ts", "games/**/*.ts", "build.ts", "global.d.ts", "scripts/**/*.mjs"]
+    "includes": [
+      "shared/**/*.ts",
+      "games/**/*.ts",
+      "app.ts",
+      "games.ts",
+      "sw.ts",
+      "build.ts",
+      "global.d.ts",
+      "scripts/**/*.mjs"
+    ]
   },
   "formatter": {
     "enabled": true,

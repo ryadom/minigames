@@ -18,5 +18,13 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["shared/**/*.ts", "games/**/*.ts", "build.ts", "global.d.ts"]
+  "include": [
+    "shared/**/*.ts",
+    "games/**/*.ts",
+    "app.ts",
+    "games.ts",
+    "sw.ts",
+    "build.ts",
+    "global.d.ts"
+  ]
 }

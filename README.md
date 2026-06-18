@@ -17,18 +17,10 @@ The site is a **static site** served straight from GitHub Pages — there is no
 runtime framework. The sources are **TypeScript**, compiled and bundled with
 [Bun](https://bun.sh) into a `dist/` folder that *is* the deployed site.
 
-The migration to TypeScript is incremental:
-
-- **Migrated** code (the shared runtime and the 🚜 Farm game) is written as
-  TypeScript **ES modules** and bundled per page.
-- **Not-yet-migrated** games are still plain JS and load the shared runtime the
-  classic way, via a `<script src=".../shared/mg.js">` tag that publishes
-  `window.MG`.
-
-The build (`build.ts`) supports both at once: it emits the shared runtime as a
-classic IIFE global script (`dist/shared/mg.js`) for legacy games, and inlines
-it into the module bundles of migrated games. So nothing breaks while games are
-ported one at a time.
+The whole site is **TypeScript ES modules** — the home page, every game, the
+shared runtime and the service worker. Each page imports the shared runtime
+directly and the bundler inlines it into that page's module, so there's no
+standalone runtime script to ship.
 
 A small shared runtime gives every page consistent chrome:
 
@@ -39,13 +31,14 @@ A small shared runtime gives every page consistent chrome:
 | Path                            | Purpose                                              |
 | ------------------------------- | ---------------------------------------------------- |
 | `index.html`                    | Home page shell                                      |
-| `games.js`                      | Registry of games (`window.GAMES`)                   |
-| `app.js`                        | Renders the game list + home language switch         |
+| `games.ts`                      | Registry of games (exports `GAMES`)                  |
+| `app.ts`                        | Renders the game list + home language switch         |
+| `sw.ts`                         | Service worker (offline cache, scope `/`)            |
 | `shared/mg.ts`                  | Shared runtime: i18n + header + save store (`MG`)    |
 | `shared/cards.ts`               | Shared playing-card runtime (`MG.cards`)             |
 | `shared/types.ts`               | Public TypeScript types for the shared runtime       |
 | `shared/*.css`                  | Shared chrome / card styles                          |
-| `games/*/index.html`            | The games (TS modules or legacy JS)                  |
+| `games/*/`                      | The games (TS ES modules, entry `js/main.ts`)        |
 | `build.ts`                      | Bun build → `dist/`                                  |
 | `tsconfig.json` / `biome.json`  | TypeScript + Biome (lint/format) config              |
 | `scripts/`                      | Dev server + structure validator                     |
@@ -109,12 +102,13 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full API.
    Use `<body class="mg-app">` with a `<div class="mg-game-area">` host, then
    `MG.i18n.register(...)` and `MG.mountHeader(...)`.
 
-2. Add the game's entry point to `build.ts` so it gets bundled.
+2. Add the game's entry point to the `GAMES` list in `build.ts` so it gets
+   bundled.
 
-3. Register it in `games.js`:
+3. Register it in `games.ts` (append to the exported `GAMES` array):
 
-   ```js
-   window.GAMES = [
+   ```ts
+   export const GAMES: Game[] = [
      {
        title: "Snake",
        icon: "🐍",
