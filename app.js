@@ -15,6 +15,14 @@
       menu: "Options",
       clearSave: "Clear save data",
       confirmClear: "Delete saved progress for {game}? This can't be undone.",
+      "tag.puzzle": "Puzzle",
+      "tag.logic": "Logic",
+      "tag.arcade": "Arcade",
+      "tag.action": "Action",
+      "tag.survival": "Survival",
+      "tag.casual": "Casual",
+      "tag.simulation": "Simulation",
+      "tag.racing": "Racing",
     },
     ru: {
       tagline: "Коллекция бесплатных браузерных мини-игр. Без установок и регистрации — просто играй.",
@@ -26,6 +34,14 @@
       menu: "Меню",
       clearSave: "Удалить сохранение",
       confirmClear: "Удалить сохранение для {game}? Это нельзя отменить.",
+      "tag.puzzle": "Головоломка",
+      "tag.logic": "Логика",
+      "tag.arcade": "Аркада",
+      "tag.action": "Экшен",
+      "tag.survival": "Выживание",
+      "tag.casual": "Казуальная",
+      "tag.simulation": "Симулятор",
+      "tag.racing": "Гонки",
     },
     es: {
       tagline: "Una colección de minijuegos gratis para el navegador. Sin instalar, sin registros — solo juega.",
@@ -37,6 +53,14 @@
       menu: "Opciones",
       clearSave: "Borrar datos guardados",
       confirmClear: "¿Borrar el progreso guardado de {game}? No se puede deshacer.",
+      "tag.puzzle": "Rompecabezas",
+      "tag.logic": "Lógica",
+      "tag.arcade": "Arcade",
+      "tag.action": "Acción",
+      "tag.survival": "Supervivencia",
+      "tag.casual": "Casual",
+      "tag.simulation": "Simulación",
+      "tag.racing": "Carreras",
     },
   });
 
@@ -59,6 +83,28 @@
       return value[MG.i18n.lang] || value.en || "";
     }
     return value || "";
+  }
+
+  // Resolve a tag key to its label: prefer the shared `tag.<key>` table, but
+  // fall back to the key itself so an unregistered tag still renders readably.
+  function localizeTag(tag) {
+    var key = "tag." + tag;
+    var label = MG.i18n.t(key);
+    return label === key ? String(tag) : label;
+  }
+
+  // Order games most-recently-played first (by their save timestamp), keeping
+  // the registry order as a stable tiebreak for never-played games.
+  function sortByRecent(list, saves) {
+    return list
+      .map(function (game, i) {
+        var save = saves[saveNameFor(game.url)];
+        return { game: game, idx: i, at: save && save.savedAt ? save.savedAt : 0 };
+      })
+      .sort(function (a, b) {
+        return b.at - a.at || a.idx - b.idx;
+      })
+      .map(function (x) { return x.game; });
   }
 
   // Build the language selector from the shared list of supported languages.
@@ -135,7 +181,7 @@
       }
     };
 
-    games.forEach(function (game) {
+    sortByRecent(games, saves).forEach(function (game) {
       var titleText = localize(game.title);
       var save = saves[saveNameFor(game.url)];
 
@@ -161,6 +207,19 @@
       card.appendChild(icon);
       card.appendChild(title);
       card.appendChild(desc);
+
+      // Category tags, shown as a row of small chips under the description.
+      if (Array.isArray(game.tags) && game.tags.length) {
+        var tags = document.createElement("ul");
+        tags.className = "game-tags";
+        game.tags.forEach(function (tag) {
+          var chip = document.createElement("li");
+          chip.className = "game-tag";
+          chip.textContent = localizeTag(tag);
+          tags.appendChild(chip);
+        });
+        card.appendChild(tags);
+      }
 
       // Last-played line, shown only for games with a saved game in this browser.
       if (save) {
