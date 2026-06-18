@@ -562,7 +562,7 @@
     h += '<div class="section-h">' + esc(MG.i18n.t("mAnimals")) + "</div>";
     ANIMALS.forEach(function (a) {
       var lock = !isUnlocked(a.lvl);
-      var owned = countAnimals(a.type);
+      var owned = countAnimals(a.id);
       var full = owned >= MAX_PER_ANIMAL;
       var can = !lock && !full && state.coins >= a.cost;
       h += '<div class="card' + (lock ? " locked" : "") + '"><span class="big">' + a.ico + '</span><div class="body">' +

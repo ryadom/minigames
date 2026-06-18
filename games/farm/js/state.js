@@ -66,7 +66,7 @@
   // and an optional collector (auto-gathers produce into storage).
   function freshPens() {
     var o = {};
-    ANIMALS.forEach(function (a) { o[a.type] = { feeder: false, collector: false, feed: 0 }; });
+    ANIMALS.forEach(function (a) { o[a.id] = { feeder: false, collector: false, feed: 0 }; });
     return o;
   }
   function ensurePen(type) {
@@ -164,9 +164,9 @@
       }
       if (d.pens && typeof d.pens === "object") {
         ANIMALS.forEach(function (a) {
-          var pd = d.pens[a.type];
+          var pd = d.pens[a.id];
           if (pd && typeof pd === "object") {
-            state.pens[a.type] = {
+            state.pens[a.id] = {
               feeder: !!pd.feeder,
               collector: !!pd.collector,
               feed: Math.max(0, Math.min(FEEDER_CAP, Math.floor(+pd.feed || 0)))
@@ -259,8 +259,8 @@
       pens: (function () {
         var o = {};
         ANIMALS.forEach(function (a) {
-          var p = state.pens[a.type] || {};
-          o[a.type] = { feeder: !!p.feeder, collector: !!p.collector, feed: Math.round(p.feed || 0) };
+          var p = state.pens[a.id] || {};
+          o[a.id] = { feeder: !!p.feeder, collector: !!p.collector, feed: Math.round(p.feed || 0) };
         });
         return o;
       })(),
