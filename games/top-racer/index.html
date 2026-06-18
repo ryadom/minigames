@@ -115,7 +115,10 @@
       justify-content: center;
       text-align: center;
       padding: 24px;
-      pointer-events: none;
+      /* The overlay is only shown in ready/finished states (hidden during the
+         race), so it can safely capture pointer events for the start tap. */
+      pointer-events: auto;
+      cursor: pointer;
     }
     .overlay.hidden { display: none; }
 
