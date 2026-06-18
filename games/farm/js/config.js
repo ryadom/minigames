@@ -1,0 +1,155 @@
+/* ============================================================================
+ *  Farm — configuration & content (window.Farm namespace bootstrap).
+ *
+ *  The game is split across several plain <script> files that all share one
+ *  global namespace, `window.Farm`. This first file establishes that
+ *  namespace and a tiny init mechanism, then defines the static content of
+ *  the game: tuning constants, the crop / flower / product / animal / dish
+ *  tables, and the lookup maps derived from them.
+ *
+ *  Modules wire themselves together via `Farm.ready(fn)`: each module queues
+ *  a callback that runs once at boot (after every file has loaded), where it
+ *  binds the cross-module functions / live state it needs into local
+ *  variables. This keeps function bodies free of namespace prefixes while
+ *  staying correct as files load in any order. Static content defined here is
+ *  available to every later file immediately, since this file loads first.
+ * ========================================================================== */
+window.Farm = window.Farm || {};
+
+(function (Farm) {
+  "use strict";
+
+  // ---- Init mechanism: modules register a binding step run once at boot. ----
+  Farm._inits = [];
+  Farm.ready = function (fn) { Farm._inits.push(fn); };
+  Farm.runInits = function () { for (var i = 0; i < Farm._inits.length; i++) Farm._inits[i](); };
+
+  // ---- Tiny generic helpers ----
+  Farm.$ = function (id) { return document.getElementById(id); };
+  Farm.esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+
+  /* ======================================================================
+   *  CONTENT TABLES
+   *  Growth / production / cooking are all time-based (timestamps or
+   *  accumulated game-ms) so progress advances across sessions.
+   * ==================================================================== */
+
+  // Crops: seed cost (coins), grow time (ms), base sell price, xp on harvest.
+  var CROPS = [
+    { id: "wheat",      ico: "🌾", seed: 3,  grow: 16000,  sell: 5,  xp: 1, lvl: 1 },
+    { id: "carrot",     ico: "🥕", seed: 6,  grow: 28000,  sell: 11, xp: 2, lvl: 1 },
+    { id: "potato",     ico: "🥔", seed: 9,  grow: 44000,  sell: 17, xp: 3, lvl: 2 },
+    { id: "tomato",     ico: "🍅", seed: 12, grow: 52000,  sell: 22, xp: 4, lvl: 3 },
+    { id: "corn",       ico: "🌽", seed: 15, grow: 64000,  sell: 27, xp: 4, lvl: 4 },
+    { id: "strawberry", ico: "🍓", seed: 20, grow: 80000,  sell: 36, xp: 5, lvl: 5 },
+    { id: "blueberry",  ico: "🫐", seed: 24, grow: 96000,  sell: 46, xp: 6, lvl: 6 },
+    { id: "pumpkin",    ico: "🎃", seed: 28, grow: 120000, sell: 56, xp: 7, lvl: 7 },
+    { id: "eggplant",   ico: "🍆", seed: 34, grow: 140000, sell: 70, xp: 9, lvl: 8 },
+    { id: "grape",      ico: "🍇", seed: 44, grow: 168000, sell: 92, xp: 11, lvl: 10 },
+    { id: "chili",      ico: "🌶️", seed: 52, grow: 150000, sell: 112, xp: 13, lvl: 11 },
+    { id: "watermelon", ico: "🍉", seed: 66, grow: 196000, sell: 145, xp: 16, lvl: 12 },
+    { id: "pineapple",  ico: "🍍", seed: 84, grow: 244000, sell: 186, xp: 20, lvl: 14 }
+  ];
+
+  // Flowers: grown in greenhouse pots (no water needed), high value, prized
+  // by orders. Like dishes, a pot runs on an end timestamp.
+  var FLOWERS = [
+    { id: "tulip",     ico: "🌷", seed: 18, grow: 60000,  sell: 30, xp: 5, lvl: 5 },
+    { id: "rose",      ico: "🌹", seed: 30, grow: 110000, sell: 56, xp: 8, lvl: 7 },
+    { id: "sunflower", ico: "🌻", seed: 46, grow: 165000, sell: 88, xp: 12, lvl: 9 },
+    { id: "daisy",     ico: "🌼", seed: 60, grow: 140000, sell: 112, xp: 14, lvl: 11 },
+    { id: "lotus",     ico: "🪷", seed: 80, grow: 186000, sell: 152, xp: 18, lvl: 13 }
+  ];
+
+  // Products come from animals.
+  var PRODUCTS = [
+    { id: "egg",     ico: "🥚", sell: 14, xp: 2 },
+    { id: "milk",    ico: "🥛", sell: 26, xp: 3 },
+    { id: "wool",    ico: "🧶", sell: 34, xp: 4 },
+    { id: "truffle", ico: "🍄", sell: 52, xp: 6 },
+    { id: "honey",   ico: "🍯", sell: 40, xp: 5 }
+  ];
+
+  // Animals: kept in pens out on the map, fed a crop, produce a product on a timer.
+  var ANIMALS = [
+    { id: "chicken", ico: "🐔", cost: 45,  prod: "egg",     feed: "wheat",  interval: 30000,  lvl: 2 },
+    { id: "cow",     ico: "🐄", cost: 130, prod: "milk",    feed: "corn",   interval: 70000,  lvl: 4 },
+    { id: "sheep",   ico: "🐑", cost: 175, prod: "wool",    feed: "carrot", interval: 95000,  lvl: 6 },
+    { id: "pig",     ico: "🐖", cost: 240, prod: "truffle", feed: "potato", interval: 120000, lvl: 8 }
+  ];
+
+  // Dishes: cooked from a recipe in the kitchen, worth far more than raw goods.
+  var DISHES = [
+    { id: "bread",    ico: "🍞", cook: 22000, sell: 20,  xp: 3,  lvl: 2, recipe: { wheat: 2 } },
+    { id: "salad",    ico: "🥗", cook: 28000, sell: 44,  xp: 5,  lvl: 3, recipe: { carrot: 1, tomato: 1 } },
+    { id: "omelette", ico: "🍳", cook: 34000, sell: 66,  xp: 7,  lvl: 4, recipe: { egg: 2, tomato: 1 } },
+    { id: "soup",     ico: "🍲", cook: 42000, sell: 90,  xp: 9,  lvl: 5, recipe: { potato: 1, carrot: 1, corn: 1 } },
+    { id: "pizza",    ico: "🍕", cook: 50000, sell: 124, xp: 12, lvl: 6, recipe: { wheat: 1, tomato: 1, milk: 1 } },
+    { id: "cake",     ico: "🍰", cook: 56000, sell: 150, xp: 14, lvl: 6, recipe: { wheat: 1, egg: 1, milk: 1 } },
+    { id: "burger",   ico: "🍔", cook: 60000, sell: 168, xp: 15, lvl: 7, recipe: { wheat: 1, tomato: 1, eggplant: 1 } },
+    { id: "pie",      ico: "🥧", cook: 64000, sell: 190, xp: 17, lvl: 7, recipe: { pumpkin: 1, egg: 1, wheat: 1 } },
+    { id: "icecream", ico: "🍨", cook: 58000, sell: 210, xp: 19, lvl: 8, recipe: { milk: 1, strawberry: 1, blueberry: 1 } },
+    { id: "juice",    ico: "🧃", cook: 48000, sell: 240, xp: 22, lvl: 10, recipe: { grape: 2 } },
+    { id: "honeytea", ico: "🍵", cook: 42000, sell: 150, xp: 14, lvl: 8,  recipe: { honey: 1, strawberry: 1 } },
+    { id: "pancake",  ico: "🥞", cook: 54000, sell: 186, xp: 16, lvl: 9,  recipe: { wheat: 1, egg: 1, honey: 1 } },
+    { id: "taco",     ico: "🌮", cook: 60000, sell: 216, xp: 19, lvl: 12, recipe: { corn: 1, tomato: 1, chili: 1 } }
+  ];
+
+  // Master item table (everything that can sit in storage).
+  var ITEM = {};
+  CROPS.forEach(function (c) { ITEM[c.id] = { id: c.id, ico: c.ico, sell: c.sell, kind: "crop" }; });
+  FLOWERS.forEach(function (f) { ITEM[f.id] = { id: f.id, ico: f.ico, sell: f.sell, kind: "flower" }; });
+  PRODUCTS.forEach(function (p) { ITEM[p.id] = { id: p.id, ico: p.ico, sell: p.sell, kind: "product" }; });
+  DISHES.forEach(function (d) { ITEM[d.id] = { id: d.id, ico: d.ico, sell: d.sell, kind: "dish" }; });
+
+  var CROP_BY_ID = {}; CROPS.forEach(function (c) { CROP_BY_ID[c.id] = c; });
+  var FLOWER_BY_ID = {}; FLOWERS.forEach(function (f) { FLOWER_BY_ID[f.id] = f; });
+  var PROD_BY_ID = {}; PRODUCTS.forEach(function (p) { PROD_BY_ID[p.id] = p; });
+  var ANIMAL_BY_ID = {}; ANIMALS.forEach(function (a) { ANIMAL_BY_ID[a.id] = a; });
+  var DISH_BY_ID = {}; DISHES.forEach(function (d) { DISH_BY_ID[d.id] = d; });
+  var ANIMAL_FOR_PROD = {}; ANIMALS.forEach(function (a) { ANIMAL_FOR_PROD[a.prod] = a; });
+
+  // Growth sprite stages.
+  Farm.SEED_SPRITE = "🌰";
+  Farm.SPROUT_SPRITE = "🌱";
+  Farm.LEAF_SPRITE = "🌿";
+
+  // ---- Tuning constants ----
+  Farm.GRID = 25;            // 5×5 field
+  Farm.START_PLOTS = 6;
+  Farm.WATER_BOOST = 2;      // growth multiplier while watered
+  Farm.WATER_MS = 12000;     // how long a watering lasts (game-time)
+  Farm.FEED_MS = 55000;      // how long one feeding keeps an animal producing
+  Farm.MAX_PER_ANIMAL = 9;   // each pen holds up to this many of its own animal
+  Farm.FEEDER_CAP = 20;      // feed crops a pen's feeder can hold
+  Farm.MARKET_MS = 180000;   // how often market prices re-roll
+  Farm.FERT_COST = 10;       // coins to fertilise a plot (doubles its yield)
+  Farm.START_POTS = 2;       // greenhouse pots you begin with
+  Farm.MAX_POTS = 6;         // greenhouse pot cap
+  Farm.SOIL_STEP = 0.08;     // Rich Soil: growth speed gained per level
+  Farm.MAX_SOIL = 8;
+  Farm.MAX_SPRINKLER = 4;
+  // Apiary: beehives passively make honey on a timer (no feeding). Like
+  // animals, a hive accumulates up to HIVE_MS then offers honey to collect.
+  Farm.APIARY_LVL = 5;       // level the apiary (and first hive) unlocks at
+  Farm.HIVE_MS = 60000;      // time one hive takes to fill with honey
+  Farm.MAX_HIVES = 5;
+  // Workshop upgrades (sold at the Market) that tune timings and trade.
+  Farm.OVEN_STEP = 0.1; Farm.MAX_OVEN = 5;       // each level: dishes cook faster
+  Farm.HEATER_STEP = 0.1; Farm.MAX_HEATER = 5;   // each level: flowers grow faster
+  Farm.TRADE_STEP = 0.06; Farm.MAX_TRADE = 5;    // each level: +% on every sale
+
+  // ---- Expose content tables + lookups ----
+  Farm.CROPS = CROPS;
+  Farm.FLOWERS = FLOWERS;
+  Farm.PRODUCTS = PRODUCTS;
+  Farm.ANIMALS = ANIMALS;
+  Farm.DISHES = DISHES;
+  Farm.ITEM = ITEM;
+  Farm.CROP_BY_ID = CROP_BY_ID;
+  Farm.FLOWER_BY_ID = FLOWER_BY_ID;
+  Farm.PROD_BY_ID = PROD_BY_ID;
+  Farm.ANIMAL_BY_ID = ANIMAL_BY_ID;
+  Farm.DISH_BY_ID = DISH_BY_ID;
+  Farm.ANIMAL_FOR_PROD = ANIMAL_FOR_PROD;
+})(window.Farm);

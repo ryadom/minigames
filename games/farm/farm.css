@@ -1,0 +1,608 @@
+/* ============================================================================
+ *  Farm — game-specific styles.
+ *  Shared chrome (header bar, theme tokens) lives in ../../shared/mg.css;
+ *  everything here is the look of the farm itself: the pannable world, crop
+ *  plots, animal pens, the bottom toolbar and the sliding building panels.
+ * ========================================================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: #8ec96b;
+  color: #2e3b22;
+  font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+/* The game area is a vertical stack: status strip + full-window map. */
+.mg-game-area { display: flex; flex-direction: column; background: #79b557; }
+
+/* ---- Status strip (level / xp / storage) ---- */
+.status {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: rgba(46, 59, 34, 0.16);
+  z-index: 6;
+}
+.status .lvl {
+  font-weight: 800;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.status .xpwrap {
+  flex: 1 1 auto;
+  height: 12px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.status .xpwrap > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #ffe066, #ffb43d);
+  transition: width 0.3s ease;
+}
+.status .store {
+  font-weight: 700;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.status .store.full { color: #b22; }
+
+/* ====================================================================
+ *  THE WORLD — a single, full-window, pannable top-down village. The
+ *  scene (grass, paths, pond, fences, trees and gabled cottages) is one
+ *  big inline SVG; interactive bits (crop plots, animals, building
+ *  signs) are HTML laid precisely over it in world-percent coordinates.
+ *  The whole .world is moved with a CSS transform to pan; it is always
+ *  scaled to *cover* the viewport so the map fills the entire window.
+ * ================================================================== */
+.world-view {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;        /* we handle panning ourselves */
+  cursor: grab;
+  background: linear-gradient(180deg, #bfe6ff 0%, #d8f1ff 14%, #8ec96b 30%);
+}
+.world-view.drag { cursor: grabbing; }
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  container-type: size;       /* enables cqw/cqh sizing for overlays */
+}
+.world > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;       /* taps fall through to the overlays */
+}
+
+/* ---- A crop plot tile, laid over the tilled field in the scene. ---- */
+.plot {
+  position: absolute;
+  border: none;
+  border-radius: 12%;
+  background:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0 6px, transparent 6px 12px),
+    linear-gradient(180deg, #9c6a3e 0%, #8a5a30 100%);
+  box-shadow: inset 0 3px 6px rgba(255,255,255,0.18), inset 0 -4px 8px rgba(0,0,0,0.25);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(1.1rem, 4cqw, 3rem);
+  line-height: 1;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+  color: transparent;
+}
+.plot:active { transform: scale(0.94); }
+.plot.watered {
+  background:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.08) 0 6px, transparent 6px 12px),
+    linear-gradient(180deg, #6f4427 0%, #5d3a20 100%);
+  box-shadow: inset 0 3px 8px rgba(80,140,255,0.25), inset 0 -4px 8px rgba(0,0,0,0.35);
+}
+.plot.locked {
+  background: linear-gradient(180deg, #5d4530 0%, #4a361f 100%);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+}
+.plot.locked .sprite { color: rgba(255,255,255,0.7); font-size: 0.85em; }
+.plot .sprite {
+  display: block;
+  color: #2e3b22;
+  transform-origin: 50% 90%;
+  filter: drop-shadow(0 2px 1px rgba(0,0,0,0.3));
+}
+.plot.ready .sprite { animation: ripe 1.3s ease-in-out infinite; }
+.plot.ready { box-shadow: inset 0 0 0 3px #ffd23f, inset 0 -4px 8px rgba(0,0,0,0.25); }
+.plot.fert::before {
+  content: "✨";
+  position: absolute;
+  top: 4%;
+  right: 6%;
+  font-size: clamp(0.5rem, 2cqw, 0.95rem);
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
+}
+@keyframes ripe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10%) scale(1.06); }
+}
+.plot .bar {
+  position: absolute;
+  left: 10%; right: 10%; bottom: 8%;
+  height: 7%;
+  min-height: 3px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.plot .bar > i {
+  display: block;
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #b6f36a, #6fc92b);
+  transition: width 0.25s linear;
+}
+.plot.ready .bar, .plot.empty .bar, .plot.locked .bar { display: none; }
+.plot .pcost {
+  position: absolute;
+  bottom: 6%;
+  font-size: clamp(0.5rem, 2cqw, 0.9rem);
+  font-weight: 800;
+  color: #ffe9b0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* ---- Building sign: a placard over each drawn cottage. ---- */
+.hotspot {
+  position: absolute;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: #3a2b1a;
+}
+.hotspot::after {
+  content: "";
+  position: absolute;
+  inset: 8% 8% 16%;
+  border-radius: 16%;
+  background: rgba(255, 255, 255, 0);
+  transition: background 0.12s ease;
+  pointer-events: none;
+}
+.hotspot:active::after { background: rgba(255, 255, 255, 0.22); }
+
+.sign {
+  position: absolute;
+  left: 50%;
+  bottom: 1%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(180deg, #fffdf5, #f1e3c4);
+  border-radius: 0.7cqw;
+  padding: 0.2cqw 0.8cqw 0.35cqw;
+  box-shadow: 0 0.45cqw 0 rgba(120, 85, 40, 0.4), 0 0.15cqw 0.4cqw rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.hotspot:active .sign {
+  transform: translateX(-50%) translateY(0.3cqw);
+  box-shadow: 0 0.15cqw 0 rgba(120, 85, 40, 0.4);
+}
+.sign .si { font-size: clamp(0.9rem, 2.1cqw, 2rem); line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2)); }
+.sign .st { font-size: clamp(0.6rem, 1.15cqw, 1.05rem); font-weight: 800; line-height: 1.15; color: #3a2b1a; }
+.sign .ss { font-size: clamp(0.55rem, 1cqw, 0.95rem); font-weight: 700; line-height: 1.15; color: #7a5a30; margin-top: 0.1cqw; }
+
+.b-badge {
+  position: absolute;
+  top: 0;
+  right: 6%;
+  z-index: 3;
+  background: #7fd06a;
+  color: #14310c;
+  font-weight: 800;
+  font-size: clamp(0.6rem, 1.25cqw, 1.05rem);
+  line-height: 1;
+  border-radius: 999px;
+  padding: 0.4cqw 0.8cqw;
+  box-shadow: 0 0.25cqw 0 #4f9b3e;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* ---- Animal pens: one fenced enclosure per animal type, drawn into the
+ *  scene. The whole pen is a hold-and-sweep target — drag across the
+ *  animals to collect what's ready (and feed the hungry ones). ---- */
+.pen-hot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.5cqw 0.3cqw;
+}
+.pen-hot::after { inset: 7% 4% 4%; border-radius: 10%; }
+.pen-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3cqw;
+  font-size: clamp(0.5rem, 1cqw, 0.95rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #3a2b1a;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 1cqw;
+  padding: 0.1cqw 0.7cqw;
+  white-space: nowrap;
+  box-shadow: 0 0.2cqw 0 rgba(120, 85, 40, 0.35);
+  pointer-events: none;
+}
+.pen-animals {
+  flex: 1 1 auto;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 0.2cqw 0.4cqw;
+  padding-top: 0.5cqw;
+}
+.pen-hot .an {
+  position: relative;
+  font-size: clamp(0.9rem, 2.6cqw, 2.2rem);
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  transition: transform 0.08s ease;
+}
+.pen-hot .an.rdy { animation: ripe 1.3s ease-in-out infinite; }
+.pen-hot .an.hungry { opacity: 0.6; filter: grayscale(0.45) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25)); }
+.pen-hot .an .prod {
+  position: absolute;
+  top: -0.35em;
+  right: -0.55em;
+  font-size: 0.62em;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+.pen-buy {
+  font-size: clamp(0.7rem, 1.7cqw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.05;
+  text-align: center;
+  color: #3f5226;
+  opacity: 0.8;
+  margin-top: 0.4cqw;
+}
+.pen-buy .pi { font-size: 1.5em; display: block; filter: grayscale(0.3); opacity: 0.7; }
+.pen-lock {
+  font-size: clamp(0.55rem, 1.2cqw, 1rem);
+  font-weight: 700;
+  color: #3f5226;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.3cqw 0.8cqw;
+  border-radius: 1cqw;
+  margin-top: 0.6cqw;
+}
+
+/* ---- A floating hint badge over the map. ---- */
+.pan-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 30, 14, 0.7);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  max-width: 90%;
+  text-align: center;
+}
+.pan-hint.show { opacity: 1; }
+
+/* ---- Bottom toolbar (seed / tool selector), floating over the map. ---- */
+.toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0));
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  z-index: 5;
+  background: linear-gradient(0deg, rgba(46, 59, 34, 0.42) 0%, rgba(46, 59, 34, 0.16) 70%, transparent 100%);
+}
+.toolbar::-webkit-scrollbar { display: none; }
+.tool {
+  flex: 0 0 auto;
+  min-width: 70px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.95);
+  color: #2e3b22;
+  padding: 6px 9px 7px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.22);
+  transition: transform 0.08s ease, border-color 0.12s ease;
+}
+.tool:active { transform: translateY(2px); }
+.tool.selected {
+  border-color: #ffd23f;
+  box-shadow: 0 4px 0 #c79a00, 0 0 0 3px rgba(255,210,63,0.4);
+}
+.tool.locked { opacity: 0.55; }
+.tool .ico { font-size: 1.5rem; line-height: 1; }
+.tool .name { font-size: 0.68rem; font-weight: 700; }
+.tool .cost { font-size: 0.68rem; font-weight: 800; color: #7a5a00; }
+.tool .cost.lock { color: #8a3030; }
+.tool .stk { margin-top: 1px; }
+
+/* ---- Stock chip — shows how much of an item you currently hold. ---- */
+.stk {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #4a3f1a;
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 7px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.stk.zero { color: #9a2020; background: rgba(200, 40, 40, 0.12); }
+
+/* ---- Generic cards (used inside the building panels) ---- */
+.card {
+  background: rgba(255,255,255,0.94);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card.locked { opacity: 0.55; }
+.card .big { font-size: 2.1rem; line-height: 1; flex: 0 0 auto; }
+.card .body { flex: 1 1 auto; min-width: 0; }
+.card .ttl { font-weight: 800; font-size: 0.98rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.card .sub {
+  font-size: 0.78rem;
+  color: #5a6648;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.card .right { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+
+.ingredients { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.ing {
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(0,0,0,0.05);
+  border-radius: 8px;
+  padding: 2px 7px;
+}
+.ing.miss { background: rgba(200,40,40,0.14); color: #9a2020; }
+
+.pbar {
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(0,0,0,0.16);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.pbar > i {
+  display: block; height: 100%; width: 0%;
+  background: linear-gradient(90deg, #6fc92b, #b6f36a);
+  transition: width 0.25s linear;
+}
+.pbar.warm > i { background: linear-gradient(90deg, #ff9d3d, #ffd23f); }
+
+.btn {
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 0.82rem;
+  border: none;
+  border-radius: 11px;
+  padding: 9px 14px;
+  cursor: pointer;
+  color: #2e3b22;
+  background: #ffd23f;
+  box-shadow: 0 3px 0 #c79a00;
+  transition: transform 0.07s ease, opacity 0.12s;
+  white-space: nowrap;
+}
+.btn:active { transform: translateY(2px); }
+.btn.alt { background: #cfe8b0; box-shadow: 0 3px 0 #93b56e; }
+.btn.go { background: #7fd06a; box-shadow: 0 3px 0 #4f9b3e; color: #14310c; }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; box-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+.btn.sm { padding: 7px 10px; font-size: 0.78rem; }
+
+.badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: #ffd23f;
+  color: #4a3800;
+}
+.badge.ready { background: #7fd06a; color: #14310c; animation: pulse 1.2s ease-in-out infinite; }
+.badge.lock { background: rgba(0,0,0,0.1); color: #5a6648; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+.price { display: inline-flex; align-items: center; gap: 2px; font-weight: 800; }
+.price .up { color: #2f9e2f; }
+.price .down { color: #c23b3b; }
+
+.empty-note {
+  text-align: center;
+  color: #44502f;
+  font-size: 0.85rem;
+  opacity: 0.8;
+  padding: 16px 8px;
+}
+
+/* ---- "Collect all" bar + slim summary cards for empty slots ---- */
+.collect-all { margin: 0 0 10px; }
+.collect-all .btn { width: 100%; }
+.card.slim { padding: 7px 12px; opacity: 0.7; }
+.card.slim .big { font-size: 1.4rem; }
+.card.slim .sub { margin-top: 0; }
+
+.section-h {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #44502f;
+  margin: 14px 2px 8px;
+  opacity: 0.9;
+}
+.section-h:first-child { margin-top: 0; }
+
+/* ---- Sliding panel (market / kitchen / pen / orders) ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(20, 30, 14, 0);
+  pointer-events: none;
+  transition: background 0.2s ease;
+}
+.overlay.show { pointer-events: auto; background: rgba(20, 30, 14, 0.5); }
+.sheet {
+  background: linear-gradient(180deg, #bfe79a 0%, #a7d579 100%);
+  border-radius: 20px 20px 0 0;
+  max-height: 88%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
+  transform: translateY(100%);
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.overlay.show .sheet { transform: translateY(0); }
+.sheet-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #3c5a28, #2f4a1f);
+  color: #fff;
+  border-radius: 20px 20px 0 0;
+}
+.sheet-head .sh-ico { font-size: 1.4rem; line-height: 1; }
+.sheet-head .sh-ttl { font-weight: 800; font-size: 1.02rem; flex: 1 1 auto; }
+.sheet-head .sh-close {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sheet-head .sh-close:active { transform: scale(0.92); }
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px calc(18px + env(safe-area-inset-bottom, 0));
+}
+.sheet-body .wrap { width: 100%; max-width: 520px; margin: 0 auto; }
+
+.tip {
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #2e3b22;
+  opacity: 0.82;
+  margin: 0 auto 12px;
+  max-width: 520px;
+  min-height: 1.05em;
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%) translateY(12px);
+  background: rgba(20, 30, 14, 0.94);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 9px 16px;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 70;
+  max-width: 90vw;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 380px) {
+  .card { padding: 10px 11px; gap: 9px; }
+  .card .big { font-size: 1.8rem; }
+}
