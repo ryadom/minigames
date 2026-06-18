@@ -21,7 +21,7 @@ MG.i18n.register({
       "double click / tap — clear neighbors · auto-flag",
       "RMB / long press — flag",
       "drag — pan",
-      "wheel — zoom",
+      "pinch / wheel — zoom",
       "grid 16×16 — chunk guides",
     ],
   },
@@ -39,7 +39,7 @@ MG.i18n.register({
       "2× клик / тап — раскрыть соседей · авто-флаг",
       "ПКМ / долгий тап — флаг",
       "тащить — двигать",
-      "колесо — зум",
+      "щипок / колесо — зум",
       "сетка 16×16 — разметка чанков",
     ],
   },
@@ -57,7 +57,7 @@ MG.i18n.register({
       "doble clic / toque — abrir vecinas · auto-bandera",
       "Clic der. / mantener — bandera",
       "arrastrar — mover",
-      "rueda — zoom",
+      "pellizcar / rueda — zoom",
       "rejilla 16×16 — guías de chunk",
     ],
   },
@@ -473,6 +473,43 @@ let lastTap = 0;
 let lastTapKey = "";
 const DRAG = 5;
 
+// Multi-touch pinch-to-zoom. We track every active pointer; once two are down
+// we leave pan/tap behind and scale the board around the gesture's midpoint
+// (the touch equivalent of the wheel handler below).
+const pointers = new Map<number, { x: number; y: number }>();
+let pinching = false;
+let pinchStartDist = 0;
+let pinchStartSize = 0;
+let pinchWX = 0;
+let pinchWY = 0;
+
+function startPinch(): void {
+  pinching = true;
+  if (lpTimer !== null) clearTimeout(lpTimer);
+  down = false; // abandon any pan / pending tap in favour of the zoom
+  const pts = Array.from(pointers.values());
+  const r = canvas.getBoundingClientRect();
+  pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+  pinchStartSize = cellSize;
+  const mx = (pts[0].x + pts[1].x) / 2 - r.left;
+  const my = (pts[0].y + pts[1].y) / 2 - r.top;
+  pinchWX = (mx - offsetX) / cellSize;
+  pinchWY = (my - offsetY) / cellSize;
+}
+
+function movePinch(): void {
+  const pts = Array.from(pointers.values());
+  const r = canvas.getBoundingClientRect();
+  const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+  const mx = (pts[0].x + pts[1].x) / 2 - r.left;
+  const my = (pts[0].y + pts[1].y) / 2 - r.top;
+  cellSize = clamp(pinchStartSize * (dist / pinchStartDist), 7, 70);
+  offsetX = mx - pinchWX * cellSize;
+  offsetY = my - pinchWY * cellSize;
+  draw();
+  updateHud();
+}
+
 function cellAt(cxp: number, cyp: number): [number, number] {
   const r = canvas.getBoundingClientRect();
   return [
@@ -483,6 +520,11 @@ function cellAt(cxp: number, cyp: number): [number, number] {
 
 canvas.addEventListener("pointerdown", (e: PointerEvent) => {
   canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size >= 2) {
+    startPinch();
+    return;
+  }
   down = true;
   moved = false;
   btn = e.button;
@@ -500,6 +542,11 @@ canvas.addEventListener("pointerdown", (e: PointerEvent) => {
 });
 
 canvas.addEventListener("pointermove", (e: PointerEvent) => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinching) {
+    movePinch();
+    return;
+  }
   if (!down) return;
   const dx = e.clientX - lx;
   const dy = e.clientY - ly;
@@ -518,6 +565,15 @@ canvas.addEventListener("pointermove", (e: PointerEvent) => {
 });
 
 canvas.addEventListener("pointerup", (e: PointerEvent) => {
+  pointers.delete(e.pointerId);
+  if (pinching) {
+    if (pointers.size < 2) {
+      pinching = false;
+      scheduleSave();
+    }
+    down = false;
+    return;
+  }
   if (lpTimer !== null) clearTimeout(lpTimer);
   if (down && !moved) {
     const c = cellAt(e.clientX, e.clientY);
@@ -544,7 +600,9 @@ canvas.addEventListener("pointerup", (e: PointerEvent) => {
   down = false;
 });
 
-canvas.addEventListener("pointercancel", () => {
+canvas.addEventListener("pointercancel", (e: PointerEvent) => {
+  pointers.delete(e.pointerId);
+  if (pinching && pointers.size < 2) pinching = false;
   if (lpTimer !== null) clearTimeout(lpTimer);
   down = false;
 });
