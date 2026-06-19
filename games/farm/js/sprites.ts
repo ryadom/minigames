@@ -386,10 +386,52 @@ const ANIMAL_ART: Record<string, () => string> = {
   pig,
 };
 
-/** Drawn art for a single roaming animal (or "" for an unknown type). */
-export function animalSprite(type: string): string {
+/** How an animal currently feels, which decides the cue floating over it:
+ *  `hungry` (wants feeding) or `ready` (has produce to collect). */
+export type AnimalStatus = "idle" | "hungry" | "ready";
+
+// A little thought-bubble cue floating at the animal's top-right, so the player
+// can read its needs at a glance: an empty feed bowl when it's hungry, or a
+// sparkle of fresh produce when it's ready to harvest. `icon` is the contextual
+// emoji (the feed crop when hungry, the product when ready); when it's absent a
+// plain drawn glyph is used instead, so the cue still works for any animal.
+function statusBubble(status: AnimalStatus, icon: string): string {
+  if (status === "idle") return "";
+  const tint = status === "hungry" ? "#ffe7c4" : "#dcf4c2";
+  const ring = status === "hungry" ? "#ef9d3f" : "#7fbf4f";
+  let glyph: string;
+  if (icon) {
+    glyph = `<text x="74" y="23" font-size="15" text-anchor="middle" dominant-baseline="central">${icon}</text>`;
+  } else if (status === "hungry") {
+    // an empty feed bowl
+    glyph =
+      `<path d="M67 23 a7 7 0 0 0 14 0 Z" fill="#fff" stroke="${ring}" stroke-width="1.6"/>` +
+      `<ellipse cx="74" cy="23" rx="9" ry="2.4" fill="${ring}"/>`;
+  } else {
+    // a four-point sparkle = fresh produce ready
+    glyph = `<path d="M74 14 l2.4 6 6 2.4 -6 2.4 -2.4 6 -2.4 -6 -6 -2.4 6 -2.4 Z" fill="${ring}"/>`;
+  }
+  return (
+    // trailing thought dots rising off the animal's back into the bubble
+    `<circle cx="59" cy="45" r="2.2" fill="${tint}" stroke="${ring}" stroke-width="0.8"/>` +
+    `<circle cx="65" cy="38" r="3.2" fill="${tint}" stroke="${ring}" stroke-width="0.9"/>` +
+    // the bubble itself
+    `<circle cx="74" cy="23" r="13" fill="${tint}" stroke="${ring}" stroke-width="1.6"/>` +
+    glyph
+  );
+}
+
+/** Drawn art for a single roaming animal (or "" for an unknown type).
+ *  Pass a `status` (and optional contextual `icon`) to float a hungry / ready
+ *  cue over it. */
+export function animalSprite(type: string, status: AnimalStatus = "idle", icon = ""): string {
   const fn = ANIMAL_ART[type];
-  return fn ? fn() : "";
+  if (!fn) return "";
+  const base = fn();
+  const cue = statusBubble(status, icon);
+  // The art functions return a complete <svg>…</svg>; tuck the cue in before
+  // the close so it shares the sprite's 0 0 100 100 canvas and scaling.
+  return cue ? base.replace("</svg>", `${cue}</svg>`) : base;
 }
 
 /** Drawn art for a placed building / pen tile, or "" if it has no sprite. */
