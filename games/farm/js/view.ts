@@ -771,12 +771,15 @@ function renderPen(type: string): string {
   const count = mine.length;
   let ready = 0;
   let fedN = 0;
+  let hungry = 0;
   let prog = 0;
   mine.forEach((a) => {
     if (a.grown >= def.interval) ready++;
     if (Date.now() < a.feedUntil) fedN++;
+    else hungry++;
     prog += Math.min(1, a.grown / def.interval);
   });
+  const feedHave = state.inv[def.feed] || 0;
 
   let h = tipLine("tipPen");
 
@@ -793,7 +796,9 @@ function renderPen(type: string): string {
       `<div class="ttl">${esc(name(type))} <span class="badge lock">${esc(tf("owned", { n: count, max: MAX_PER_ANIMAL }))}</span> ${statusBadge}</div>` +
       `<div class="sub">${ITEM[def.prod].ico} ${esc(name(def.prod))} ${stk(def.prod)}</div>` +
       `<div class="pbar"><i style="width:${pct}%"></i></div></div>` +
-      `<div class="right"><button class="btn go sm" data-act="collectall" data-arg="pen"${ready ? "" : " disabled"}>` +
+      `<div class="right"><button class="btn alt sm" data-act="feedall" data-arg="pen"${hungry && feedHave > 0 ? "" : " disabled"}>` +
+      `${esc(MG.i18n.t("feed"))} ${ITEM[def.feed].ico}</button>` +
+      `<button class="btn go sm" data-act="collectall" data-arg="pen"${ready ? "" : " disabled"}>` +
       `${esc(MG.i18n.t("collectAll"))}</button></div></div>`;
   }
 
@@ -820,7 +825,6 @@ function renderPen(type: string): string {
       `<div class="sub">${esc(tf("feederSub", { item: ITEM[def.feed].ico, name: name(def.feed) }))}</div></div>` +
       `<div class="right"><button class="btn sm" data-act="buyfeeder" data-arg="${type}"${state.coins >= fc ? "" : " disabled"}>🪙 ${fc}</button></div></div>`;
   } else {
-    const feedHave = state.inv[def.feed] || 0;
     const fpct = ((pen.feed / FEEDER_CAP) * 100).toFixed(1);
     h +=
       `<div class="card"><span class="big">🍽️</span><div class="body">` +

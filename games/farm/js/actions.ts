@@ -176,6 +176,10 @@ export function handle(act: string, arg?: string): void {
     loadFeed(arg as string);
     return;
   }
+  if (act === "feedall") {
+    feedAll(arg as string);
+    return;
+  }
   if (act === "collectall") {
     collectAll(arg as string);
     return;
@@ -542,6 +546,27 @@ function loadFeed(type: string): void {
   takeItem(def.feed, n);
   pen.feed += n;
   toast(`🍽️ ${ITEM[def.feed].ico} +${n}`);
+  save();
+  render();
+}
+// Feed every hungry animal in the open pen by hand, spending one feed crop
+// each — the manual counterpart to a stocked feeder. Each feeding keeps an
+// animal producing for another FEED_MS.
+function feedAll(kind: string): void {
+  const type = kind === "pen" ? state.penType : kind;
+  const def = ANIMAL_BY_ID[type as string];
+  if (!def) return;
+  const now = Date.now();
+  let fed = 0;
+  for (const a of state.animals) {
+    if (a.type !== type || now < a.feedUntil) continue;
+    if ((state.inv[def.feed] || 0) < 1) break;
+    takeItem(def.feed, 1);
+    a.feedUntil = now + FEED_MS;
+    fed++;
+  }
+  if (fed) toast(`🍽️ ${ITEM[def.feed].ico} ×${fed}`);
+  else toast(MG.i18n.t("needIngredients"));
   save();
   render();
 }
