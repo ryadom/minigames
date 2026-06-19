@@ -141,6 +141,28 @@ export function clearBuild(i: number): void {
   });
 }
 
+/** Move the building rooted at `src` so its top-left sits at `dest`, keeping
+ *  all its tile data (crops, pen type, footprint). Returns false (leaving the
+ *  grid untouched) when the building won't fit at the destination. The source
+ *  footprint is freed first, so the new spot may overlap the old one. */
+export function moveBuild(src: number, dest: number): boolean {
+  const root = rootOf(src);
+  const tile = state.grid[root];
+  if (!tile || tile.kind === "link") return false;
+  const w = tile.w || 1;
+  const h = tile.h || 1;
+  // Free the source so the destination check can overlap the old footprint.
+  footprintCells(root, w, h).forEach((c) => {
+    state.grid[c] = null;
+  });
+  if (!buildFits(state.grid, dest, w, h)) {
+    stampBuild(state.grid, root, tile); // didn't fit — put it back
+    return false;
+  }
+  stampBuild(state.grid, dest, tile);
+  return true;
+}
+
 // A brand-new farm: an empty grid with a market, an orders board and a small
 // cluster of starter soil tiles already placed near the centre.
 function freshGrid(): (Tile | null)[] {
@@ -171,6 +193,7 @@ export function freshState(): State {
     sel: "wheat",
     build: false,
     buildSel: "soil",
+    moveSrc: null,
     grid: freshGrid(),
     inv: {},
     cap: 40,
@@ -333,6 +356,7 @@ export function load(): void {
     // The village (no panel) is the home screen; building panels are transient.
     state.tab = "village";
     state.build = false;
+    state.moveSrc = null;
   }
 
   // Offline progress.

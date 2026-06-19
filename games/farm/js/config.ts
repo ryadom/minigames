@@ -237,6 +237,8 @@ BUILDS.forEach((b) => {
 });
 // The special "demolish" tool the build toolbar carries after the catalog.
 export const REMOVE_TOOL = "remove";
+// The special "move" tool: pick up a placed building, then tap where to drop it.
+export const MOVE_TOOL = "move";
 
 // ---- Tuning constants ----
 // A finer, smaller-celled grid (was 7×7 with chunky tiles): more, smaller

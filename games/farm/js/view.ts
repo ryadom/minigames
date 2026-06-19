@@ -38,6 +38,7 @@ import {
   MAX_SOIL,
   MAX_SPRINKLER,
   MAX_TRADE,
+  MOVE_TOOL,
   OVEN_STEP,
   REMOVE_TOOL,
   SOIL_STEP,
@@ -222,6 +223,7 @@ function buildingCell(i: number, t: Tile): string {
 function buildCell(i: number): string {
   const t = state.grid[i];
   const removing = state.buildSel === REMOVE_TOOL;
+  const moving = state.buildSel === MOVE_TOOL;
   const cw = t?.w || 1;
   const ch = t?.h || 1;
   let inner = `<span class="bc-plus">＋</span>`;
@@ -232,8 +234,12 @@ function buildCell(i: number): string {
       ? `<span class="bc-art">${art}</span>`
       : `<span class="bc-ico">${tileIcon(t)}</span>`;
   }
+  // Move tool: flag movable buildings, and lift the one currently picked up.
+  let edit = "";
+  if (removing && t) edit = " rm";
+  else if (moving && t) edit = state.moveSrc === i ? " picked" : " movable";
   return (
-    `<button class="buildcell${t ? " filled" : " open"}${removing && t ? " rm" : ""}" ` +
+    `<button class="buildcell${t ? " filled" : " open"}${edit}" ` +
     `data-act="buildcell" data-arg="${i}" ${cellStyle(i, cw, ch)}>${inner}</button>`
   );
 }
@@ -283,6 +289,10 @@ function renderToolbar(): string {
         `<span class="name">${esc(buildName(b))}</span>` +
         `<span class="cost${lock ? " lock" : ""}">${costLabel}</span></button>`;
     });
+    h +=
+      `<button class="tool${state.buildSel === MOVE_TOOL ? " selected" : ""}" data-act="buildsel" data-arg="${MOVE_TOOL}">` +
+      `<span class="ico">✋</span><span class="name">${esc(MG.i18n.t("bMove"))}</span>` +
+      `<span class="cost">·</span></button>`;
     h +=
       `<button class="tool${state.buildSel === REMOVE_TOOL ? " selected" : ""}" data-act="buildsel" data-arg="${REMOVE_TOOL}">` +
       `<span class="ico">🚮</span><span class="name">${esc(MG.i18n.t("bRemove"))}</span>` +

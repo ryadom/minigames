@@ -176,6 +176,9 @@ export interface State {
   sel: string;
   build: boolean;
   buildSel: string;
+  /** Build mode "move" tool: root cell of the building currently picked up
+   *  (null when nothing is held). Transient — never persisted. */
+  moveSrc?: number | null;
   grid: (Tile | null)[];
   inv: Record<string, number>;
   cap: number;
