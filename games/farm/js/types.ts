@@ -179,6 +179,9 @@ export interface State {
   /** Build mode "move" tool: root cell of the building currently picked up
    *  (null when nothing is held). Transient — never persisted. */
   moveSrc?: number | null;
+  /** Build mode placement: root cell of the pending build preview (the ghost
+   *  the player can reposition before confirming). Transient — never persisted. */
+  placeAt?: number | null;
   grid: (Tile | null)[];
   inv: Record<string, number>;
   cap: number;

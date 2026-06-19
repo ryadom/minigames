@@ -68,7 +68,7 @@ import { applyWorld, ensureScale } from "./input";
 import { dom, ui } from "./runtime";
 import { buildScene, cellPos, pf, TILE, WORLD_H, WORLD_W } from "./scene";
 import { buildArtById, buildingArt, cropArt, cropStage } from "./sprites";
-import { ensurePen, need, state } from "./state";
+import { buildFits, ensurePen, need, state } from "./state";
 import type { BuildDef, Tile } from "./types";
 
 // Buildings you can step into; each opens as a sliding panel.
@@ -244,6 +244,37 @@ function buildCell(i: number): string {
   );
 }
 
+// Can the selected build be committed at cell `i` right now? (unlocked, not a
+// duplicate of a unique build, footprint clear & in bounds, and affordable.)
+// Drives the placement ghost's valid / blocked styling.
+function placeValid(b: BuildDef, i: number): boolean {
+  if (!isUnlocked(b.lvl)) return false;
+  if (b.unique && isPlaced(b)) return false;
+  if (!buildFits(state.grid, i, b.w, b.h)) return false;
+  const cost = b.id === "soil" ? soilTileCost() : b.cost;
+  return state.coins >= cost;
+}
+
+// The pending placement preview: a movable ghost of the selected build. Tapping
+// it confirms (data-act placeok); the corner ✕ cancels; tapping any other cell
+// repositions it. Coloured green when it can be placed, red when blocked.
+function placeGhost(): string {
+  if (!state.build || state.placeAt == null) return "";
+  const b = BUILD_BY_ID[state.buildSel];
+  if (!b) return "";
+  const i = state.placeAt;
+  const ok = placeValid(b, i);
+  const art = b.id === "soil" ? "" : buildArtById(b.id);
+  const inner = art ? `<span class="bc-art">${art}</span>` : `<span class="bc-ico">${b.ico}</span>`;
+  return (
+    `<div class="placeghost ${ok ? "ok" : "bad"}" data-act="placeok" ${cellStyle(i, b.w, b.h)}>` +
+    inner +
+    `<span class="pg-badge">${ok ? "✓" : "✖"}</span>` +
+    `<button class="pg-x" data-act="placecancel" aria-label="cancel">✕</button>` +
+    "</div>"
+  );
+}
+
 // Has this unique build already been placed somewhere on the grid?
 function isPlaced(b: BuildDef): boolean {
   if (b.pen) return state.grid.some((t) => t && t.kind === "pen" && t.penType === b.pen);
@@ -347,7 +378,8 @@ export function render(): void {
   }
   dom.world.innerHTML =
     `<svg viewBox="0 0 ${WORLD_W} ${WORLD_H}" preserveAspectRatio="none" aria-hidden="true">${buildScene()}</svg>` +
-    cells;
+    cells +
+    placeGhost();
   dom.world.classList.toggle("building", state.build);
   applyWorld();
   dom.toolbar.innerHTML = renderToolbar();

@@ -194,6 +194,7 @@ export function freshState(): State {
     build: false,
     buildSel: "soil",
     moveSrc: null,
+    placeAt: null,
     grid: freshGrid(),
     inv: {},
     cap: 40,
@@ -357,6 +358,7 @@ export function load(): void {
     state.tab = "village";
     state.build = false;
     state.moveSrc = null;
+    state.placeAt = null;
   }
 
   // Offline progress.
