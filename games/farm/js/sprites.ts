@@ -56,28 +56,34 @@ function market(): string {
   );
 }
 
-// Kitchen — a cosy gabled bakery with a smoking chimney and a heart window.
+// Kitchen — a big cast-iron cooking pot bubbling over a little fire, with
+// steam curling up off the stew. (Reads clearly as "the kitchen" at a glance.)
 function kitchen(): string {
   return svg(
-    shadow(50, 91, 33, 7) +
-      // chimney + smoke
-      `<rect x="62" y="20" width="11" height="20" rx="1.5" fill="#b65b46"/>` +
-      `<circle cx="67" cy="16" r="4" fill="rgba(255,255,255,0.7)"/>` +
-      `<circle cx="73" cy="9" r="5" fill="rgba(255,255,255,0.55)"/>` +
-      // roof
-      `<path d="M22 44 L50 22 L78 44 Z" fill="#c75b46"/>` +
-      `<path d="M22 44 L50 22 L78 44 Z" fill="none" stroke="#a94733" stroke-width="2"/>` +
-      // walls
-      `<rect x="28" y="44" width="44" height="40" rx="2" fill="#f4e3c0"/>` +
-      `<rect x="28" y="44" width="44" height="40" rx="2" fill="none" stroke="#d8c096" stroke-width="1.5"/>` +
-      // door
-      `<rect x="44" y="62" width="14" height="22" rx="6" fill="#a9763f"/>` +
-      `<circle cx="55" cy="73" r="1.6" fill="#ffe9b0"/>` +
-      // heart window
-      `<circle cx="38" cy="56" r="6.5" fill="#bfe0f2" stroke="#fff" stroke-width="1.6"/>` +
-      `<path d="M38 58 l-3 -3 a2 2 0 1 1 3 -1 a2 2 0 1 1 3 1 Z" fill="#e8554d"/>` +
-      // little awning over the door
-      `<rect x="40" y="58" width="22" height="5" rx="2" fill="#e8554d"/>`,
+    shadow(50, 92, 34, 7) +
+      // fire stand + flames under the pot
+      `<rect x="26" y="84" width="48" height="6" rx="3" fill="#6f4427"/>` +
+      `<path d="M34 86 q -4 -9 2 -14 q 0 5 3 6 q 1 -5 4 -7 q 3 7 -1 15 Z" fill="#ffb13f"/>` +
+      `<path d="M52 86 q -4 -9 2 -14 q 0 5 3 6 q 1 -5 4 -7 q 3 7 -1 15 Z" fill="#ff8a3f"/>` +
+      // side handles
+      `<path d="M20 60 q -9 6 0 14" fill="none" stroke="#3d434b" stroke-width="5"/>` +
+      `<path d="M80 60 q 9 6 0 14" fill="none" stroke="#3d434b" stroke-width="5"/>` +
+      // pot body
+      `<path d="M20 56 Q20 86 50 86 Q80 86 80 56 Z" fill="#4f5862"/>` +
+      `<path d="M20 56 Q20 86 50 86 Q80 86 80 56 Z" fill="none" stroke="#3d434b" stroke-width="2"/>` +
+      // body shine
+      `<path d="M30 64 Q30 80 42 85" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="4" stroke-linecap="round"/>` +
+      // rim
+      `<rect x="15" y="50" width="70" height="11" rx="5.5" fill="#6b7680"/>` +
+      `<rect x="15" y="50" width="70" height="11" rx="5.5" fill="none" stroke="#566069" stroke-width="1.5"/>` +
+      // stew surface + bubbles
+      `<ellipse cx="50" cy="53" rx="30" ry="6" fill="#ff9e3f"/>` +
+      `<circle cx="40" cy="52" r="3" fill="#ffb866"/><circle cx="58" cy="54" r="2.4" fill="#ffb866"/>` +
+      `<circle cx="50" cy="51" r="2" fill="#ffd29e"/>` +
+      // steam curling up
+      `<path d="M38 46 q -6 -7 0 -13 q 6 -6 0 -13" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3" stroke-linecap="round"/>` +
+      `<path d="M50 44 q -5 -7 0 -13 q 5 -6 0 -13" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="3" stroke-linecap="round"/>` +
+      `<path d="M62 46 q 6 -7 0 -13 q -6 -6 0 -13" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="3" stroke-linecap="round"/>`,
   );
 }
 
@@ -159,29 +165,37 @@ function board(): string {
   );
 }
 
-// Animal pen — a red barn beside a little grassy yard (the animal emoji is
-// drawn on top by the view). Used for every pen type.
-function barn(): string {
+// Animal pen — a fenced grassy paddock with room for the animal to roam.
+// The back and side fences enclose an open-front yard; the animal emoji is
+// drawn (and walked) on top by the view. Used for every pen type.
+function paddock(): string {
+  // A single wooden fence post (a small rounded plank).
+  const post = (x: number, y0: number, y1: number) =>
+    `<rect x="${x - 2}" y="${y0}" width="4" height="${y1 - y0}" rx="1.5" fill="#c9a26a" stroke="#a9824d" stroke-width="0.8"/>`;
   return svg(
-    shadow(50, 92, 37, 7) +
-      // grassy yard
-      `<ellipse cx="50" cy="84" rx="40" ry="12" fill="#8fc861"/>` +
-      // barn body
-      `<rect x="18" y="46" width="40" height="40" rx="2" fill="#d35a4a"/>` +
-      `<rect x="18" y="46" width="40" height="40" rx="2" fill="none" stroke="#b3463a" stroke-width="1.5"/>` +
-      // gambrel roof
-      `<path d="M14 46 L26 30 L50 30 L62 46 Z" fill="#f4e3c0"/>` +
-      `<path d="M14 46 L26 30 L50 30 L62 46 Z" fill="none" stroke="#d8c096" stroke-width="1.5"/>` +
-      // hayloft + cross-buck doors
-      `<circle cx="38" cy="40" r="4" fill="#caa063"/>` +
-      `<rect x="30" y="58" width="16" height="28" rx="1.5" fill="#f4e3c0"/>` +
-      `<path d="M30 58 L46 86 M46 58 L30 86" stroke="#d35a4a" stroke-width="2"/>` +
-      `<path d="M38 58 V86" stroke="#d35a4a" stroke-width="2"/>` +
-      // yard fence on the right
-      `<g stroke="#dab57e" stroke-width="2.4">` +
-      `<line x1="64" y1="68" x2="86" y2="68"/><line x1="64" y1="76" x2="86" y2="76"/></g>` +
-      `<g fill="#c9a26a"><rect x="64" y="62" width="3" height="20"/><rect x="74" y="62" width="3" height="20"/>` +
-      `<rect x="84" y="62" width="3" height="20"/></g>`,
+    shadow(50, 92, 40, 8) +
+      // grassy paddock floor
+      `<rect x="12" y="46" width="76" height="42" rx="9" fill="#8fc861"/>` +
+      `<rect x="12" y="46" width="76" height="42" rx="9" fill="none" stroke="#7ab84f" stroke-width="1.2"/>` +
+      // grass tufts + a flower for a bit of life
+      `<path d="M24 80 q1 -5 0 -8 M27 80 q0 -6 2 -9 M30 80 q1 -5 2 -7" stroke="#6fb049" stroke-width="1.4" fill="none"/>` +
+      `<path d="M68 83 q1 -5 0 -8 M71 83 q0 -6 2 -9" stroke="#6fb049" stroke-width="1.4" fill="none"/>` +
+      `<circle cx="78" cy="74" r="2.4" fill="#ff7aa8"/><circle cx="78" cy="74" r="1" fill="#ffd23f"/>` +
+      // left & right side rails (open at the front so you can see in)
+      `<rect x="10.5" y="52" width="3" height="34" rx="1.5" fill="#cda263"/>` +
+      `<rect x="86.5" y="52" width="3" height="34" rx="1.5" fill="#cda263"/>` +
+      post(12, 48, 64) +
+      post(12, 70, 86) +
+      post(88, 48, 64) +
+      post(88, 70, 86) +
+      // back fence — two rails across the top with posts
+      `<rect x="12" y="40" width="76" height="3.6" rx="1.8" fill="#dab57e"/>` +
+      `<rect x="12" y="47" width="76" height="3.6" rx="1.8" fill="#c9a05c"/>` +
+      post(18, 36, 54) +
+      post(34, 36, 54) +
+      post(50, 36, 54) +
+      post(66, 36, 54) +
+      post(82, 36, 54),
   );
 }
 
@@ -195,14 +209,14 @@ const BUILDINGS: Record<string, () => string> = {
 
 /** Drawn art for a placed building / pen tile, or "" if it has no sprite. */
 export function buildingArt(t: Tile): string {
-  if (t.kind === "pen") return barn();
+  if (t.kind === "pen") return paddock();
   const fn = BUILDINGS[t.kind];
   return fn ? fn() : "";
 }
 
 /** Drawn art for a build id (used by the build catalog & placement preview). */
 export function buildArtById(id: string): string {
-  if (id.startsWith("pen-")) return barn();
+  if (id.startsWith("pen-")) return paddock();
   const fn = BUILDINGS[id === "kitchen" ? "kitchen" : id];
   return fn ? fn() : "";
 }
