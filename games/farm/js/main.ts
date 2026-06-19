@@ -26,7 +26,7 @@ import { applyWorld, ensureScale, initInput, isInteracting, showPanHint } from "
 import { setRuntime } from "./runtime";
 import { isDirty, load, markDirty, reset, save, state } from "./state";
 import type { Dom } from "./types";
-import { patch, render, syncStats } from "./view";
+import { patch, render, stepLivestock, syncStats } from "./view";
 
 /* ======================================================================
  *  HEADER + DOM REFS
@@ -150,6 +150,9 @@ function tick(now: number): void {
     if (before < HIVE_MS && hv.grown >= HIVE_MS) markDirty();
   });
   if (nowMs >= state.marketUntil) rollMarket(state, false);
+
+  // Walk the pens' livestock every frame so they roam smoothly.
+  stepLivestock(dt);
 
   patchAccum += dt;
   if (patchAccum > 200) {

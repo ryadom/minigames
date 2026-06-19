@@ -207,6 +207,141 @@ const BUILDINGS: Record<string, () => string> = {
   board,
 };
 
+/* ============================================================================
+ *  ANIMALS — little drawn livestock that roam their pens.
+ *
+ *  Each is a self-contained SVG creature in the same flat-cute style, drawn
+ *  **facing right** and standing low on the square canvas so it sits on the
+ *  paddock grass. The view layer (`view.ts`) renders one per owned animal in a
+ *  persistent layer and walks them around independently; it flips the sprite
+ *  (scaleX) when an animal heads left, so every drawing only ever faces right.
+ * ========================================================================== */
+
+// Chicken — plump white hen with a red comb, orange beak and stick legs.
+function chicken(): string {
+  return svg(
+    shadow(50, 86, 22, 5) +
+      // legs + feet
+      `<g stroke="#e8973a" stroke-width="3" stroke-linecap="round">` +
+      `<line x1="46" y1="73" x2="44" y2="85"/><line x1="56" y1="73" x2="58" y2="85"/></g>` +
+      `<path d="M40 86 l-4 2 M44 86 l4 2 M54 86 l-4 2 M58 86 l4 2" stroke="#e8973a" stroke-width="2.4" stroke-linecap="round"/>` +
+      // tail feathers (back/left)
+      `<path d="M30 58 q -16 -6 -18 -20 q 15 5 21 13 Z" fill="#ece6da"/>` +
+      `<path d="M30 63 q -15 0 -19 -10 q 13 1 19 1 Z" fill="#fff"/>` +
+      // body
+      `<ellipse cx="50" cy="60" rx="21" ry="17" fill="#fff" stroke="#e9e2d4" stroke-width="1.5"/>` +
+      // wing
+      `<path d="M48 53 q 15 2 17 15 q -10 4 -19 -3 Z" fill="#f1ece1"/>` +
+      // head
+      `<circle cx="64" cy="44" r="11" fill="#fff" stroke="#e9e2d4" stroke-width="1.4"/>` +
+      // comb
+      `<path d="M57 35 q 2 -6 5 -3 q 2 -6 5 -2 q 3 -4 4 2 q -1 5 -7 4 q -5 1 -7 -1 Z" fill="#e8554d"/>` +
+      // beak (points right)
+      `<path d="M74 42 l 12 -1 l -11 7 Z" fill="#f5a623"/>` +
+      // wattle
+      `<path d="M70 50 q 2 7 -2 9 q -3 -1 -2 -8 Z" fill="#e8554d"/>` +
+      // eye
+      `<circle cx="66" cy="42" r="2" fill="#2a2320"/>`,
+  );
+}
+
+// Cow — big spotted body, horned head with a pink muzzle, tufted tail.
+function cow(): string {
+  return svg(
+    shadow(50, 88, 30, 6) +
+      // tail
+      `<path d="M24 56 q -10 8 -7 23" fill="none" stroke="#d9d4cb" stroke-width="3"/>` +
+      `<circle cx="17" cy="80" r="3.6" fill="#6b4a35"/>` +
+      // legs + hooves
+      `<g fill="#efe9df">` +
+      `<rect x="31" y="66" width="8" height="22" rx="3"/><rect x="44" y="68" width="8" height="20" rx="3"/>` +
+      `<rect x="58" y="68" width="8" height="20" rx="3"/></g>` +
+      `<g fill="#3a2b24"><rect x="31" y="84" width="8" height="5" rx="2"/>` +
+      `<rect x="44" y="84" width="8" height="4" rx="2"/><rect x="58" y="84" width="8" height="4" rx="2"/></g>` +
+      // body
+      `<ellipse cx="47" cy="57" rx="27" ry="18" fill="#fbf7f0" stroke="#e4ddd0" stroke-width="1.5"/>` +
+      // spots
+      `<path d="M33 49 q 9 -5 13 3 q -2 9 -11 6 q -6 -5 -2 -9 Z" fill="#6b4a35"/>` +
+      `<ellipse cx="57" cy="63" rx="9" ry="6.5" fill="#6b4a35"/>` +
+      // head (right)
+      `<ellipse cx="74" cy="52" rx="13" ry="12" fill="#fbf7f0" stroke="#e4ddd0" stroke-width="1.4"/>` +
+      // ears
+      `<ellipse cx="63" cy="44" rx="4.6" ry="3" fill="#f0d9c8" transform="rotate(-28 63 44)"/>` +
+      `<ellipse cx="85" cy="45" rx="4.6" ry="3" fill="#f0d9c8" transform="rotate(28 85 45)"/>` +
+      // horns
+      `<path d="M68 41 q -3 -6 1 -9" stroke="#e6d9b8" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+      `<path d="M80 41 q 3 -6 -1 -9" stroke="#e6d9b8" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+      // muzzle + nostrils
+      `<ellipse cx="76" cy="59" rx="9" ry="6" fill="#f6c1c9"/>` +
+      `<circle cx="73" cy="59" r="1.4" fill="#3a2b24"/><circle cx="80" cy="59" r="1.4" fill="#3a2b24"/>` +
+      // eyes
+      `<circle cx="71" cy="48" r="2" fill="#2a2320"/><circle cx="80" cy="48" r="2" fill="#2a2320"/>`,
+  );
+}
+
+// Sheep — a cloud of cream wool puffs with a dark face and slim legs.
+function sheep(): string {
+  const wool = "#f6f1e7";
+  return svg(
+    shadow(50, 88, 27, 6) +
+      // legs
+      `<g fill="#5b4a44"><rect x="37" y="68" width="5" height="19" rx="2.5"/>` +
+      `<rect x="49" y="70" width="5" height="17" rx="2.5"/><rect x="60" y="68" width="5" height="19" rx="2.5"/></g>` +
+      // woolly body — overlapping puffs
+      `<g fill="${wool}" stroke="#e7e0d2" stroke-width="1.2">` +
+      `<circle cx="37" cy="57" r="13"/><circle cx="51" cy="51" r="15"/><circle cx="64" cy="59" r="12"/>` +
+      `<circle cx="45" cy="65" r="11"/><circle cx="59" cy="67" r="10"/></g>` +
+      // head (right, dark)
+      `<ellipse cx="72" cy="56" rx="10" ry="11" fill="#5e4d46"/>` +
+      // ears
+      `<ellipse cx="64" cy="50" rx="5" ry="3" fill="#52423c" transform="rotate(-22 64 50)"/>` +
+      `<ellipse cx="80" cy="50" rx="5" ry="3" fill="#52423c" transform="rotate(22 80 50)"/>` +
+      // wool tuft on head
+      `<circle cx="72" cy="46" r="6" fill="${wool}"/>` +
+      // muzzle + eyes
+      `<ellipse cx="74" cy="61" rx="6" ry="4.5" fill="#7a665e"/>` +
+      `<circle cx="69" cy="54" r="1.8" fill="#1f1a17"/><circle cx="77" cy="54" r="1.8" fill="#1f1a17"/>`,
+  );
+}
+
+// Pig — round pink body, snout with nostrils, floppy ear and a curly tail.
+function pig(): string {
+  const pink = "#f3a9bd";
+  const dark = "#d98aa2";
+  return svg(
+    shadow(50, 88, 28, 6) +
+      // curly tail
+      `<path d="M24 58 q -9 -1 -7 -8 q 2 -6 8 -2" fill="none" stroke="${dark}" stroke-width="3" stroke-linecap="round"/>` +
+      // legs
+      `<g fill="${dark}"><rect x="33" y="66" width="8" height="22" rx="3"/><rect x="46" y="68" width="8" height="20" rx="3"/>` +
+      `<rect x="58" y="68" width="8" height="20" rx="3"/></g>` +
+      // body
+      `<ellipse cx="47" cy="59" rx="26" ry="18" fill="${pink}" stroke="${dark}" stroke-width="1.4"/>` +
+      // ear
+      `<path d="M65 41 q 6 -8 13 -4 q 0 9 -7 12 Z" fill="${dark}"/>` +
+      // head
+      `<circle cx="72" cy="56" r="13" fill="${pink}" stroke="${dark}" stroke-width="1.3"/>` +
+      // snout
+      `<ellipse cx="82" cy="58" rx="8" ry="6.5" fill="${dark}"/>` +
+      `<ellipse cx="83" cy="58" rx="1.5" ry="2.4" fill="#9c5e72"/><ellipse cx="79" cy="58" rx="1.5" ry="2.4" fill="#9c5e72"/>` +
+      // eye
+      `<circle cx="70" cy="50" r="2" fill="#3a2630"/>`,
+  );
+}
+
+const ANIMAL_ART: Record<string, () => string> = {
+  chicken,
+  cow,
+  sheep,
+  pig,
+};
+
+/** Drawn art for a single roaming animal (or "" for an unknown type). */
+export function animalSprite(type: string): string {
+  const fn = ANIMAL_ART[type];
+  return fn ? fn() : "";
+}
+
 /** Drawn art for a placed building / pen tile, or "" if it has no sprite. */
 export function buildingArt(t: Tile): string {
   if (t.kind === "pen") return paddock();

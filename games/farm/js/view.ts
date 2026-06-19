@@ -67,7 +67,7 @@ import { itemName as name, tf } from "./i18n";
 import { applyWorld, ensureScale } from "./input";
 import { dom, ui } from "./runtime";
 import { buildScene, cellPos, pf, TILE, WORLD_H, WORLD_W } from "./scene";
-import { buildArtById, buildingArt, cropArt, cropStage } from "./sprites";
+import { animalSprite, buildArtById, buildingArt, cropArt, cropStage } from "./sprites";
 import { buildFits, ensurePen, need, state } from "./state";
 import type { BuildDef, Tile } from "./types";
 
@@ -200,13 +200,11 @@ function buildingCell(i: number, t: Tile): string {
     badge = ready || "";
   }
   const art = buildingArt(t);
-  // Pens draw the animal emoji over their barn; other buildings are pure art.
-  const emblem =
-    t.kind === "pen"
-      ? `<span class="bld-art">${art}<span class="bld-pet">${ico}</span></span>`
-      : art
-        ? `<span class="bld-art">${art}</span>`
-        : `<span class="bld-ico">${ico}</span>`;
+  // Buildings (pens included) are pure drawn art; a pen's animals roam on top
+  // of its paddock, drawn separately in the persistent livestock layer.
+  const emblem = art
+    ? `<span class="bld-art">${art}</span>`
+    : `<span class="bld-ico">${ico}</span>`;
   return (
     `<button class="hotspot bld" data-act="${act}" data-arg="${arg}" ${cellStyle(i, t.w || 1, t.h || 1)}>` +
     (badge ? `<span class="b-badge">${badge}</span>` : "") +
@@ -357,6 +355,217 @@ function renderToolbar(): string {
 }
 
 /* ======================================================================
+ *  LIVESTOCK — animals that roam their pens, each walking independently.
+ *
+ *  The world is rebuilt (`innerHTML`) roughly once a second, which would
+ *  restart any CSS animation on a pen's animal every render — so instead the
+ *  animals live in their own persistent layer that survives re-renders (it is
+ *  re-appended, not recreated). Each owned animal gets its own sprite and a
+ *  small random-walk state machine (`stepLivestock`), so they wander, pause and
+ *  turn to face their way independently rather than marching in lock-step.
+ * ==================================================================== */
+
+// How many animals of a pen are actually drawn roaming (the rest are implied);
+// capped so a 2×2 paddock doesn't get visually overcrowded.
+const MAX_ROAMING = 8;
+
+// Per-type look & gait: sprite width as a fraction of a tile, and walk speed
+// in world units per millisecond (smaller, heavier animals amble slower).
+const ANIMAL_VIEW: Record<string, { size: number; speed: number }> = {
+  chicken: { size: 0.42, speed: 0.02 },
+  cow: { size: 0.62, speed: 0.011 },
+  sheep: { size: 0.54, speed: 0.013 },
+  pig: { size: 0.58, speed: 0.012 },
+};
+
+interface Walker {
+  el: HTMLElement; // outer positioned element (left/top set in world %)
+  face: HTMLElement; // inner element flipped (scaleX) to face the walk way
+  // Roam bounds (world units) — the grassy interior of the pen's footprint.
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  x: number;
+  y: number; // current position (world units)
+  tx: number;
+  ty: number; // current target
+  dir: number; // 1 faces right, -1 faces left
+  phase: 0 | 1; // 0 = walking to target, 1 = resting
+  timer: number; // ms left to rest
+  speed: number;
+  init: boolean; // has it been placed inside its pen yet?
+}
+
+let livestockLayer: HTMLElement | null = null;
+let livestockShown = false;
+const walkers = new Map<string, Walker>();
+const reduceMotion =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function rand(a: number, b: number): number {
+  return a + Math.random() * (b - a);
+}
+
+function ensureLivestockLayer(): HTMLElement {
+  if (!livestockLayer) {
+    livestockLayer = document.createElement("div");
+    livestockLayer.className = "livestock";
+    livestockLayer.setAttribute("aria-hidden", "true");
+  }
+  return livestockLayer;
+}
+
+// The grassy interior of a pen rooted at `cell`, inset so a `sizeU`-wide sprite
+// stays on the grass rather than walking through the fence.
+function penRoam(
+  cell: number,
+  w: number,
+  h: number,
+  sizeU: number,
+): { x0: number; x1: number; y0: number; y1: number } {
+  const p = cellPos(cell);
+  const fw = w * TILE;
+  const fh = h * TILE;
+  const half = sizeU / 2;
+  return {
+    x0: p.x + fw * 0.2 + half,
+    x1: p.x + fw * 0.8 - half,
+    y0: p.y + fh * 0.5 + half,
+    y1: p.y + fh * 0.82 - half,
+  };
+}
+
+function newWalker(type: string, sizeU: number): Walker {
+  const el = document.createElement("div");
+  el.className = "lw";
+  el.style.width = `${(sizeU / WORLD_W) * 100}%`;
+  const face = document.createElement("div");
+  face.className = "lw-face";
+  const hop = document.createElement("div");
+  hop.className = "lw-hop";
+  // Per-animal hop timing so their little bounces never sync up.
+  hop.style.animationDuration = `${rand(0.42, 0.62).toFixed(2)}s`;
+  hop.style.animationDelay = `${rand(-0.6, 0).toFixed(2)}s`;
+  hop.innerHTML = animalSprite(type);
+  face.appendChild(hop);
+  el.appendChild(face);
+  return {
+    el,
+    face,
+    x0: 0,
+    x1: 0,
+    y0: 0,
+    y1: 0,
+    x: 0,
+    y: 0,
+    tx: 0,
+    ty: 0,
+    dir: 1,
+    phase: 1,
+    timer: 0,
+    speed: ANIMAL_VIEW[type]?.speed || 0.013,
+    init: false,
+  };
+}
+
+function applyWalker(w: Walker): void {
+  w.el.style.left = `${((w.x / WORLD_W) * 100).toFixed(2)}%`;
+  w.el.style.top = `${((w.y / WORLD_H) * 100).toFixed(2)}%`;
+  w.face.style.transform = `scaleX(${w.dir})`;
+}
+
+// Reconcile the roaming sprites against the pens currently on the grid: one
+// sprite per owned animal (up to MAX_ROAMING), created / removed as pens and
+// herds change, and re-homed when a pen is moved.
+function syncLivestock(): void {
+  const layer = ensureLivestockLayer();
+  const want = new Set<string>();
+  for (let i = 0; i < GRID_N; i++) {
+    const t = state.grid[i];
+    if (t?.kind !== "pen" || !t.penType) continue;
+    const type = t.penType;
+    const cfg = ANIMAL_VIEW[type];
+    if (!cfg) continue;
+    const sizeU = cfg.size * TILE;
+    const b = penRoam(i, t.w || 2, t.h || 2, sizeU);
+    let count = 0;
+    for (const a of state.animals) if (a.type === type) count++;
+    const show = Math.min(count, MAX_ROAMING);
+    for (let n = 0; n < show; n++) {
+      const key = `${type}#${n}`;
+      want.add(key);
+      let w = walkers.get(key);
+      if (!w) {
+        w = newWalker(type, sizeU);
+        walkers.set(key, w);
+        layer.appendChild(w.el);
+      }
+      w.x0 = b.x0;
+      w.x1 = b.x1;
+      w.y0 = b.y0;
+      w.y1 = b.y1;
+      // First placement (or a pen that moved out from under it): scatter it
+      // somewhere inside the (new) bounds and let it idle briefly first.
+      if (!w.init || w.x < b.x0 || w.x > b.x1 || w.y < b.y0 || w.y > b.y1) {
+        w.x = rand(b.x0, b.x1);
+        w.y = rand(b.y0, b.y1);
+        w.tx = w.x;
+        w.ty = w.y;
+        w.phase = 1;
+        w.timer = rand(0, 1600);
+        w.init = true;
+        applyWalker(w);
+      }
+    }
+  }
+  for (const [key, w] of walkers) {
+    if (!want.has(key)) {
+      w.el.remove();
+      walkers.delete(key);
+    }
+  }
+}
+
+// Advance every roaming animal's random walk by `dt` ms. Each picks a fresh
+// target inside its pen, ambles there, rests a random beat, then repeats —
+// turning to face the way it walks. Called every frame from the tick loop.
+export function stepLivestock(dt: number): void {
+  if (!livestockShown || reduceMotion || walkers.size === 0) return;
+  for (const w of walkers.values()) {
+    if (w.phase === 1) {
+      w.timer -= dt;
+      if (w.timer <= 0) {
+        w.tx = rand(w.x0, w.x1);
+        w.ty = rand(w.y0, w.y1);
+        w.phase = 0;
+        if (Math.abs(w.tx - w.x) > 1) w.dir = w.tx < w.x ? -1 : 1;
+        w.face.style.transform = `scaleX(${w.dir})`;
+        w.el.classList.add("mv");
+      }
+      continue;
+    }
+    const dx = w.tx - w.x;
+    const dy = w.ty - w.y;
+    const d = Math.hypot(dx, dy);
+    const stepLen = w.speed * dt;
+    if (d <= stepLen || d < 0.4) {
+      w.x = w.tx;
+      w.y = w.ty;
+      w.phase = 1;
+      w.timer = rand(500, 2800);
+      w.el.classList.remove("mv");
+    } else {
+      w.x += (dx / d) * stepLen;
+      w.y += (dy / d) * stepLen;
+    }
+    applyWalker(w);
+  }
+}
+
+/* ======================================================================
  *  RENDER — the world is always the base; a building panel may slide up.
  * ==================================================================== */
 export function render(): void {
@@ -381,6 +590,18 @@ export function render(): void {
     cells +
     placeGhost();
   dom.world.classList.toggle("building", state.build);
+  // The roaming livestock live in their own layer so they keep walking across
+  // the once-a-second world rebuild. Setting innerHTML above detached it (its
+  // sprites survive, holding their walk state); re-append and reconcile it in
+  // normal play, and leave it off while build mode shows the placement grid.
+  if (state.build) {
+    livestockShown = false;
+  } else {
+    const layer = ensureLivestockLayer();
+    dom.world.appendChild(layer);
+    livestockShown = true;
+    syncLivestock();
+  }
   applyWorld();
   dom.toolbar.innerHTML = renderToolbar();
   dom.toolbar.scrollLeft = tbScroll;
