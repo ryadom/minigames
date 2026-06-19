@@ -25,6 +25,7 @@
     "games.ts",
     "sw.ts",
     "build.ts",
-    "global.d.ts"
+    "global.d.ts",
+    "tests/**/*.ts"
   ]
 }
