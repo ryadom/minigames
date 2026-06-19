@@ -38,6 +38,7 @@ import {
   MAX_SOIL,
   MAX_SPRINKLER,
   MAX_TRADE,
+  MOVE_TOOL,
   OVEN_STEP,
   REMOVE_TOOL,
   SOIL_STEP,
@@ -67,7 +68,7 @@ import { applyWorld, ensureScale } from "./input";
 import { dom, ui } from "./runtime";
 import { buildScene, cellPos, pf, TILE, WORLD_H, WORLD_W } from "./scene";
 import { buildArtById, buildingArt, cropArt, cropStage } from "./sprites";
-import { ensurePen, need, state } from "./state";
+import { buildFits, ensurePen, need, state } from "./state";
 import type { BuildDef, Tile } from "./types";
 
 // Buildings you can step into; each opens as a sliding panel.
@@ -222,6 +223,7 @@ function buildingCell(i: number, t: Tile): string {
 function buildCell(i: number): string {
   const t = state.grid[i];
   const removing = state.buildSel === REMOVE_TOOL;
+  const moving = state.buildSel === MOVE_TOOL;
   const cw = t?.w || 1;
   const ch = t?.h || 1;
   let inner = `<span class="bc-plus">＋</span>`;
@@ -232,9 +234,44 @@ function buildCell(i: number): string {
       ? `<span class="bc-art">${art}</span>`
       : `<span class="bc-ico">${tileIcon(t)}</span>`;
   }
+  // Move tool: flag movable buildings, and lift the one currently picked up.
+  let edit = "";
+  if (removing && t) edit = " rm";
+  else if (moving && t) edit = state.moveSrc === i ? " picked" : " movable";
   return (
-    `<button class="buildcell${t ? " filled" : " open"}${removing && t ? " rm" : ""}" ` +
+    `<button class="buildcell${t ? " filled" : " open"}${edit}" ` +
     `data-act="buildcell" data-arg="${i}" ${cellStyle(i, cw, ch)}>${inner}</button>`
+  );
+}
+
+// Can the selected build be committed at cell `i` right now? (unlocked, not a
+// duplicate of a unique build, footprint clear & in bounds, and affordable.)
+// Drives the placement ghost's valid / blocked styling.
+function placeValid(b: BuildDef, i: number): boolean {
+  if (!isUnlocked(b.lvl)) return false;
+  if (b.unique && isPlaced(b)) return false;
+  if (!buildFits(state.grid, i, b.w, b.h)) return false;
+  const cost = b.id === "soil" ? soilTileCost() : b.cost;
+  return state.coins >= cost;
+}
+
+// The pending placement preview: a movable ghost of the selected build. Tapping
+// it confirms (data-act placeok); the corner ✕ cancels; tapping any other cell
+// repositions it. Coloured green when it can be placed, red when blocked.
+function placeGhost(): string {
+  if (!state.build || state.placeAt == null) return "";
+  const b = BUILD_BY_ID[state.buildSel];
+  if (!b) return "";
+  const i = state.placeAt;
+  const ok = placeValid(b, i);
+  const art = b.id === "soil" ? "" : buildArtById(b.id);
+  const inner = art ? `<span class="bc-art">${art}</span>` : `<span class="bc-ico">${b.ico}</span>`;
+  return (
+    `<div class="placeghost ${ok ? "ok" : "bad"}" data-act="placeok" ${cellStyle(i, b.w, b.h)}>` +
+    inner +
+    `<span class="pg-badge">${ok ? "✓" : "✖"}</span>` +
+    `<button class="pg-x" data-act="placecancel" aria-label="cancel">✕</button>` +
+    "</div>"
   );
 }
 
@@ -283,6 +320,10 @@ function renderToolbar(): string {
         `<span class="name">${esc(buildName(b))}</span>` +
         `<span class="cost${lock ? " lock" : ""}">${costLabel}</span></button>`;
     });
+    h +=
+      `<button class="tool${state.buildSel === MOVE_TOOL ? " selected" : ""}" data-act="buildsel" data-arg="${MOVE_TOOL}">` +
+      `<span class="ico">✋</span><span class="name">${esc(MG.i18n.t("bMove"))}</span>` +
+      `<span class="cost">·</span></button>`;
     h +=
       `<button class="tool${state.buildSel === REMOVE_TOOL ? " selected" : ""}" data-act="buildsel" data-arg="${REMOVE_TOOL}">` +
       `<span class="ico">🚮</span><span class="name">${esc(MG.i18n.t("bRemove"))}</span>` +
@@ -337,7 +378,8 @@ export function render(): void {
   }
   dom.world.innerHTML =
     `<svg viewBox="0 0 ${WORLD_W} ${WORLD_H}" preserveAspectRatio="none" aria-hidden="true">${buildScene()}</svg>` +
-    cells;
+    cells +
+    placeGhost();
   dom.world.classList.toggle("building", state.build);
   applyWorld();
   dom.toolbar.innerHTML = renderToolbar();

@@ -29,6 +29,7 @@ import {
   MAX_SOIL,
   MAX_SPRINKLER,
   MAX_TRADE,
+  MOVE_TOOL,
   PROD_BY_ID,
   REMOVE_TOOL,
   WATER_MS,
@@ -64,6 +65,8 @@ import {
   countAnimals,
   ensurePen,
   markDirty,
+  moveBuild,
+  rootOf,
   save,
   stampBuild,
   state,
@@ -95,18 +98,30 @@ export function handle(act: string, arg?: string): void {
 
   if (act === "mode") {
     state.build = !state.build;
+    state.moveSrc = null; // drop any held building when leaving / re-entering build
+    state.placeAt = null; // and discard any pending placement preview
     markDirty();
     render();
     return;
   }
   if (act === "buildsel") {
     state.buildSel = arg as string;
+    state.moveSrc = null; // switching tools puts down whatever was picked up
+    state.placeAt = null; // and clears any pending placement preview
     markDirty();
     render();
     return;
   }
   if (act === "buildcell") {
     buildCell(+(arg as string));
+    return;
+  }
+  if (act === "placeok") {
+    placeConfirm();
+    return;
+  }
+  if (act === "placecancel") {
+    placeCancel();
     return;
   }
 
@@ -361,6 +376,28 @@ function buildCell(i: number): void {
     render();
     return;
   }
+  if (state.buildSel === MOVE_TOOL) {
+    moveCell(i);
+    return;
+  }
+  const b = BUILD_BY_ID[state.buildSel];
+  if (!b) return;
+  // Don't commit on the first tap — drop a preview ghost the player can shuffle
+  // around. Tapping the ghost confirms (placeConfirm); tapping another cell
+  // moves it here. So this tap only (re)positions the pending placement.
+  const first = state.placeAt == null;
+  state.placeAt = i;
+  if (first) toast(MG.i18n.t("placeHint"));
+  markDirty();
+  render();
+}
+
+// Commit the pending placement preview (the player tapped the ghost). Runs the
+// same affordability / footprint / unlock checks as before; on any failure it
+// toasts the reason and leaves the preview up so the spot can be changed.
+function placeConfirm(): void {
+  const i = state.placeAt;
+  if (i == null) return;
   const b = BUILD_BY_ID[state.buildSel];
   if (!b) return;
   if (!isUnlocked(b.lvl)) {
@@ -384,9 +421,51 @@ function buildCell(i: number): void {
   state.coins -= cost;
   stampBuild(state.grid, i, makeTile(b));
   if (b.pen) ensurePen(b.pen);
+  state.placeAt = null;
   toast(MG.i18n.t("built"));
   save();
   render();
+}
+
+// Discard the pending placement preview without building anything.
+function placeCancel(): void {
+  if (state.placeAt == null) return;
+  state.placeAt = null;
+  markDirty();
+  render();
+}
+
+// The move tool is a two-tap gesture: the first tap on a building picks it up
+// (records its root in `state.moveSrc`), the second tap drops it so the tapped
+// cell becomes its new top-left. Tapping the held building again cancels.
+function moveCell(i: number): void {
+  if (state.moveSrc == null) {
+    if (!state.grid[i]) {
+      toast(MG.i18n.t("movePick"));
+      return;
+    }
+    state.moveSrc = rootOf(i);
+    toast(MG.i18n.t("moveDrop"));
+    markDirty();
+    render();
+    return;
+  }
+  const src = state.moveSrc;
+  if (rootOf(i) === src) {
+    // Tapped the building we're holding — put it back down (cancel).
+    state.moveSrc = null;
+    markDirty();
+    render();
+    return;
+  }
+  if (moveBuild(src, i)) {
+    state.moveSrc = null;
+    toast(MG.i18n.t("moved"));
+    save();
+    render();
+  } else {
+    toast(MG.i18n.t("occupied"));
+  }
 }
 
 function buyAnimal(id: string): void {
