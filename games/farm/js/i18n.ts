@@ -68,7 +68,7 @@ MG.i18n.register({
     apiaryEmpty: "No hives yet — add one to start making honey.",
     // pens
     tipPen:
-      "Sweep across the animals to collect & feed by hand, or add a feeder and collector to run the pen on its own.",
+      "Tap Feed to feed hungry animals and Collect to gather produce by hand, or add a feeder and collector to run the pen on its own.",
     penEmpty: "No animals here yet — buy one below.",
     feed: "Feed",
     collect: "Collect",
@@ -239,7 +239,7 @@ MG.i18n.register({
     buyHive: "Добавить улей",
     apiaryEmpty: "Ульев пока нет — добавь, чтобы начать собирать мёд.",
     tipPen:
-      "Веди по животным, чтобы собирать и кормить вручную, или поставь кормушку и сборщик — и загон работает сам.",
+      "Нажми «Кормить», чтобы покормить голодных, и «Собрать», чтобы забрать продукцию вручную, или поставь кормушку и сборщик — и загон работает сам.",
     penEmpty: "Здесь пока нет животных — купи ниже.",
     feed: "Кормить",
     collect: "Собрать",
@@ -404,7 +404,7 @@ MG.i18n.register({
     buyHive: "Añadir colmena",
     apiaryEmpty: "Aún no hay colmenas — añade una para empezar a hacer miel.",
     tipPen:
-      "Desliza por los animales para recoger y alimentar a mano, o añade un comedero y un recolector para que el corral funcione solo.",
+      "Pulsa Alimentar para dar de comer a los animales con hambre y Recoger para recoger la producción a mano, o añade un comedero y un recolector para que el corral funcione solo.",
     penEmpty: "Aún no hay animales aquí — compra uno abajo.",
     feed: "Alimentar",
     collect: "Recoger",

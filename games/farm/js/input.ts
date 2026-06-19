@@ -3,9 +3,10 @@
  *
  *  Keeps the world scaled to cover the viewport and lets the player drag it
  *  around. Owns the pointer pipeline: a press on open land pans; a press on a
- *  field tile or a pen animal starts a hold-and-sweep "paint" gesture that
- *  tends each cell entered. Also delegates taps to `handle()` (the action
- *  layer) and shows the one-time "drag to look around" hint.
+ *  field tile starts a hold-and-sweep "paint" gesture that tends each cell
+ *  entered. Also delegates taps to `handle()` (the action layer) — tapping a
+ *  pen opens its panel, where animals are fed/collected — and shows the
+ *  one-time "drag to look around" hint.
  *
  *  `initInput()` wires the listeners at boot (called from main.ts).
  * ========================================================================== */
