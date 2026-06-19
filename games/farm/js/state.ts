@@ -42,6 +42,8 @@ import type { Pen, State, Tile, TileKind } from "./types";
 const VALID_KINDS: Record<string, boolean> = {
   soil: true,
   market: true,
+  storage: true,
+  research: true,
   board: true,
   kitchen: true,
   greenhouse: true,
@@ -50,8 +52,27 @@ const VALID_KINDS: Record<string, boolean> = {
   link: true,
 };
 
+// Stamp a 2×2 building of `kind` into the first free spot of a *saved* grid
+// (the migration runs on raw save data, before the canonical state exists), but
+// only if one isn't already placed. Used to retrofit the storage / research
+// buildings into older saves that pre-date them.
+function injectBuild(grid: any[], kind: string): void {
+  if (grid.some((t) => t && t.kind === kind)) return;
+  for (let i = 0; i < GRID_N; i++) {
+    if (!inBounds(i, 2, 2)) continue;
+    const cells = footprintCells(i, 2, 2);
+    if (cells.every((c) => !grid[c])) {
+      grid[i] = { kind, w: 2, h: 2 };
+      cells.forEach((c) => {
+        if (c !== i) grid[c] = { kind: "link", root: i };
+      });
+      return;
+    }
+  }
+}
+
 const store = MG.storage<Record<string, any>>("farm", {
-  version: 7,
+  version: 8,
   migrations: {
     // 6: the farm becomes a buildable tile grid (soil, shops and pens are all
     // placed on a grid). The old fixed-field layout is incompatible.
@@ -60,6 +81,15 @@ const store = MG.storage<Record<string, any>>("farm", {
     // multi-cell footprints (2×2 shops, a 3×3 greenhouse). Old single-cell
     // grids no longer line up, so any pre-footprint save is dropped.
     7: () => null,
+    // 8: storage capacity & workshop upgrades moved out of the market into their
+    // own Storage and Research buildings — retrofit them into existing farms.
+    8: (d) => {
+      if (d && Array.isArray(d.grid)) {
+        injectBuild(d.grid, "storage");
+        injectBuild(d.grid, "research");
+      }
+      return d;
+    },
   },
 });
 
@@ -168,8 +198,10 @@ export function moveBuild(src: number, dest: number): boolean {
 function freshGrid(): (Tile | null)[] {
   const grid: (Tile | null)[] = new Array(GRID_N).fill(null);
   const at = (col: number, row: number) => row * GRID_COLS + col;
-  stampBuild(grid, at(2, 1), { kind: "market", w: 2, h: 2 });
-  stampBuild(grid, at(6, 1), { kind: "board", w: 2, h: 2 });
+  stampBuild(grid, at(1, 1), { kind: "market", w: 2, h: 2 });
+  stampBuild(grid, at(7, 1), { kind: "board", w: 2, h: 2 });
+  stampBuild(grid, at(1, 7), { kind: "storage", w: 2, h: 2 });
+  stampBuild(grid, at(7, 7), { kind: "research", w: 2, h: 2 });
   [
     [4, 4],
     [5, 4],

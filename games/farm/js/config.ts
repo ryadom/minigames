@@ -223,6 +223,8 @@ export const BUILDS: BuildDef[] = [
   { id: "soil", ico: "🟫", cost: 0, lvl: 1, unique: false, w: 1, h: 1 },
   { id: "board", ico: "🪧", cost: 50, lvl: 1, unique: true, w: 2, h: 2 },
   { id: "market", ico: "🏪", cost: 0, lvl: 1, unique: true, w: 2, h: 2 },
+  { id: "storage", ico: "📦", cost: 0, lvl: 1, unique: true, w: 2, h: 2 },
+  { id: "research", ico: "🔬", cost: 0, lvl: 1, unique: true, w: 2, h: 2 },
   { id: "kitchen", ico: "🍳", cost: 120, lvl: 2, unique: true, w: 2, h: 2 },
   { id: "apiary", ico: "🐝", cost: 300, lvl: 5, unique: true, w: 2, h: 2 },
   { id: "greenhouse", ico: "🌻", cost: 240, lvl: 5, unique: true, w: 3, h: 3 },

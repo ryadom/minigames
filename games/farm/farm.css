@@ -696,6 +696,88 @@ body {
 }
 .section-h:first-child { margin-top: 0; }
 
+/* ---- Kitchen cooking queue: a horizontal carousel of stoves, each a dish
+ *  image inside a progress ring. Tap a ready (green) one to collect. ---- */
+.cook-queue {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  padding: 2px 2px 8px;
+  margin-bottom: 6px;
+}
+.cook-queue::-webkit-scrollbar { display: none; }
+.cook-slot {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cook-slot[disabled] { cursor: default; }
+.cook-ring {
+  --p: 0;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  padding: 5px;
+  background: conic-gradient(#ff9d3d calc(var(--p) * 1%), rgba(0, 0, 0, 0.14) 0);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.08s ease;
+}
+.cook-ring.ready { background: #7fd06a; animation: pulse 1.2s ease-in-out infinite; }
+.cook-slot.empty .cook-ring { background: rgba(0, 0, 0, 0.1); box-shadow: none; }
+.cook-slot:active:not([disabled]) .cook-ring { transform: scale(0.94); }
+.cs-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fffdf5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  line-height: 1;
+}
+.cook-slot.empty .cs-img { background: rgba(255, 255, 255, 0.5); opacity: 0.55; font-size: 1.4rem; }
+.cs-tag {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #5a4a1a;
+  min-height: 0.95em;
+  white-space: nowrap;
+}
+.cook-slot.ready .cs-tag { color: #2c7a1e; }
+
+/* ---- Storage barn: a read-only grid of everything currently held. ---- */
+.store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+}
+.store-item {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+}
+.si-ico { font-size: 1.6rem; line-height: 1; }
+.si-n { font-size: 0.8rem; font-weight: 800; color: #4a3f1a; }
+
 /* ---- Sliding panel (market / kitchen / pen / orders) ---- */
 .overlay {
   position: fixed;

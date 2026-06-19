@@ -74,6 +74,8 @@ import type { BuildDef, Tile } from "./types";
 // Buildings you can step into; each opens as a sliding panel.
 const PANELS: Record<string, { ico: string; title: string }> = {
   market: { ico: "🏪", title: "tabMarket" },
+  storage: { ico: "📦", title: "tabStorage" },
+  research: { ico: "🔬", title: "tabResearch" },
   pen: { ico: "🐄", title: "" },
   cook: { ico: "🍳", title: "tabCook" },
   greenhouse: { ico: "🌻", title: "tabGreenhouse" },
@@ -163,6 +165,15 @@ function buildingCell(i: number, t: Tile): string {
   if (t.kind === "market") {
     title = MG.i18n.t("tabMarket");
     sub = `🪙 ${state.coins}`;
+  } else if (t.kind === "storage") {
+    title = MG.i18n.t("tabStorage");
+    const n = invCount();
+    sub = `📦 ${n}/${state.cap}`;
+  } else if (t.kind === "research") {
+    title = MG.i18n.t("tabResearch");
+    const avail = researchAvail();
+    sub = `🔬 ${avail}/${RESEARCH_TOTAL}`;
+    badge = avail || "";
   } else if (t.kind === "board") {
     arg = "quests";
     title = MG.i18n.t("tabQuests");
@@ -283,6 +294,8 @@ function buildName(b: BuildDef): string {
   if (b.pen) return name(b.pen);
   if (b.id === "soil") return MG.i18n.t("bSoil");
   if (b.id === "market") return MG.i18n.t("tabMarket");
+  if (b.id === "storage") return MG.i18n.t("tabStorage");
+  if (b.id === "research") return MG.i18n.t("tabResearch");
   if (b.id === "board") return MG.i18n.t("tabQuests");
   if (b.id === "kitchen") return MG.i18n.t("tabCook");
   if (b.id === "greenhouse") return MG.i18n.t("tabGreenhouse");
@@ -680,15 +693,19 @@ function renderOverlay(): void {
   const body =
     tab === "market"
       ? renderMarket()
-      : tab === "pen"
-        ? renderPen(state.penType as string)
-        : tab === "cook"
-          ? renderCook()
-          : tab === "greenhouse"
-            ? renderGreenhouse()
-            : tab === "apiary"
-              ? renderApiary()
-              : renderQuests();
+      : tab === "storage"
+        ? renderStorage()
+        : tab === "research"
+          ? renderResearch()
+          : tab === "pen"
+            ? renderPen(state.penType as string)
+            : tab === "cook"
+              ? renderCook()
+              : tab === "greenhouse"
+                ? renderGreenhouse()
+                : tab === "apiary"
+                  ? renderApiary()
+                  : renderQuests();
   // The pen panel's icon / title depend on which animal you tapped, so a
   // change of pen type counts as a fresh panel even when the tab is "pen".
   const fresh = overlayTab !== tab || (tab === "pen" && overlayPenType !== state.penType);
@@ -835,9 +852,31 @@ function renderPen(type: string): string {
 function renderCook(): string {
   let h = tipLine("tipCook");
 
-  // Recipes (the menu) render first so that starting a dish — which adds a
-  // card to the stoves queue below — doesn't push the recipe you just tapped
-  // down the screen.
+  // The cooking queue sits up top as a compact carousel — each busy stove is
+  // just the dish's image inside a progress ring (tap a ready one to collect),
+  // free stoves are faint placeholders. Keeping it small means starting a dish
+  // never pushes the recipe you just tapped out of view.
+  h += `<div class="section-h">${esc(MG.i18n.t("stoves"))} (${state.stoves})</div>`;
+  h += collectAllBar("cook", readyCounts().cook);
+  h += `<div class="cook-queue">`;
+  state.cooks.forEach((c, i) => {
+    if (!c) {
+      h += `<div class="cook-slot empty"><span class="cook-ring"><span class="cs-img">🍳</span></span></div>`;
+      return;
+    }
+    const def = DISH_BY_ID[c.dish];
+    const total = c.total || def.cook;
+    const left = Math.max(0, c.endsAt - Date.now());
+    const ready = left <= 0;
+    const pct = Math.min(100, ((total - left) / total) * 100).toFixed(1);
+    h +=
+      `<button class="cook-slot${ready ? " ready" : ""}" data-act="collectcook" data-arg="${i}"${ready ? "" : " disabled"}>` +
+      `<span class="cook-ring${ready ? " ready" : ""}" data-cbar="${i}" style="--p:${pct}">` +
+      `<span class="cs-img">${def.ico}</span></span>` +
+      `<span class="cs-tag">${ready ? "✓" : fmtTime(left)}</span></button>`;
+  });
+  h += `</div>`;
+
   h += `<div class="section-h">${esc(MG.i18n.t("recipes"))}</div>`;
   const freeStove = state.cooks.some((c) => !c);
   DISHES.forEach((d) => {
@@ -860,32 +899,6 @@ function renderCook(): string {
         : `<button class="btn sm" data-act="cook" data-arg="${d.id}"${can && freeStove ? "" : " disabled"}>${esc(MG.i18n.t("cook"))}</button>`) +
       "</div></div>";
   });
-
-  h += `<div class="section-h">${esc(MG.i18n.t("stoves"))} (${state.stoves})</div>`;
-  h += collectAllBar("cook", readyCounts().cook);
-  let freeStoves = 0;
-  state.cooks.forEach((c, i) => {
-    if (!c) {
-      freeStoves++;
-      return;
-    }
-    const def = DISH_BY_ID[c.dish];
-    const total = c.total || def.cook;
-    const left = Math.max(0, c.endsAt - Date.now());
-    const ready = left <= 0;
-    const pct = Math.min(100, ((total - left) / total) * 100).toFixed(1);
-    h +=
-      `<div class="card" data-cook="${i}"><span class="big">${def.ico}</span><div class="body">` +
-      `<div class="ttl">${esc(name(c.dish))} ${stk(c.dish)}` +
-      (ready
-        ? ' <span class="badge ready">✓</span>'
-        : ` <span class="badge">${fmtTime(left)}</span>`) +
-      "</div>" +
-      `<div class="pbar${ready ? "" : " warm"}" data-cbar="${i}"><i style="width:${pct}%"></i></div></div>` +
-      `<div class="right"><button class="btn go sm" data-act="collectcook" data-arg="${i}"${ready ? "" : " disabled"}>` +
-      `${esc(MG.i18n.t("collect"))}</button></div></div>`;
-  });
-  h += freeSlotsCard("🍳", freeStoves);
 
   return h;
 }
@@ -1022,9 +1035,59 @@ function renderMarket(): string {
         "</div></div>";
     });
   }
+  return h;
+}
 
-  h += `<div class="section-h">${esc(MG.i18n.t("mUpgrades"))}</div>`;
+/* ------------------------------- STORAGE ----------------------------- */
+// The barn: how full storage is, the capacity upgrade, and a read-only grid of
+// everything currently held (selling still lives at the Market).
+function renderStorage(): string {
+  let h = tipLine("tipStorage");
+  const n = invCount();
+  const pct = Math.min(100, (n / state.cap) * 100).toFixed(1);
+  h +=
+    `<div class="card"><span class="big">📦</span><div class="body">` +
+    `<div class="ttl">${esc(MG.i18n.t("storageUse"))} <span class="badge ${n >= state.cap ? "" : "lock"}">${n}/${state.cap}</span></div>` +
+    `<div class="pbar"><i style="width:${pct}%"></i></div></div></div>`;
   h += upgradeCard("cap", "📦", MG.i18n.t("upCap"), `${state.cap} → ${state.cap + 20}`, capCost());
+
+  h += `<div class="section-h">${esc(MG.i18n.t("stored"))}</div>`;
+  const ids: string[] = [];
+  for (const id in ITEM) if (state.inv[id]) ids.push(id);
+  ids.sort((a, b) => price(b) - price(a));
+  if (!ids.length) {
+    h += `<div class="empty-note">${esc(MG.i18n.t("emptyStore"))}</div>`;
+  } else {
+    h += `<div class="store-grid">`;
+    ids.forEach((id) => {
+      h +=
+        `<div class="store-item"><span class="si-ico">${ITEM[id].ico}</span>` +
+        `<span class="si-n">${state.inv[id]}</span></div>`;
+    });
+    h += `</div>`;
+  }
+  return h;
+}
+
+/* ------------------------------ RESEARCH ----------------------------- */
+// The lab: the farm-wide upgrades that used to sit in the market (an extra
+// stove, richer soil, the sprinkler, a faster oven, greenhouse heat and the
+// trader's licence).
+const RESEARCH_TOTAL = 6;
+// How many research upgrades the player can buy right now (affordable & not
+// maxed) — drives the building's badge so a ready upgrade is noticeable.
+function researchAvail(): number {
+  let n = 0;
+  if (state.coins >= stoveCost()) n++;
+  if (state.soil < MAX_SOIL && state.coins >= soilCost()) n++;
+  if (state.sprinkler < MAX_SPRINKLER && state.coins >= sprinklerCost()) n++;
+  if (state.oven < MAX_OVEN && state.coins >= ovenCost()) n++;
+  if (state.heater < MAX_HEATER && state.coins >= heaterCost()) n++;
+  if (state.trade < MAX_TRADE && state.coins >= tradeCost()) n++;
+  return n;
+}
+function renderResearch(): string {
+  let h = tipLine("tipResearch");
   h += upgradeCard(
     "stove",
     "🍳",
@@ -1143,8 +1206,9 @@ export function patch(): void {
       const def = DISH_BY_ID[c.dish];
       const total = c.total || def.cook;
       const left = Math.max(0, c.endsAt - Date.now());
-      const bar = dom.overlay.querySelector(`[data-cbar="${i}"] > i`) as HTMLElement | null;
-      if (bar) bar.style.width = `${Math.min(100, ((total - left) / total) * 100).toFixed(1)}%`;
+      const ring = dom.overlay.querySelector(`[data-cbar="${i}"]`) as HTMLElement | null;
+      if (ring)
+        ring.style.setProperty("--p", Math.min(100, ((total - left) / total) * 100).toFixed(1));
     });
   } else if (state.tab === "greenhouse") {
     state.pots.forEach((p, i) => {

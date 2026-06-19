@@ -96,6 +96,8 @@ export interface BuildDef {
 export type TileKind =
   | "soil"
   | "market"
+  | "storage"
+  | "research"
   | "board"
   | "kitchen"
   | "greenhouse"

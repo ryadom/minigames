@@ -87,6 +87,54 @@ function kitchen(): string {
   );
 }
 
+// Storage — a little timber warehouse / barn with a big door and stacked crates.
+function storage(): string {
+  return svg(
+    shadow(50, 92, 36, 7) +
+      // barn body
+      `<rect x="18" y="40" width="64" height="46" rx="3" fill="#c9883f" stroke="#a96c2c" stroke-width="2"/>` +
+      // gabled roof
+      `<path d="M12 42 L50 18 L88 42 Z" fill="#b65b46" stroke="#9c4a37" stroke-width="2"/>` +
+      `<path d="M50 18 L88 42 L84 42 L50 22 Z" fill="rgba(0,0,0,0.12)"/>` +
+      // hayloft window
+      `<rect x="45" y="28" width="10" height="10" rx="1.5" fill="#f6d98a" stroke="#a96c2c" stroke-width="1.4"/>` +
+      `<line x1="50" y1="28" x2="50" y2="38" stroke="#a96c2c" stroke-width="1.2"/>` +
+      // wide sliding door with cross-braces
+      `<rect x="36" y="52" width="28" height="34" rx="2" fill="#e0b06a"/>` +
+      `<g stroke="#a96c2c" stroke-width="1.6"><line x1="36" y1="52" x2="64" y2="86"/>` +
+      `<line x1="64" y1="52" x2="36" y2="86"/><line x1="50" y1="52" x2="50" y2="86"/></g>` +
+      // stacked crates by the door
+      `<g fill="#dba85b" stroke="#a96c2c" stroke-width="1.2">` +
+      `<rect x="20" y="68" width="13" height="13" rx="1.5"/><rect x="22" y="56" width="11" height="11" rx="1.5"/>` +
+      `<rect x="67" y="70" width="12" height="12" rx="1.5"/></g>` +
+      `<path d="M20 74 h13 M26.5 68 v13" stroke="#a96c2c" stroke-width="1"/>`,
+  );
+}
+
+// Research — a lab cottage with a bubbling flask, sparks and a little antenna.
+function research(): string {
+  return svg(
+    shadow(50, 92, 34, 7) +
+      // building body
+      `<rect x="22" y="44" width="56" height="42" rx="4" fill="#dfe7ee" stroke="#aebcc9" stroke-width="2"/>` +
+      // flat roof + parapet
+      `<rect x="18" y="38" width="64" height="9" rx="3" fill="#9fb0c0"/>` +
+      // antenna with a spark
+      `<line x1="68" y1="38" x2="68" y2="26" stroke="#7c8b99" stroke-width="2"/>` +
+      `<circle cx="68" cy="24" r="3" fill="#ffd23f"/>` +
+      `<path d="M68 24 l4 -4 M68 24 l-4 -4 M68 24 l5 1" stroke="#ffd23f" stroke-width="1.2"/>` +
+      // door
+      `<rect x="30" y="60" width="14" height="26" rx="2" fill="#9fb0c0"/>` +
+      `<circle cx="41" cy="73" r="1.4" fill="#5d6b78"/>` +
+      // window with an Erlenmeyer flask of bubbling green brew
+      `<rect x="52" y="54" width="22" height="22" rx="2" fill="#bfe1f2" stroke="#9fb0c0" stroke-width="1.6"/>` +
+      `<path d="M61 58 h4 v5 l5 9 a2 2 0 0 1 -2 3 h-10 a2 2 0 0 1 -2 -3 l5 -9 Z" fill="#fff" stroke="#7c8b99" stroke-width="1.2"/>` +
+      `<path d="M58.5 70 h9 l1.5 2.6 a2 2 0 0 1 -2 3 h-9 a2 2 0 0 1 -2 -3 Z" fill="#5fcf6a"/>` +
+      `<circle cx="62" cy="66" r="1.1" fill="#7fd06a"/><circle cx="65" cy="62" r="0.9" fill="#7fd06a"/>` +
+      `<circle cx="64" cy="58" r="0.8" fill="#7fd06a"/>`,
+  );
+}
+
 // Greenhouse — a glass house with a peaked roof and leafy plants inside.
 function greenhouse(): string {
   return svg(
@@ -201,6 +249,8 @@ function paddock(): string {
 
 const BUILDINGS: Record<string, () => string> = {
   market,
+  storage,
+  research,
   kitchen,
   greenhouse,
   apiary,
