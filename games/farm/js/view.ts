@@ -67,9 +67,16 @@ import { itemName as name, tf } from "./i18n";
 import { applyWorld, ensureScale } from "./input";
 import { dom, ui } from "./runtime";
 import { buildScene, cellPos, pf, TILE, WORLD_H, WORLD_W } from "./scene";
-import { animalSprite, buildArtById, buildingArt, cropArt, cropStage } from "./sprites";
+import {
+  type AnimalStatus,
+  animalSprite,
+  buildArtById,
+  buildingArt,
+  cropArt,
+  cropStage,
+} from "./sprites";
 import { buildFits, ensurePen, need, state } from "./state";
-import type { BuildDef, Tile } from "./types";
+import type { AnimalInstance, BuildDef, Tile } from "./types";
 
 // Buildings you can step into; each opens as a sliding panel.
 const PANELS: Record<string, { ico: string; title: string }> = {
@@ -394,6 +401,8 @@ const ANIMAL_VIEW: Record<string, { size: number; speed: number }> = {
 interface Walker {
   el: HTMLElement; // outer positioned element (left/top set in world %)
   face: HTMLElement; // inner element flipped (scaleX) to face the walk way
+  hop: HTMLElement; // inner element holding the sprite art (re-drawn on status change)
+  statusKey: string; // last drawn "status:icon", so the art is only rebuilt when it changes
   // Roam bounds (world units) — the grassy interior of the pen's footprint.
   x0: number;
   x1: number;
@@ -468,6 +477,8 @@ function newWalker(type: string, sizeU: number): Walker {
   return {
     el,
     face,
+    hop,
+    statusKey: "idle:",
     x0: 0,
     x1: 0,
     y0: 0,
@@ -490,6 +501,23 @@ function applyWalker(w: Walker): void {
   w.face.style.transform = `scaleX(${w.dir})`;
 }
 
+// The mood cue a roaming animal should show, plus the emoji to put in it:
+// `ready` (its produce is ripe — show the product) takes priority over
+// `hungry` (it needs feeding — show the feed crop); otherwise it just idles.
+function animalMood(
+  type: string,
+  a: AnimalInstance | undefined,
+): {
+  status: AnimalStatus;
+  icon: string;
+} {
+  const def = ANIMAL_BY_ID[type];
+  if (!a || !def) return { status: "idle", icon: "" };
+  if (a.grown >= def.interval) return { status: "ready", icon: ITEM[def.prod]?.ico || "" };
+  if (Date.now() >= a.feedUntil) return { status: "hungry", icon: CROP_BY_ID[def.feed]?.ico || "" };
+  return { status: "idle", icon: "" };
+}
+
 // Reconcile the roaming sprites against the pens currently on the grid: one
 // sprite per owned animal (up to MAX_ROAMING), created / removed as pens and
 // herds change, and re-homed when a pen is moved.
@@ -504,9 +532,8 @@ function syncLivestock(): void {
     if (!cfg) continue;
     const sizeU = cfg.size * TILE;
     const b = penRoam(i, t.w || 2, t.h || 2, sizeU);
-    let count = 0;
-    for (const a of state.animals) if (a.type === type) count++;
-    const show = Math.min(count, MAX_ROAMING);
+    const herd = state.animals.filter((a) => a.type === type);
+    const show = Math.min(herd.length, MAX_ROAMING);
     for (let n = 0; n < show; n++) {
       const key = `${type}#${n}`;
       want.add(key);
@@ -515,6 +542,14 @@ function syncLivestock(): void {
         w = newWalker(type, sizeU);
         walkers.set(key, w);
         layer.appendChild(w.el);
+      }
+      // Reflect the matching animal's mood: a hungry / ready cue floats over it.
+      // Only rebuild the art when that mood actually changes (per render tick).
+      const { status, icon } = animalMood(type, herd[n]);
+      const moodKey = `${status}:${icon}`;
+      if (w.statusKey !== moodKey) {
+        w.statusKey = moodKey;
+        w.hop.innerHTML = animalSprite(type, status, icon);
       }
       w.x0 = b.x0;
       w.x1 = b.x1;
