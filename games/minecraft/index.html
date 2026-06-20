@@ -28,10 +28,11 @@
       <!-- Block-breaking progress bar (shown while holding mine) -->
       <div class="minebar" id="minebar"><div class="minefill" id="minefill"></div></div>
 
-      <!-- Top buttons: open inventory / crafting overlay -->
+      <!-- Top buttons: open inventory / crafting / settings overlay -->
       <div class="topbtns">
         <button class="topbtn" id="btn-bag" type="button" aria-label="inventory">🎒</button>
         <button class="topbtn" id="btn-craft" type="button" aria-label="crafting">🛠️</button>
+        <button class="topbtn" id="btn-settings" type="button" aria-label="settings">⚙️</button>
       </div>
 
       <!-- Hotbar (always visible; tap / 1-9 / wheel to pick a block) -->
@@ -44,6 +45,19 @@
           <div class="tbtn jump" id="btn-jump" aria-label="jump">⤒</div>
           <div class="tbtn mine" id="btn-mine" aria-label="mine">⛏️</div>
           <div class="tbtn place" id="btn-place" aria-label="place">▥</div>
+        </div>
+      </div>
+
+      <!-- Settings / pause menu (gear button or Esc / O) -->
+      <div class="overlay menu hidden" id="settings">
+        <div class="panel">
+          <div class="title" id="set-title">⚙️ Settings</div>
+          <div class="hint" id="set-hint"></div>
+          <div class="menu-btns">
+            <button class="menu-btn primary" id="set-resume" type="button">▶ Resume</button>
+            <button class="menu-btn" id="set-fly" type="button">Fly</button>
+            <button class="menu-btn" id="set-new" type="button">New world</button>
+          </div>
         </div>
       </div>
 

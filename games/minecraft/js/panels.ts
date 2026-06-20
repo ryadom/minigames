@@ -21,10 +21,16 @@ interface PanelDeps {
   onChange: () => void; // refresh hotbar + persist
 }
 
+/** Which menu is showing: the backpack (`inv`, basic hand crafting) or the
+ *  crafting table (`craft`, every recipe). */
+export type PanelMode = "inv" | "craft";
+
 export interface Panels {
-  toggle: () => void;
+  open: (mode: PanelMode) => void;
+  toggle: (mode: PanelMode) => void;
   close: () => void;
   isOpen: () => boolean;
+  mode: () => PanelMode;
   refresh: () => void;
 }
 
@@ -49,6 +55,7 @@ function iconEl(atlas: HTMLCanvasElement, id: string, count: number, size = 34):
 export function createPanels(deps: PanelDeps): Panels {
   const { inv, atlas, onChange } = deps;
   const t = (k: string): string => MG.i18n.t(k) as string;
+  let mode: PanelMode = "inv";
 
   // --- Overlay scaffold ---
   const overlay = document.createElement("div");
@@ -165,7 +172,10 @@ export function createPanels(deps: PanelDeps): Panels {
 
   function renderRecipes(): void {
     craftGrid.innerHTML = "";
-    for (const r of RECIPES) {
+    // The backpack only offers basic hand crafting; the crafting table offers
+    // every recipe (tools included).
+    const list = mode === "craft" ? RECIPES : RECIPES.filter((r) => !r.station);
+    for (const r of list) {
       const row = document.createElement("div");
       row.className = "mc-recipe";
 
@@ -210,8 +220,9 @@ export function createPanels(deps: PanelDeps): Panels {
   }
 
   function localize(): void {
-    titleEl.textContent = t("invTitle");
-    craftHead.textContent = `🛠️ ${t("craftTitle")}`;
+    const atTable = mode === "craft";
+    titleEl.textContent = atTable ? `🛠️ ${t("craftTitle")}` : `🎒 ${t("invTitle")}`;
+    craftHead.textContent = atTable ? t("craftTitle") : t("craftBasic");
     invHead.textContent = `🎒 ${t("invItems")}`;
   }
 
@@ -221,7 +232,8 @@ export function createPanels(deps: PanelDeps): Panels {
     renderInv();
   }
 
-  function open(): void {
+  function open(m: PanelMode): void {
+    mode = m;
     refresh();
     overlay.classList.remove("hidden");
     if (document.pointerLockElement) document.exitPointerLock();
@@ -242,9 +254,9 @@ export function createPanels(deps: PanelDeps): Panels {
     return !overlay.classList.contains("hidden");
   }
 
-  function toggle(): void {
-    if (isOpen()) close();
-    else open();
+  function toggle(m: PanelMode): void {
+    if (isOpen() && mode === m) close();
+    else open(m);
   }
 
   closeBtn.addEventListener("click", close);
@@ -255,5 +267,5 @@ export function createPanels(deps: PanelDeps): Panels {
     if (isOpen()) refresh();
   });
 
-  return { toggle, close, isOpen, refresh };
+  return { open, toggle, close, isOpen, mode: () => mode, refresh };
 }

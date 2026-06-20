@@ -61,13 +61,15 @@ canvas {
 /* ----------------------------------------------------------- held item (first-person view-model) */
 .viewmodel {
   position: absolute;
-  right: 5%;
-  bottom: 70px;
+  right: 8%;
+  bottom: -10px;
   z-index: 1;
-  width: 128px;
-  height: 128px;
+  width: 168px;
+  height: 168px;
   pointer-events: none;
-  transform-origin: 85% 95%;
+  /* Pivot at the lower-right so the tool reads as rising from the player's
+     hand at the bottom edge of the view, not floating in the corner. */
+  transform-origin: 90% 100%;
   transform: rotate(-26deg);
   filter: drop-shadow(-3px 5px 6px rgba(0, 0, 0, 0.45));
   will-change: transform;
@@ -117,9 +119,9 @@ canvas {
 
 @media (max-width: 480px) {
   .viewmodel {
-    width: 96px;
-    height: 96px;
-    bottom: 64px;
+    width: 124px;
+    height: 124px;
+    bottom: -8px;
   }
 }
 
@@ -344,6 +346,36 @@ canvas {
   50% {
     transform: translateY(-5px);
   }
+}
+
+/* Settings / pause menu (reuses .overlay + .panel). */
+.menu-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.menu-btn {
+  padding: 11px 18px;
+  font-weight: 800;
+  font-size: 1rem;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.menu-btn:active {
+  background: rgba(255, 227, 77, 0.3);
+}
+
+.menu-btn.primary {
+  color: #062b3a;
+  background: #ffe34d;
+  border-color: #ffe34d;
+  box-shadow: 0 4px 0 #c9a900;
 }
 
 /* Slim hotbar slots on small screens so the row still fits. */
