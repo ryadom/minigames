@@ -18,15 +18,20 @@ export interface Recipe {
   id: string;
   out: Ingredient;
   in: Ingredient[];
+  /** Only craftable at a crafting table (false/undefined = also by hand). */
+  station?: boolean;
 }
 
 export const RECIPES: Recipe[] = [
+  // Basic crafts — available by hand from the inventory.
   { id: "planks", out: { id: "planks", count: 4 }, in: [{ id: "log", count: 1 }] },
   { id: "stick", out: { id: "stick", count: 4 }, in: [{ id: "planks", count: 2 }] },
   { id: "craft", out: { id: "craft", count: 1 }, in: [{ id: "planks", count: 4 }] },
+  // Tools — require a crafting table.
   {
     id: "wood_pickaxe",
     out: { id: "pickaxe", count: 1 },
+    station: true,
     in: [
       { id: "planks", count: 3 },
       { id: "stick", count: 2 },
@@ -35,6 +40,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "wood_axe",
     out: { id: "axe", count: 1 },
+    station: true,
     in: [
       { id: "planks", count: 3 },
       { id: "stick", count: 2 },
@@ -43,6 +49,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "wood_sword",
     out: { id: "sword", count: 1 },
+    station: true,
     in: [
       { id: "planks", count: 2 },
       { id: "stick", count: 1 },
@@ -51,6 +58,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "stone_pickaxe",
     out: { id: "pickaxe", count: 1 },
+    station: true,
     in: [
       { id: "cobble", count: 3 },
       { id: "stick", count: 2 },
@@ -59,6 +67,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "stone_axe",
     out: { id: "axe", count: 1 },
+    station: true,
     in: [
       { id: "cobble", count: 3 },
       { id: "stick", count: 2 },
@@ -67,6 +76,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "stone_sword",
     out: { id: "sword", count: 1 },
+    station: true,
     in: [
       { id: "cobble", count: 2 },
       { id: "stick", count: 1 },

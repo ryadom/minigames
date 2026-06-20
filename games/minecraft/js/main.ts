@@ -10,7 +10,7 @@
 
 import { MG } from "../../../shared/mg";
 import type { HeaderUI, SaveStore } from "../../../shared/types";
-import { AIR, breakTime, isSolid, type ToolType, WATER } from "./blocks";
+import { AIR, breakTime, CRAFT, isSolid, type ToolType, WATER } from "./blocks";
 import { createProgram, createTexture, type GL } from "./glutil";
 import { registerI18n } from "./i18n";
 import { HOTBAR_SIZE, Inventory, type SerializedSlot } from "./inventory";
@@ -714,12 +714,17 @@ function updateMineBar(): void {
 
 function place(): void {
   if (paused) return;
+  const hit = raycast();
+  if (!hit) return;
+  // Using a placed crafting table opens its crafting menu instead of placing.
+  if (world.get(hit.hx, hit.hy, hit.hz) === CRAFT) {
+    openCrafting();
+    return;
+  }
   const s = inventory.slots[sel];
   if (!s) return;
   const def = itemDef(s.id);
   if (def?.kind !== "block" || def.block === undefined) return;
-  const hit = raycast();
-  if (!hit) return;
   const { px, py, pz } = hit;
   if (!world.inBounds(px, py, pz)) return;
   const target = world.get(px, py, pz);
@@ -841,10 +846,11 @@ function refreshInventory(): void {
   scheduleSave();
 }
 
-/** Open / close the inventory + crafting overlay, pausing the game while up. */
-function togglePanels(): void {
-  panels.toggle();
-  paused = panels.isOpen();
+/** Recompute the paused state from whatever overlay is up (inventory / crafting
+ *  table / settings) and, when paused, drop any held inputs so the player
+ *  doesn't keep moving or mining behind the menu. */
+function refreshPause(): void {
+  paused = panels.isOpen() || settingsOpen;
   if (paused) {
     keys.fwd = keys.back = keys.left = keys.right = keys.jump = keys.down = false;
     mineHeld = false;
@@ -852,6 +858,74 @@ function togglePanels(): void {
     setSwing(false);
   }
 }
+
+/** Open the backpack (inventory + basic hand crafting). */
+function toggleInventory(): void {
+  closeSettings();
+  panels.toggle("inv");
+  refreshPause();
+}
+
+/** Open the crafting-table menu (every recipe). */
+function openCrafting(): void {
+  closeSettings();
+  panels.open("craft");
+  refreshPause();
+}
+
+function toggleCrafting(): void {
+  closeSettings();
+  panels.toggle("craft");
+  refreshPause();
+}
+
+function closePanels(): void {
+  panels.close();
+  refreshPause();
+}
+
+/* --------------------------------------------------------------- settings menu */
+
+// A small pause / settings menu (gear button or the Esc / O shortcut). Holds
+// the same world actions as the header plus a controls reminder, handy on
+// phones where the header is kept slim.
+const settingsEl = $("settings");
+const setResumeBtn = $("set-resume");
+const setFlyBtn = $("set-fly");
+const setNewBtn = $("set-new");
+let settingsOpen = false;
+
+function openSettings(): void {
+  if (panels.isOpen()) closePanels();
+  settingsOpen = true;
+  settingsEl.classList.remove("hidden");
+  if (document.pointerLockElement) document.exitPointerLock();
+  localizeSettings();
+  refreshPause();
+}
+function closeSettings(): void {
+  if (!settingsOpen) return;
+  settingsOpen = false;
+  settingsEl.classList.add("hidden");
+  refreshPause();
+}
+function toggleSettings(): void {
+  if (settingsOpen) closeSettings();
+  else openSettings();
+}
+
+setResumeBtn.addEventListener("click", closeSettings);
+setFlyBtn.addEventListener("click", () => {
+  toggleFly();
+  localizeSettings();
+});
+setNewBtn.addEventListener("click", () => {
+  newWorld();
+  closeSettings();
+});
+settingsEl.addEventListener("click", (e) => {
+  if (e.target === settingsEl) closeSettings();
+});
 
 /* --------------------------------------------------------------- input */
 
@@ -898,16 +972,25 @@ function setKey(code: string, down: boolean): boolean {
 
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
-  if (e.code === "KeyE" || e.code === "KeyC") {
-    togglePanels();
+  if (e.code === "KeyI" || e.code === "KeyE") {
+    toggleInventory();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === "KeyC") {
+    toggleCrafting();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === "KeyO") {
+    toggleSettings();
     e.preventDefault();
     return;
   }
   if (e.code === "Escape") {
-    if (panels.isOpen()) {
-      togglePanels();
-      e.preventDefault();
-    }
+    if (panels.isOpen()) closePanels();
+    else toggleSettings();
+    e.preventDefault();
     return;
   }
   if (paused) return;
@@ -1112,8 +1195,9 @@ function bindTap(el: HTMLElement, fn: () => void): void {
     { passive: false },
   );
 }
-bindTap($("btn-bag"), togglePanels);
-bindTap($("btn-craft"), togglePanels);
+bindTap($("btn-bag"), toggleInventory);
+bindTap($("btn-craft"), toggleCrafting);
+bindTap($("btn-settings"), toggleSettings);
 
 /* --------------------------------------------------------------- localize */
 
@@ -1125,11 +1209,23 @@ function localize(): void {
   overlayTag.textContent = MG.i18n.t("tagline");
   overlayHint.innerHTML = MG.i18n.t(hasFinePointer ? "hintDesktop" : "hintMobile");
   overlayPlay.textContent = MG.i18n.t("play");
+  localizeSettings();
+}
+
+/** Re-label the settings menu (also re-run when the fly state flips). */
+function localizeSettings(): void {
+  settingsTitle.textContent = `⚙️ ${MG.i18n.t("settings")}`;
+  settingsHint.innerHTML = MG.i18n.t(hasFinePointer ? "hintDesktop" : "hintMobile");
+  setResumeBtn.textContent = `▶ ${MG.i18n.t("resume")}`;
+  setFlyBtn.textContent = MG.i18n.t(player.fly ? "walk" : "fly");
+  setNewBtn.textContent = MG.i18n.t("newWorld");
 }
 const overlayTitle = $("ov-title");
 const overlayTag = $("ov-tag");
 const overlayHint = $("ov-hint");
 const overlayPlay = $("ov-play");
+const settingsTitle = $("set-title");
+const settingsHint = $("set-hint");
 MG.i18n.onChange(localize);
 
 /* --------------------------------------------------------------- render */
