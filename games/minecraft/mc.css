@@ -58,6 +58,71 @@ canvas {
   pointer-events: none;
 }
 
+/* ----------------------------------------------------------- held item (first-person view-model) */
+.viewmodel {
+  position: absolute;
+  right: 5%;
+  bottom: 70px;
+  z-index: 1;
+  width: 128px;
+  height: 128px;
+  pointer-events: none;
+  transform-origin: 85% 95%;
+  transform: rotate(-26deg);
+  filter: drop-shadow(-3px 5px 6px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+}
+
+.viewmodel canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.viewmodel.empty {
+  display: none;
+}
+
+/* Repeating chopping/mining swing while the mine button is held. */
+.viewmodel.swinging {
+  animation: mc-swing 0.42s ease-in-out infinite;
+}
+
+/* A single quick swing (placing a block / one tap). */
+.viewmodel.swing-once {
+  animation: mc-swing 0.3s ease-out 1;
+}
+
+@keyframes mc-swing {
+  0% {
+    transform: rotate(-26deg) translate(0, 0);
+  }
+  35% {
+    transform: rotate(10deg) translate(-16px, 20px);
+  }
+  60% {
+    transform: rotate(-1deg) translate(-7px, 9px);
+  }
+  100% {
+    transform: rotate(-26deg) translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewmodel.swinging,
+  .viewmodel.swing-once {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .viewmodel {
+    width: 96px;
+    height: 96px;
+    bottom: 64px;
+  }
+}
+
 /* ----------------------------------------------------------- hotbar */
 .hotbar {
   position: absolute;

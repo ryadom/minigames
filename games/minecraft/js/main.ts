@@ -660,8 +660,11 @@ function resetMining(): void {
 function updateMining(dt: number): void {
   if (!mineHeld || paused) {
     if (mineActive) resetMining();
+    setSwing(false);
     return;
   }
+  // Holding the mine button always swings the tool, even at thin air.
+  setSwing(true);
   const hit = raycast();
   if (!hit) {
     resetMining();
@@ -726,6 +729,7 @@ function place(): void {
   inventory.decAt(sel);
   remeshAround(px, py, pz);
   updateHotbar();
+  swingOnce();
   scheduleSave();
 }
 
@@ -735,6 +739,44 @@ function toggleFly(): void {
   const btn = ui.action("fly");
   if (btn) btn.textContent = MG.i18n.t(player.fly ? "walk" : "fly");
 }
+
+/* ----------------------------------------------------- first-person held item */
+
+const viewmodelEl = $("viewmodel");
+let vmIconId = " "; // last item rendered into the hand (avoid rebuilds)
+let swinging = false;
+
+/** Show the selected item in the player's hand (or hide it when empty). */
+function updateViewModel(): void {
+  const s = inventory.slots[sel];
+  const id = s ? s.id : "";
+  if (id === vmIconId) return;
+  vmIconId = id;
+  viewmodelEl.innerHTML = "";
+  const def = s ? itemDef(s.id) : undefined;
+  if (!def) {
+    viewmodelEl.classList.add("empty");
+    return;
+  }
+  viewmodelEl.classList.remove("empty");
+  viewmodelEl.appendChild(tileIcon(atlas, def.icon, 64));
+}
+
+/** Start/stop the looping chopping swing (held while mining). */
+function setSwing(on: boolean): void {
+  if (on === swinging) return;
+  swinging = on;
+  viewmodelEl.classList.toggle("swinging", on);
+}
+
+/** Play one quick swing (used when placing a block). */
+function swingOnce(): void {
+  if (swinging) return; // already swinging from mining
+  viewmodelEl.classList.remove("swing-once");
+  void viewmodelEl.offsetWidth; // restart the animation
+  viewmodelEl.classList.add("swing-once");
+}
+viewmodelEl.addEventListener("animationend", () => viewmodelEl.classList.remove("swing-once"));
 
 /* --------------------------------------------------------------- hotbar */
 
@@ -784,6 +826,7 @@ function updateHotbar(): void {
   const cur = inventory.slots[sel];
   const def = cur ? itemDef(cur.id) : undefined;
   ui.setStat("block", def ? (MG.i18n.t(def.nameKey) as string) : "—");
+  updateViewModel();
 }
 function selectSlot(i: number): void {
   sel = ((i % HOTBAR_SIZE) + HOTBAR_SIZE) % HOTBAR_SIZE;
@@ -806,6 +849,7 @@ function togglePanels(): void {
     keys.fwd = keys.back = keys.left = keys.right = keys.jump = keys.down = false;
     mineHeld = false;
     resetMining();
+    setSwing(false);
   }
 }
 
