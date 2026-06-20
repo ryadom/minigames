@@ -96,6 +96,13 @@ canvas {
   image-rendering: pixelated;
 }
 
+.slot .ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .slot .num {
   position: absolute;
   top: 1px;
@@ -104,6 +111,18 @@ canvas {
   font-weight: 700;
   color: rgba(255, 255, 255, 0.65);
   text-shadow: 0 1px 1px #000;
+  pointer-events: none;
+}
+
+.slot .cnt {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px #000, 0 0 2px #000;
+  pointer-events: none;
 }
 
 .slot.active {
@@ -271,5 +290,260 @@ canvas {
   .slot canvas {
     width: 30px;
     height: 30px;
+  }
+}
+
+/* ----------------------------------------------------------- mining bar */
+.minebar {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 22px);
+  transform: translateX(-50%);
+  width: 84px;
+  height: 8px;
+  z-index: 3;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+
+.minebar.show {
+  opacity: 1;
+}
+
+.minefill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #ffe34d, #ffb347);
+}
+
+/* ----------------------------------------------------------- top buttons */
+.topbtns {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+}
+
+.topbtn {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+}
+
+.topbtn:active {
+  background: rgba(255, 227, 77, 0.35);
+}
+
+/* ----------------------------------------------------------- inv / craft panel */
+.mc-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 12, 20, 0.6);
+  backdrop-filter: blur(3px);
+  overscroll-behavior: contain;
+}
+
+.mc-panel-overlay.hidden {
+  display: none;
+}
+
+.mc-panel {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #2a2f3a;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 14px 16px 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  -webkit-overflow-scrolling: touch;
+}
+
+.mc-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mc-panel-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.mc-panel-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.mc-panel-close:active {
+  background: rgba(240, 90, 90, 0.4);
+}
+
+.mc-sub {
+  margin: 12px 2px 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* Crafting recipe rows. */
+.mc-recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mc-recipe {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mc-recipe-out {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+}
+
+.mc-recipe-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.mc-recipe-in {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mc-ing {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.8rem;
+  padding: 2px 5px 2px 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mc-ing-short {
+  color: #ff8d7a;
+}
+
+.mc-craft-btn {
+  border: none;
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #062b3a;
+  background: #ffe34d;
+  cursor: pointer;
+}
+
+.mc-craft-btn:disabled {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: default;
+}
+
+/* Inventory grid. */
+.mc-inv-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 5px;
+}
+
+.mc-slot {
+  position: relative;
+  aspect-ratio: 1;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mc-slot-hot {
+  border-color: rgba(255, 227, 77, 0.5);
+  background: rgba(255, 227, 77, 0.08);
+}
+
+/* Item icon + count badge (hotbar, inventory grid, recipes, carry). */
+.mc-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mc-icon canvas {
+  image-rendering: pixelated;
+}
+
+.mc-count {
+  position: absolute;
+  right: -2px;
+  bottom: -3px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px #000, 0 0 2px #000;
+}
+
+.mc-carry {
+  position: fixed;
+  z-index: 30;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.mc-carry.hidden {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .mc-inv-grid {
+    gap: 3px;
+  }
+  .mc-recipe-out {
+    min-width: 96px;
   }
 }

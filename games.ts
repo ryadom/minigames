@@ -146,9 +146,9 @@ export const GAMES: Game[] = [
     url: "./games/minecraft/",
     tags: ["simulation", "casual"],
     description: {
-      en: "A first-person 3D voxel sandbox — walk or fly, mine and place blocks, and build in a blocky world.",
-      ru: "Воксельная 3D-песочница от первого лица — ходи или летай, копай и ставь блоки, строй в кубическом мире.",
-      es: "Un sandbox de vóxeles 3D en primera persona — anda o vuela, pica y coloca bloques y construye en un mundo de cubos.",
+      en: "A first-person 3D voxel sandbox — mine blocks that drop into your inventory, craft tools, and build in a blocky world.",
+      ru: "Воксельная 3D-песочница от первого лица — копай блоки, собирай их в инвентарь, создавай инструменты и строй в кубическом мире.",
+      es: "Un sandbox de vóxeles 3D en primera persona — pica bloques que caen a tu inventario, fabrica herramientas y construye en un mundo de cubos.",
     },
   },
   {

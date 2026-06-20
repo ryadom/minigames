@@ -4,7 +4,9 @@
    Blocks are identified by a small integer (stored one byte per voxel).
    Each block maps its top / bottom / side faces to a tile in the texture
    atlas built in textures.ts. A handful of flags drive world generation,
-   meshing (which faces to cull) and collision.
+   meshing (which faces to cull) and collision. Each block also carries
+   mining metadata (how long it takes to break by hand and which tool speeds
+   that up) used by the hold-to-mine progress in main.ts.
    ========================================================================== */
 
 // --- Block ids (0 = air) ---
@@ -20,6 +22,7 @@ export const PLANKS = 8;
 export const WATER = 9;
 export const GLASS = 10;
 export const BRICK = 11;
+export const CRAFT = 12; // crafting table
 
 // --- Atlas tile indices (must match the draw order in textures.ts) ---
 export const T_GRASS_TOP = 0;
@@ -35,9 +38,16 @@ export const T_PLANKS = 9;
 export const T_WATER = 10;
 export const T_GLASS = 11;
 export const T_BRICK = 12;
-export const TILE_COUNT = 13;
+export const T_CRAFT_TOP = 13;
+export const T_CRAFT_SIDE = 14;
+export const T_STICK = 15;
+export const T_PICKAXE = 16;
+export const T_AXE = 17;
+export const T_SWORD = 18;
+export const TILE_COUNT = 19;
 
 export type FaceKind = "top" | "bottom" | "side";
+export type ToolType = "pickaxe" | "axe" | "sword" | null;
 
 interface BlockDef {
   top: number;
@@ -51,18 +61,38 @@ interface BlockDef {
   solid: boolean;
   /** Per-vertex alpha multiplier used in the translucent pass. */
   alpha: number;
+  /** Seconds to break by hand (with no effective tool). 0 = unbreakable. */
+  hardness: number;
+  /** Tool that breaks this block faster (or null if none helps). */
+  tool: ToolType;
+}
+
+interface BlockOpts {
+  hardness?: number;
+  tool?: ToolType;
 }
 
 const DEFS: Record<number, BlockDef> = {
-  [GRASS]: t(T_GRASS_TOP, T_DIRT, T_GRASS_SIDE),
-  [DIRT]: u(T_DIRT),
-  [STONE]: u(T_STONE),
-  [COBBLE]: u(T_COBBLE),
-  [SAND]: u(T_SAND),
-  [LOG]: t(T_LOG_TOP, T_LOG_TOP, T_LOG_SIDE),
-  [LEAVES]: u(T_LEAVES),
-  [PLANKS]: u(T_PLANKS),
-  [BRICK]: u(T_BRICK),
+  [GRASS]: t(T_GRASS_TOP, T_DIRT, T_GRASS_SIDE, { hardness: 0.6 }),
+  [DIRT]: u(T_DIRT, { hardness: 0.6 }),
+  [STONE]: u(T_STONE, { hardness: 2.4, tool: "pickaxe" }),
+  [COBBLE]: u(T_COBBLE, { hardness: 2.4, tool: "pickaxe" }),
+  [SAND]: u(T_SAND, { hardness: 0.6 }),
+  [LOG]: t(T_LOG_TOP, T_LOG_TOP, T_LOG_SIDE, { hardness: 1.6, tool: "axe" }),
+  [LEAVES]: u(T_LEAVES, { hardness: 0.3, tool: "sword" }),
+  [PLANKS]: u(T_PLANKS, { hardness: 1.4, tool: "axe" }),
+  [BRICK]: u(T_BRICK, { hardness: 2.4, tool: "pickaxe" }),
+  [CRAFT]: {
+    top: T_CRAFT_TOP,
+    bottom: T_PLANKS,
+    side: T_CRAFT_SIDE,
+    opaque: true,
+    translucent: false,
+    solid: true,
+    alpha: 1,
+    hardness: 1.4,
+    tool: "axe",
+  },
   [WATER]: {
     top: T_WATER,
     bottom: T_WATER,
@@ -71,6 +101,8 @@ const DEFS: Record<number, BlockDef> = {
     translucent: true,
     solid: false,
     alpha: 0.72,
+    hardness: 0,
+    tool: null,
   },
   [GLASS]: {
     top: T_GLASS,
@@ -80,11 +112,13 @@ const DEFS: Record<number, BlockDef> = {
     translucent: true,
     solid: true,
     alpha: 1,
+    hardness: 0.4,
+    tool: null,
   },
 };
 
 /** Opaque solid where every face shows the same tile. */
-function u(tile: number): BlockDef {
+function u(tile: number, opts: BlockOpts = {}): BlockDef {
   return {
     top: tile,
     bottom: tile,
@@ -93,12 +127,24 @@ function u(tile: number): BlockDef {
     translucent: false,
     solid: true,
     alpha: 1,
+    hardness: opts.hardness ?? 1,
+    tool: opts.tool ?? null,
   };
 }
 
 /** Opaque solid with distinct top / bottom / side tiles. */
-function t(top: number, bottom: number, side: number): BlockDef {
-  return { top, bottom, side, opaque: true, translucent: false, solid: true, alpha: 1 };
+function t(top: number, bottom: number, side: number, opts: BlockOpts = {}): BlockDef {
+  return {
+    top,
+    bottom,
+    side,
+    opaque: true,
+    translucent: false,
+    solid: true,
+    alpha: 1,
+    hardness: opts.hardness ?? 1,
+    tool: opts.tool ?? null,
+  };
 }
 
 export function tileFor(block: number, kind: FaceKind): number {
@@ -121,6 +167,14 @@ export function alphaOf(block: number): number {
   return block === AIR ? 1 : DEFS[block].alpha;
 }
 
+/** Seconds to break a block with the given tool (0 = can't be mined). */
+export function breakTime(block: number, tool: ToolType): number {
+  const def = DEFS[block];
+  if (!def || def.hardness <= 0) return 0;
+  const matched = def.tool !== null && def.tool === tool;
+  return def.hardness * (matched ? 0.25 : 1);
+}
+
 /**
  * Whether `neighbour` hides the face of `self`. Opaque neighbours always
  * hide; a translucent block only hides faces against the *same* block type
@@ -131,17 +185,3 @@ export function occludes(neighbour: number, self: number): boolean {
   if (isOpaque(neighbour)) return true;
   return neighbour === self;
 }
-
-/** Blocks offered in the hotbar, with the tile used for the slot icon. */
-export const HOTBAR: { block: number; icon: number; nameKey: string }[] = [
-  { block: GRASS, icon: T_GRASS_SIDE, nameKey: "b.grass" },
-  { block: DIRT, icon: T_DIRT, nameKey: "b.dirt" },
-  { block: STONE, icon: T_STONE, nameKey: "b.stone" },
-  { block: COBBLE, icon: T_COBBLE, nameKey: "b.cobble" },
-  { block: SAND, icon: T_SAND, nameKey: "b.sand" },
-  { block: LOG, icon: T_LOG_SIDE, nameKey: "b.log" },
-  { block: PLANKS, icon: T_PLANKS, nameKey: "b.planks" },
-  { block: LEAVES, icon: T_LEAVES, nameKey: "b.leaves" },
-  { block: BRICK, icon: T_BRICK, nameKey: "b.brick" },
-  { block: GLASS, icon: T_GLASS, nameKey: "b.glass" },
-];
