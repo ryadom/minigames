@@ -15,17 +15,7 @@ import { createProgram, createTexture, type GL } from "./glutil";
 import { registerI18n } from "./i18n";
 import * as mat4 from "./mat4";
 import { buildAtlas, tileIcon } from "./textures";
-import {
-  CHUNK,
-  CHUNKS_X,
-  CHUNKS_Z,
-  FLOATS_PER_VERT,
-  type MeshArrays,
-  World,
-  WX,
-  WY,
-  WZ,
-} from "./world";
+import { CHUNK, chunkKey, FLOATS_PER_VERT, type MeshArrays, World, WY } from "./world";
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
 
@@ -139,12 +129,18 @@ interface ChunkGL {
   trans: GLMesh | null;
 }
 
-const chunks: ChunkGL[] = new Array(CHUNKS_X * CHUNKS_Z);
-// Per-chunk visibility for the current frame (frustum + view-distance culling).
-const visible: boolean[] = new Array(CHUNKS_X * CHUNKS_Z).fill(false);
+// Live GL meshes, keyed by chunkKey(cx, cz). The set of resident chunks
+// streams in/out as the player moves (see manageChunks).
+const chunkGL = new Map<number, ChunkGL>();
 // Chunks whose centre is farther than this (horizontally) aren't drawn; sits
 // just beyond the fog far plane so culling never pops geometry into view.
 const RENDER_DIST = 72;
+// Chunk-radius (in chunks) kept meshed around the player, comfortably covering
+// RENDER_DIST so nothing pops into view, and how far before they're evicted.
+const VIEW_CHUNKS = 6;
+const KEEP_CHUNKS = VIEW_CHUNKS + 2;
+// Cap how many chunks are (re)meshed per frame so streaming never hitches.
+const BUILD_BUDGET = 2;
 
 function uploadMesh(m: MeshArrays): GLMesh | null {
   if (m.count === 0) return null;
@@ -163,21 +159,73 @@ function freeMesh(m: GLMesh | null): void {
   GLc.deleteBuffer(m.ibo);
 }
 
-function rebuildChunk(cx: number, cz: number): void {
-  if (cx < 0 || cz < 0 || cx >= CHUNKS_X || cz >= CHUNKS_Z) return;
-  const i = cz * CHUNKS_X + cx;
-  const prev = chunks[i];
-  if (prev) {
-    freeMesh(prev.opaque);
-    freeMesh(prev.trans);
-  }
-  const mesh = world.buildChunkMesh(cx, cz);
-  chunks[i] = { opaque: uploadMesh(mesh.opaque), trans: uploadMesh(mesh.trans) };
+function freeChunkGL(c: ChunkGL): void {
+  freeMesh(c.opaque);
+  freeMesh(c.trans);
 }
 
-function rebuildAll(): void {
-  for (let cz = 0; cz < CHUNKS_Z; cz++) {
-    for (let cx = 0; cx < CHUNKS_X; cx++) rebuildChunk(cx, cz);
+/** Mesh a chunk and upload it, replacing any existing GL buffers. */
+function buildChunk(cx: number, cz: number): void {
+  const key = chunkKey(cx, cz);
+  const prev = chunkGL.get(key);
+  if (prev) freeChunkGL(prev);
+  const mesh = world.buildChunkMesh(cx, cz);
+  chunkGL.set(key, { opaque: uploadMesh(mesh.opaque), trans: uploadMesh(mesh.trans) });
+}
+
+/** Re-mesh an already-resident chunk (after an edit). Chunks that aren't
+ *  resident are skipped — they'll be meshed correctly when they stream in. */
+function rebuildChunk(cx: number, cz: number): void {
+  if (chunkGL.has(chunkKey(cx, cz))) buildChunk(cx, cz);
+}
+
+/** Drop every resident chunk (used when starting a fresh world). */
+function clearChunks(): void {
+  for (const c of chunkGL.values()) freeChunkGL(c);
+  chunkGL.clear();
+}
+
+/** Stream chunks in/out around the player: evict far ones, then mesh the
+ *  nearest missing ones (budgeted per frame). */
+function manageChunks(): void {
+  const pcx = Math.floor(player.x) >> 4;
+  const pcz = Math.floor(player.z) >> 4;
+
+  for (const [key, c] of chunkGL) {
+    const cx = key >> 16;
+    const cz = (key << 16) >> 16;
+    if (Math.abs(cx - pcx) > KEEP_CHUNKS || Math.abs(cz - pcz) > KEEP_CHUNKS) {
+      freeChunkGL(c);
+      chunkGL.delete(key);
+    }
+  }
+  // Also drop voxel data (including meshing-neighbour chunks that never got a
+  // mesh) so memory stays bounded as the player roams. +1 keeps the ring the
+  // outermost resident meshes read from.
+  world.prune(pcx, pcz, KEEP_CHUNKS + 1);
+
+  let budget = BUILD_BUDGET;
+  for (let r = 0; r <= VIEW_CHUNKS && budget > 0; r++) {
+    for (let dz = -r; dz <= r && budget > 0; dz++) {
+      for (let dx = -r; dx <= r && budget > 0; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue; // ring edge only
+        const cx = pcx + dx;
+        const cz = pcz + dz;
+        if (chunkGL.has(chunkKey(cx, cz))) continue;
+        buildChunk(cx, cz);
+        budget--;
+      }
+    }
+  }
+}
+
+/** Mesh the chunks closest to the player up front so spawning isn't empty. */
+function primeChunks(): void {
+  const pcx = Math.floor(player.x) >> 4;
+  const pcz = Math.floor(player.z) >> 4;
+  const r = 3;
+  for (let dz = -r; dz <= r; dz++) {
+    for (let dx = -r; dx <= r; dx++) buildChunk(pcx + dx, pcz + dz);
   }
 }
 
@@ -196,7 +244,7 @@ function drawMesh(m: GLMesh): void {
 
 interface SaveData {
   seed: number;
-  edits: [number, number][];
+  edits: [number, number, number, number][]; // [x, y, z, block]
   px: number;
   py: number;
   pz: number;
@@ -205,25 +253,37 @@ interface SaveData {
   sel: number;
 }
 
-const store: SaveStore<SaveData> = MG.storage("minecraft", { version: 1 });
+// Legacy (v1) world half-extent: edits were stored as a flat voxel index into
+// an 80×WY×80 box. v2 stores explicit [x, y, z, block] for the infinite world.
+const LEGACY_W = 80;
+
+const store: SaveStore<SaveData> = MG.storage("minecraft", {
+  version: 2,
+  migrations: {
+    2: (d: { seed: number; edits?: [number, number][] } & Record<string, unknown>) => {
+      const edits: [number, number, number, number][] = (d.edits || []).map(([idx, block]) => {
+        const x = idx % LEGACY_W;
+        const rem = Math.floor(idx / LEGACY_W);
+        const z = rem % LEGACY_W;
+        const y = Math.floor(rem / LEGACY_W);
+        return [x, y, z, block];
+      });
+      return { ...d, edits };
+    },
+  },
+});
 
 let world: World;
-const edits = new Map<number, number>();
 
-function voxIdx(x: number, y: number, z: number): number {
-  return (y * WZ + z) * WX + x;
-}
-
-/** Set a block and remember the edit so the world can be re-saved. */
+/** Set a block; the world records the edit so it can be re-saved. */
 function setBlock(x: number, y: number, z: number, block: number): void {
   world.set(x, y, z, block);
-  edits.set(voxIdx(x, y, z), block);
 }
 
 const player = {
-  x: WX / 2,
+  x: 0.5,
   y: 40,
-  z: WZ / 2,
+  z: 0.5,
   vx: 0,
   vy: 0,
   vz: 0,
@@ -252,31 +312,26 @@ function standableTop(x: number, z: number): number {
 }
 
 /** Drop the player onto solid ground, never inside a block. Scans outward in
- *  rings from the map centre for the nearest dry, open column. */
+ *  rings from the world origin for the nearest dry, open column. */
 function spawnPlayer(): void {
-  const cx = Math.floor(WX / 2);
-  const cz = Math.floor(WZ / 2);
-  let sx = cx;
-  let sz = cz;
+  let sx = 0;
+  let sz = 0;
   let top = -1;
-  const maxR = Math.max(WX, WZ);
+  const maxR = 64;
   for (let r = 0; r <= maxR && top < 0; r++) {
     for (let dz = -r; dz <= r && top < 0; dz++) {
       for (let dx = -r; dx <= r && top < 0; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue; // ring edge only
-        const x = cx + dx;
-        const z = cz + dz;
-        if (x < 1 || x >= WX - 1 || z < 1 || z >= WZ - 1) continue;
-        const t = standableTop(x, z);
+        const t = standableTop(dx, dz);
         if (t >= 0) {
-          sx = x;
-          sz = z;
+          sx = dx;
+          sz = dz;
           top = t;
         }
       }
     }
   }
-  if (top < 0) top = Math.min(world.heightAt(cx, cz), WY - 3); // fallback
+  if (top < 0) top = Math.min(world.heightAt(0, 0), WY - 3); // fallback
   player.x = sx + 0.5;
   player.z = sz + 0.5;
   player.y = top + 1; // feet on top of the ground block
@@ -289,11 +344,7 @@ function loadOrCreate(): void {
   const data = store.load();
   if (data) {
     world = new World(data.seed);
-    edits.clear();
-    for (const [idx, block] of data.edits) {
-      world.data[idx] = block;
-      edits.set(idx, block);
-    }
+    world.loadEdits(data.edits);
     player.x = data.px;
     player.y = data.py;
     player.z = data.pz;
@@ -302,10 +353,10 @@ function loadOrCreate(): void {
     sel = Math.min(data.sel || 0, HOTBAR.length - 1);
   } else {
     world = new World((Math.random() * 0xffffffff) >>> 0);
-    edits.clear();
     spawnPlayer();
   }
-  rebuildAll();
+  clearChunks();
+  primeChunks();
   updateHotbar();
 }
 
@@ -317,7 +368,7 @@ function scheduleSave(): void {
 function persist(): void {
   store.save({
     seed: world.seed,
-    edits: Array.from(edits.entries()),
+    edits: world.getEdits(),
     px: player.x,
     py: player.y,
     pz: player.z,
@@ -329,9 +380,9 @@ function persist(): void {
 
 function newWorld(): void {
   world = new World((Math.random() * 0xffffffff) >>> 0);
-  edits.clear();
   spawnPlayer();
-  rebuildAll();
+  clearChunks();
+  primeChunks();
   persist();
 }
 
@@ -416,9 +467,7 @@ function updatePhysics(dt: number): void {
     player.vy = 0;
   }
 
-  // Keep the player inside the world box.
-  player.x = Math.max(RADIUS, Math.min(WX - RADIUS, player.x));
-  player.z = Math.max(RADIUS, Math.min(WZ - RADIUS, player.z));
+  // The world is horizontally unbounded; only catch falls out the bottom.
   if (player.y < -10) spawnPlayer();
 }
 
@@ -784,6 +833,8 @@ MG.i18n.onChange(localize);
 const proj = mat4.create();
 const view = mat4.create();
 const mvp = mat4.create();
+// Chunks that pass culling this frame (reused to avoid per-frame allocation).
+const drawList: ChunkGL[] = [];
 
 function resize(): void {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -825,38 +876,31 @@ function render(): void {
   GLc.uniformMatrix4fv(uMVP, false, mvp);
   GLc.uniform3f(uEye, ex, ey, ez);
 
-  // Decide which chunks to load this frame: cull anything beyond the view
-  // distance or outside the camera frustum, so we only draw what's visible.
+  // Decide which resident chunks to draw this frame: cull anything beyond the
+  // view distance or outside the camera frustum, so we only draw what's visible.
   const frustum = mat4.frustumPlanes(mvp);
-  for (let cz = 0; cz < CHUNKS_Z; cz++) {
-    for (let cx = 0; cx < CHUNKS_X; cx++) {
-      const x0 = cx * CHUNK;
-      const z0 = cz * CHUNK;
-      // Horizontal distance from the eye to the chunk centre.
-      const dxc = x0 + CHUNK / 2 - ex;
-      const dzc = z0 + CHUNK / 2 - ez;
-      const far = Math.hypot(dxc, dzc) - CHUNK > RENDER_DIST;
-      visible[cz * CHUNKS_X + cx] =
-        !far && mat4.aabbInFrustum(frustum, x0, 0, z0, x0 + CHUNK, WY, z0 + CHUNK);
-    }
+  drawList.length = 0;
+  for (const [key, c] of chunkGL) {
+    const x0 = (key >> 16) * CHUNK;
+    const z0 = ((key << 16) >> 16) * CHUNK;
+    // Horizontal distance from the eye to the chunk centre.
+    const dxc = x0 + CHUNK / 2 - ex;
+    const dzc = z0 + CHUNK / 2 - ez;
+    if (Math.hypot(dxc, dzc) - CHUNK > RENDER_DIST) continue;
+    if (!mat4.aabbInFrustum(frustum, x0, 0, z0, x0 + CHUNK, WY, z0 + CHUNK)) continue;
+    drawList.push(c);
   }
 
   // Opaque pass.
   GLc.disable(GLc.BLEND);
   GLc.depthMask(true);
-  for (let i = 0; i < chunks.length; i++) {
-    const c = chunks[i];
-    if (visible[i] && c?.opaque) drawMesh(c.opaque);
-  }
+  for (const c of drawList) if (c.opaque) drawMesh(c.opaque);
 
   // Translucent pass (water / glass): blended, no depth writes.
   GLc.enable(GLc.BLEND);
   GLc.blendFunc(GLc.SRC_ALPHA, GLc.ONE_MINUS_SRC_ALPHA);
   GLc.depthMask(false);
-  for (let i = 0; i < chunks.length; i++) {
-    const c = chunks[i];
-    if (visible[i] && c?.trans) drawMesh(c.trans);
-  }
+  for (const c of drawList) if (c.trans) drawMesh(c.trans);
   GLc.depthMask(true);
 }
 
@@ -868,6 +912,7 @@ function loop(now: number): void {
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
   last = now;
   if (started) updatePhysics(dt);
+  manageChunks();
   render();
 
   posAcc += dt;

@@ -1,12 +1,20 @@
 /* ==========================================================================
-   Voxel world: terrain generation, edits, and per-chunk mesh building.
+   Voxel world: infinite chunk-based terrain generation, edits and meshing.
 
-   The world is a fixed box of voxels (one byte each). Terrain comes from
-   layered value-noise; trees are scattered on grass. For drawing it is split
-   into 16×16 chunks (full height); each chunk is meshed into two interleaved
-   vertex buffers — opaque and translucent — emitting only exposed faces, with
-   per-vertex ambient occlusion and directional face shading baked into a
-   single "light" attribute. Editing a block re-meshes just the chunk(s) hit.
+   The world is unbounded on the horizontal axes and a fixed WY tall. Voxels
+   live in 16×16×WY chunks (one byte each) that are generated lazily the first
+   time they're touched and cached in a map keyed by chunk coordinate. Terrain
+   comes from layered value-noise (a pure function of world x/z, so chunks are
+   seamless and deterministic); trees are scattered on grass, and a chunk also
+   renders the slices of trees whose trunk sits in a neighbouring chunk so
+   canopies cross chunk borders cleanly. Player edits are stored separately and
+   re-applied whenever their chunk is (re)generated, so a chunk can be evicted
+   from memory and regenerated identically later.
+
+   For drawing, each chunk is meshed into two interleaved vertex buffers —
+   opaque and translucent — emitting only exposed faces, with per-vertex
+   ambient occlusion and directional face shading baked into a single "light"
+   attribute. Editing a block re-meshes just the chunk(s) hit.
    ========================================================================== */
 
 import {
@@ -28,12 +36,11 @@ import {
 import { tileUV } from "./textures";
 
 export const CHUNK = 16;
-export const WX = 80;
-export const WZ = 80;
 export const WY = 56;
 export const SEA = 24;
-export const CHUNKS_X = WX / CHUNK;
-export const CHUNKS_Z = WZ / CHUNK;
+// How far (in blocks) a tree's trunk can sit outside a chunk and still drop
+// canopy leaves into it. Trunk + canopy radius (2) → 3 is comfortably safe.
+const TREE_MARGIN = 3;
 
 // 7 floats / vertex: position(3), uv(2), light(1), alpha(1).
 export const FLOATS_PER_VERT = 7;
@@ -46,6 +53,18 @@ export interface MeshArrays {
 export interface ChunkMesh {
   opaque: MeshArrays;
   trans: MeshArrays;
+}
+
+/** Pack a chunk coordinate into a single signed-int32 map key. Supports chunk
+ *  coordinates in [-32768, 32767] (≈ ±524k blocks), far beyond any session. */
+export function chunkKey(cx: number, cz: number): number {
+  return ((cx & 0xffff) << 16) | (cz & 0xffff);
+}
+function keyCX(key: number): number {
+  return key >> 16; // arithmetic shift sign-extends
+}
+function keyCZ(key: number): number {
+  return (key << 16) >> 16;
 }
 
 function hash2(x: number, z: number, seed: number): number {
@@ -72,34 +91,97 @@ function valueNoise(x: number, z: number, seed: number, freq: number): number {
   return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
 }
 
+/** Local voxel index inside a chunk's byte array. */
+function localIdx(lx: number, y: number, lz: number): number {
+  return (y * CHUNK + lz) * CHUNK + lx;
+}
+
 export class World {
-  readonly data: Uint8Array;
   readonly seed: number;
+  // Generated chunk voxel data, keyed by chunkKey(cx, cz).
+  private chunks = new Map<number, Uint8Array>();
+  // Player edits, bucketed by chunk so they apply fast on (re)generation.
+  // Inner map: localIdx → block.
+  private edits = new Map<number, Map<number, number>>();
+
+  // One-entry cache so the hot path (sequential get/set in one chunk) skips
+  // the map lookup. Invalidated whenever a chunk is dropped.
+  private cacheKey = 1 << 30; // an impossible key
+  private cacheChunk: Uint8Array | null = null;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
-    this.data = new Uint8Array(WX * WY * WZ);
-    this.generate();
   }
 
-  private idx(x: number, y: number, z: number): number {
-    return (y * WZ + z) * WX + x;
+  /** The chunk's voxel data, generating (and caching) it on first access. */
+  private getChunk(cx: number, cz: number): Uint8Array {
+    const key = chunkKey(cx, cz);
+    let c = this.chunks.get(key);
+    if (!c) {
+      c = this.generateChunk(cx, cz);
+      this.chunks.set(key, c);
+    }
+    return c;
   }
 
-  inBounds(x: number, y: number, z: number): boolean {
-    return x >= 0 && x < WX && y >= 0 && y < WY && z >= 0 && z < WZ;
+  /** Free a chunk's voxel data (edits are kept, so it regenerates identically). */
+  dropChunk(cx: number, cz: number): void {
+    const key = chunkKey(cx, cz);
+    if (this.chunks.delete(key)) {
+      this.cacheKey = 1 << 30;
+      this.cacheChunk = null;
+    }
+  }
+
+  /** Free every resident chunk farther than `radius` chunks (Chebyshev) from
+   *  (pcx, pcz). Bounds memory as the player roams — including the voxel-only
+   *  chunks generated as meshing neighbours that never get their own mesh. */
+  prune(pcx: number, pcz: number, radius: number): void {
+    for (const key of this.chunks.keys()) {
+      if (Math.abs(keyCX(key) - pcx) > radius || Math.abs(keyCZ(key) - pcz) > radius) {
+        this.chunks.delete(key);
+      }
+    }
+    this.cacheKey = 1 << 30;
+    this.cacheChunk = null;
   }
 
   /** Block at a voxel. Below the world reads as solid stone (so floor faces
-   *  are culled); outside the horizontal/top bounds reads as air. */
+   *  are culled); above the top reads as air. */
   get(x: number, y: number, z: number): number {
     if (y < 0) return STONE;
-    if (x < 0 || x >= WX || z < 0 || z >= WZ || y >= WY) return AIR;
-    return this.data[this.idx(x, y, z)];
+    if (y >= WY) return AIR;
+    const cx = x >> 4;
+    const cz = z >> 4;
+    const key = chunkKey(cx, cz);
+    let c = this.cacheChunk;
+    if (key !== this.cacheKey || !c) {
+      c = this.getChunk(cx, cz);
+      this.cacheKey = key;
+      this.cacheChunk = c;
+    }
+    return c[localIdx(x - (cx << 4), y, z - (cz << 4))];
   }
 
+  /** Set a block (used by gameplay edits); records the edit for persistence. */
   set(x: number, y: number, z: number, block: number): void {
-    if (this.inBounds(x, y, z)) this.data[this.idx(x, y, z)] = block;
+    if (y < 0 || y >= WY) return;
+    const cx = x >> 4;
+    const cz = z >> 4;
+    const li = localIdx(x - (cx << 4), y, z - (cz << 4));
+    this.getChunk(cx, cz)[li] = block;
+    const key = chunkKey(cx, cz);
+    let m = this.edits.get(key);
+    if (!m) {
+      m = new Map();
+      this.edits.set(key, m);
+    }
+    m.set(li, block);
+  }
+
+  /** Horizontal axes are unbounded; only the vertical range is finite. */
+  inBounds(_x: number, y: number, _z: number): boolean {
+    return y >= 0 && y < WY;
   }
 
   isSolidAt(x: number, y: number, z: number): boolean {
@@ -121,43 +203,120 @@ export class World {
     return Math.floor(10 + e ** 1.25 * 34); // ~10..44
   }
 
-  private generate(): void {
-    for (let z = 0; z < WZ; z++) {
-      for (let x = 0; x < WX; x++) {
+  /* --------------------------------------------------------------- edits */
+
+  /** Bulk-load persisted edits before any chunk is generated. */
+  loadEdits(list: ReadonlyArray<[number, number, number, number]>): void {
+    this.edits.clear();
+    for (const [x, y, z, block] of list) {
+      if (y < 0 || y >= WY) continue;
+      const cx = x >> 4;
+      const cz = z >> 4;
+      const key = chunkKey(cx, cz);
+      let m = this.edits.get(key);
+      if (!m) {
+        m = new Map();
+        this.edits.set(key, m);
+      }
+      m.set(localIdx(x - (cx << 4), y, z - (cz << 4)), block);
+    }
+  }
+
+  /** All edits as flat [x, y, z, block] tuples (for saving). */
+  getEdits(): [number, number, number, number][] {
+    const out: [number, number, number, number][] = [];
+    for (const [key, m] of this.edits) {
+      const x0 = keyCX(key) << 4;
+      const z0 = keyCZ(key) << 4;
+      for (const [li, block] of m) {
+        const lx = li % CHUNK;
+        const lz = Math.floor(li / CHUNK) % CHUNK;
+        const y = Math.floor(li / (CHUNK * CHUNK));
+        out.push([x0 + lx, y, z0 + lz, block]);
+      }
+    }
+    return out;
+  }
+
+  /* ----------------------------------------------------------- generation */
+
+  private generateChunk(cx: number, cz: number): Uint8Array {
+    const data = new Uint8Array(CHUNK * WY * CHUNK);
+    const x0 = cx << 4;
+    const z0 = cz << 4;
+
+    for (let lz = 0; lz < CHUNK; lz++) {
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const x = x0 + lx;
+        const z = z0 + lz;
         const h = this.heightAt(x, z);
-        for (let y = 0; y <= h; y++) {
+        const top = Math.min(h, WY - 1);
+        for (let y = 0; y <= top; y++) {
           let b: number;
           if (y < h - 3) b = STONE;
           else if (y < h) b = DIRT;
           else b = h <= SEA ? SAND : GRASS; // top
           if (y >= h - 1 && h <= SEA + 1 && h >= SEA - 2) b = SAND; // beach band
-          this.set(x, y, z, b);
+          data[localIdx(lx, y, lz)] = b;
         }
         // Fill oceans/lakes up to sea level.
-        for (let y = h + 1; y <= SEA; y++) this.set(x, y, z, WATER);
+        for (let y = h + 1; y <= Math.min(SEA, WY - 1); y++) data[localIdx(lx, y, lz)] = WATER;
       }
     }
-    this.plantTrees();
+
+    this.plantTrees(cx, cz, data);
+
+    // Re-apply any persisted edits that fall in this chunk.
+    const m = this.edits.get(chunkKey(cx, cz));
+    if (m) for (const [li, block] of m) data[li] = block;
+
+    return data;
   }
 
-  private plantTrees(): void {
-    for (let z = 2; z < WZ - 2; z++) {
-      for (let x = 2; x < WX - 2; x++) {
-        const h = this.heightAt(x, z);
-        if (h <= SEA + 1) continue; // not on beaches or underwater
-        if (this.get(x, h, z) !== GRASS) continue;
-        if (hash2(x, z, this.seed ^ 0x51ed) > 0.022) continue;
-        // Keep trees from clumping.
-        if (hash2(x + 1, z, this.seed ^ 0x51ed) < 0.022) continue;
-        this.placeTree(x, h + 1, z);
+  /** Plant trees whose canopy touches this chunk. Trunks may sit in a
+   *  neighbouring chunk; we write only the blocks that land inside `data`. */
+  private plantTrees(cx: number, cz: number, data: Uint8Array): void {
+    const x0 = cx << 4;
+    const z0 = cz << 4;
+    for (let z = z0 - TREE_MARGIN; z < z0 + CHUNK + TREE_MARGIN; z++) {
+      for (let x = x0 - TREE_MARGIN; x < x0 + CHUNK + TREE_MARGIN; x++) {
+        if (!this.isTreeOrigin(x, z)) continue;
+        this.placeTree(data, x0, z0, x, this.heightAt(x, z) + 1, z);
       }
     }
   }
 
-  private placeTree(x: number, baseY: number, z: number): void {
+  /** Is (x, z) the base of a tree? Purely a function of position + seed, with
+   *  no voxel reads, so it gives the same answer from any neighbouring chunk. */
+  private isTreeOrigin(x: number, z: number): boolean {
+    const h = this.heightAt(x, z);
+    if (h <= SEA + 1) return false; // not on beaches or underwater (surface is grass)
+    if (hash2(x, z, this.seed ^ 0x51ed) > 0.022) return false;
+    // Keep trees from clumping.
+    if (hash2(x + 1, z, this.seed ^ 0x51ed) < 0.022) return false;
+    return true;
+  }
+
+  private placeTree(
+    data: Uint8Array,
+    x0: number,
+    z0: number,
+    x: number,
+    baseY: number,
+    z: number,
+  ): void {
+    const put = (gx: number, gy: number, gz: number, block: number, onlyIfAir: boolean): void => {
+      const lx = gx - x0;
+      const lz = gz - z0;
+      if (lx < 0 || lx >= CHUNK || lz < 0 || lz >= CHUNK || gy < 0 || gy >= WY) return;
+      const li = localIdx(lx, gy, lz);
+      if (onlyIfAir && data[li] !== AIR) return;
+      data[li] = block;
+    };
+
     const trunk = 4 + Math.floor(hash2(x, z, this.seed ^ 0x77) * 3);
     const top = baseY + trunk;
-    for (let y = baseY; y < top; y++) this.set(x, y, z, LOG);
+    for (let y = baseY; y < top; y++) put(x, y, z, LOG, false);
     // Leaf canopy: two wide layers, then a small cap.
     for (let dy = -2; dy <= 1; dy++) {
       const r = dy >= 0 ? 1 : 2;
@@ -165,12 +324,11 @@ export class World {
         for (let dx = -r; dx <= r; dx++) {
           if (dx === 0 && dz === 0 && dy < 1) continue; // leave room for trunk
           if (Math.abs(dx) === r && Math.abs(dz) === r && hash2(x + dx, z + dz, dy) < 0.5) continue;
-          const yy = top + dy;
-          if (this.get(x + dx, yy, z + dz) === AIR) this.set(x + dx, yy, z + dz, LEAVES);
+          put(x + dx, top + dy, z + dz, LEAVES, true);
         }
       }
     }
-    this.set(x, top, z, LEAVES);
+    put(x, top, z, LEAVES, true);
   }
 
   /* ------------------------------------------------------------------ mesh */
