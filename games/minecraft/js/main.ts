@@ -10,11 +10,14 @@
 
 import { MG } from "../../../shared/mg";
 import type { HeaderUI, SaveStore } from "../../../shared/types";
-import { AIR, HOTBAR, isSolid, WATER } from "./blocks";
+import { AIR, breakTime, isSolid, type ToolType, WATER } from "./blocks";
 import { createProgram, createTexture, type GL } from "./glutil";
 import { registerI18n } from "./i18n";
+import { HOTBAR_SIZE, Inventory, type SerializedSlot } from "./inventory";
+import { dropFor, itemDef } from "./items";
 import * as mat4 from "./mat4";
-import { buildAtlas, tileIcon } from "./textures";
+import { createPanels, type Panels } from "./panels";
+import { buildAtlas, tileIcon, tileUV } from "./textures";
 import { CHUNK, chunkKey, FLOATS_PER_VERT, type MeshArrays, World, WY } from "./world";
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
@@ -251,6 +254,7 @@ interface SaveData {
   yaw: number;
   pitch: number;
   sel: number;
+  inventory: SerializedSlot[];
 }
 
 // Legacy (v1) world half-extent: edits were stored as a flat voxel index into
@@ -258,7 +262,7 @@ interface SaveData {
 const LEGACY_W = 80;
 
 const store: SaveStore<SaveData> = MG.storage("minecraft", {
-  version: 2,
+  version: 3,
   migrations: {
     2: (d: { seed: number; edits?: [number, number][] } & Record<string, unknown>) => {
       const edits: [number, number, number, number][] = (d.edits || []).map(([idx, block]) => {
@@ -270,10 +274,32 @@ const store: SaveStore<SaveData> = MG.storage("minecraft", {
       });
       return { ...d, edits };
     },
+    // v2 → v3: the inventory + tools update. Existing worlds keep their builds
+    // but get a fresh starter inventory (saved on next persist).
+    3: (d: Record<string, unknown>) => ({ ...d, inventory: starterSlots() }),
   },
 });
 
+/** The starting inventory: tools to play with right away plus a few blocks
+ *  and sticks to seed crafting. Everything else is gathered by mining. */
+function starterSlots(): SerializedSlot[] {
+  const inv = new Inventory();
+  inv.add("pickaxe", 1);
+  inv.add("axe", 1);
+  inv.add("sword", 1);
+  inv.add("planks", 16);
+  inv.add("cobble", 8);
+  inv.add("glass", 4);
+  inv.add("dirt", 8);
+  inv.add("craft", 1);
+  inv.add("stick", 4);
+  return inv.serialize();
+}
+
 let world: World;
+const inventory = new Inventory();
+let panels: Panels;
+let paused = false;
 
 /** Set a block; the world records the edit so it can be re-saved. */
 function setBlock(x: number, y: number, z: number, block: number): void {
@@ -350,9 +376,11 @@ function loadOrCreate(): void {
     player.z = data.pz;
     player.yaw = data.yaw;
     player.pitch = data.pitch;
-    sel = Math.min(data.sel || 0, HOTBAR.length - 1);
+    sel = Math.min(data.sel || 0, HOTBAR_SIZE - 1);
+    inventory.load(data.inventory);
   } else {
     world = new World((Math.random() * 0xffffffff) >>> 0);
+    inventory.load(starterSlots());
     spawnPlayer();
   }
   clearChunks();
@@ -375,14 +403,17 @@ function persist(): void {
     yaw: player.yaw,
     pitch: player.pitch,
     sel,
+    inventory: inventory.serialize(),
   });
 }
 
 function newWorld(): void {
   world = new World((Math.random() * 0xffffffff) >>> 0);
+  inventory.load(starterSlots());
   spawnPlayer();
   clearChunks();
   primeChunks();
+  updateHotbar();
   persist();
 }
 
@@ -533,15 +564,157 @@ function remeshAround(x: number, y: number, z: number): void {
   }
 }
 
-function mine(): void {
+/* --------------------------------------------------------------- drops */
+
+interface Drop {
+  x: number;
+  y: number;
+  z: number;
+  vy: number;
+  age: number;
+  id: string;
+  count: number;
+}
+
+// Items lying in the world after a block is mined. They fall to the ground,
+// then fly to the player and merge into the inventory when close enough.
+const drops: Drop[] = [];
+const DROP_CAP = 80;
+const DROP_GRAV = -16;
+const MAGNET = 2.1; // start being pulled toward the player within this range
+const PICKUP = 0.7; // collected within this range
+
+function spawnDrop(x: number, y: number, z: number, id: string, count: number): void {
+  if (drops.length >= DROP_CAP) {
+    const old = drops.shift();
+    if (old) inventory.add(old.id, old.count); // never lose items to the cap
+  }
+  drops.push({ x: x + 0.5, y: y + 0.45, z: z + 0.5, vy: 1.5, age: 0, id, count });
+}
+
+function updateDrops(dt: number): void {
+  const px = player.x;
+  const py = player.y + 0.9;
+  const pz = player.z;
+  for (let i = drops.length - 1; i >= 0; i--) {
+    const d = drops[i];
+    d.age += dt;
+
+    // Gravity until it settles on the block below.
+    d.vy += DROP_GRAV * dt;
+    let ny = d.y + d.vy * dt;
+    const feet = ny - 0.16;
+    if (d.vy < 0 && world.isSolidAt(Math.floor(d.x), Math.floor(feet), Math.floor(d.z))) {
+      ny = Math.floor(feet) + 1 + 0.16;
+      d.vy = 0;
+    }
+    d.y = ny;
+
+    // Magnet toward the player, then pick up.
+    const dx = px - d.x;
+    const dy = py - d.y;
+    const dz = pz - d.z;
+    const dist = Math.hypot(dx, dy, dz);
+    if (d.age > 0.25 && dist < MAGNET) {
+      const pull = Math.min(1, dt * 7);
+      d.x += dx * pull;
+      d.y += dy * pull;
+      d.z += dz * pull;
+    }
+    if (d.age > 0.25 && dist < PICKUP) {
+      const left = inventory.add(d.id, d.count);
+      if (left <= 0) {
+        drops.splice(i, 1);
+        refreshInventory();
+      } else {
+        d.count = left; // inventory full — leave the remainder on the ground
+      }
+    }
+  }
+}
+
+/* --------------------------------------------------------------- mining */
+
+let mineHeld = false;
+let mineActive = false;
+let mineProg = 0;
+let mineTX = 0;
+let mineTY = 0;
+let mineTZ = 0;
+
+/** The tool behaviour of the currently selected hotbar item (or none). */
+function activeTool(): ToolType {
+  const s = inventory.slots[sel];
+  if (!s) return null;
+  const def = itemDef(s.id);
+  return def && def.kind === "tool" ? (def.tool ?? null) : null;
+}
+
+function resetMining(): void {
+  mineActive = false;
+  mineProg = 0;
+  updateMineBar();
+}
+
+/** Accumulate break progress on the targeted block; break it when full. */
+function updateMining(dt: number): void {
+  if (!mineHeld || paused) {
+    if (mineActive) resetMining();
+    return;
+  }
   const hit = raycast();
-  if (!hit) return;
+  if (!hit) {
+    resetMining();
+    return;
+  }
+  const block = world.get(hit.hx, hit.hy, hit.hz);
+  const bt = breakTime(block, activeTool());
+  if (bt <= 0) {
+    resetMining();
+    return;
+  }
+  if (!mineActive || hit.hx !== mineTX || hit.hy !== mineTY || hit.hz !== mineTZ) {
+    mineActive = true;
+    mineProg = 0;
+    mineTX = hit.hx;
+    mineTY = hit.hy;
+    mineTZ = hit.hz;
+  }
+  mineProg += dt / bt;
+  if (mineProg >= 1) {
+    breakBlockAt(hit);
+    resetMining();
+  } else {
+    updateMineBar();
+  }
+}
+
+function breakBlockAt(hit: RayHit): void {
+  const block = world.get(hit.hx, hit.hy, hit.hz);
   setBlock(hit.hx, hit.hy, hit.hz, AIR);
   remeshAround(hit.hx, hit.hy, hit.hz);
+  const drop = dropFor(block);
+  if (drop) spawnDrop(hit.hx, hit.hy, hit.hz, drop, 1);
   scheduleSave();
 }
 
+const mineBarEl = $("minebar");
+const mineFillEl = $("minefill");
+function updateMineBar(): void {
+  if (mineActive && mineProg > 0) {
+    mineBarEl.classList.add("show");
+    mineFillEl.style.width = `${Math.min(100, mineProg * 100)}%`;
+  } else {
+    mineBarEl.classList.remove("show");
+  }
+}
+
 function place(): void {
+  if (paused) return;
+  const s = inventory.slots[sel];
+  if (!s) return;
+  const def = itemDef(s.id);
+  if (def?.kind !== "block" || def.block === undefined) return;
   const hit = raycast();
   if (!hit) return;
   const { px, py, pz } = hit;
@@ -549,8 +722,10 @@ function place(): void {
   const target = world.get(px, py, pz);
   if (target !== AIR && target !== WATER) return;
   if (overlapsPlayer(px, py, pz)) return;
-  setBlock(px, py, pz, HOTBAR[sel].block);
+  setBlock(px, py, pz, def.block);
+  inventory.decAt(sel);
   remeshAround(px, py, pz);
+  updateHotbar();
   scheduleSave();
 }
 
@@ -564,33 +739,74 @@ function toggleFly(): void {
 /* --------------------------------------------------------------- hotbar */
 
 const hotbarEl = $("hotbar");
+const hotSlots: HTMLElement[] = [];
 function buildHotbar(): void {
   hotbarEl.innerHTML = "";
-  HOTBAR.forEach((item, i) => {
+  hotSlots.length = 0;
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
     const slot = document.createElement("button");
     slot.className = "slot";
     slot.type = "button";
-    slot.title = MG.i18n.t(item.nameKey);
-    slot.appendChild(tileIcon(atlas, item.icon, 40));
+    const ico = document.createElement("div");
+    ico.className = "ico";
+    slot.appendChild(ico);
     const num = document.createElement("span");
     num.className = "num";
     num.textContent = String(i + 1);
     slot.appendChild(num);
+    const cnt = document.createElement("span");
+    cnt.className = "cnt";
+    slot.appendChild(cnt);
     slot.addEventListener("click", () => selectSlot(i));
     hotbarEl.appendChild(slot);
-  });
+    hotSlots.push(slot);
+  }
 }
 function updateHotbar(): void {
-  Array.from(hotbarEl.children).forEach((el, i) => {
-    el.classList.toggle("active", i === sel);
-    (el as HTMLElement).title = MG.i18n.t(HOTBAR[i].nameKey);
-  });
-  ui.setStat("block", MG.i18n.t(HOTBAR[sel].nameKey));
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
+    const slot = hotSlots[i];
+    if (!slot) continue;
+    const s = inventory.slots[i];
+    const ico = slot.querySelector(".ico") as HTMLElement;
+    const cnt = slot.querySelector(".cnt") as HTMLElement;
+    ico.innerHTML = "";
+    if (s) {
+      const def = itemDef(s.id);
+      if (def) ico.appendChild(tileIcon(atlas, def.icon, 36));
+      cnt.textContent = s.count > 1 ? String(s.count) : "";
+      slot.title = def ? (MG.i18n.t(def.nameKey) as string) : "";
+    } else {
+      cnt.textContent = "";
+      slot.title = "";
+    }
+    slot.classList.toggle("active", i === sel);
+  }
+  const cur = inventory.slots[sel];
+  const def = cur ? itemDef(cur.id) : undefined;
+  ui.setStat("block", def ? (MG.i18n.t(def.nameKey) as string) : "—");
 }
 function selectSlot(i: number): void {
-  sel = ((i % HOTBAR.length) + HOTBAR.length) % HOTBAR.length;
+  sel = ((i % HOTBAR_SIZE) + HOTBAR_SIZE) % HOTBAR_SIZE;
   updateHotbar();
   scheduleSave();
+}
+
+/** Called after the inventory contents change (drops, crafting, slot moves). */
+function refreshInventory(): void {
+  updateHotbar();
+  if (panels?.isOpen()) panels.refresh();
+  scheduleSave();
+}
+
+/** Open / close the inventory + crafting overlay, pausing the game while up. */
+function togglePanels(): void {
+  panels.toggle();
+  paused = panels.isOpen();
+  if (paused) {
+    keys.fwd = keys.back = keys.left = keys.right = keys.jump = keys.down = false;
+    mineHeld = false;
+    resetMining();
+  }
 }
 
 /* --------------------------------------------------------------- input */
@@ -638,10 +854,23 @@ function setKey(code: string, down: boolean): boolean {
 
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
+  if (e.code === "KeyE" || e.code === "KeyC") {
+    togglePanels();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === "Escape") {
+    if (panels.isOpen()) {
+      togglePanels();
+      e.preventDefault();
+    }
+    return;
+  }
+  if (paused) return;
   if (e.code === "KeyF") toggleFly();
   if (e.code.startsWith("Digit")) {
     const n = Number(e.code.slice(5));
-    if (n >= 1 && n <= HOTBAR.length) selectSlot(n - 1);
+    if (n >= 1 && n <= HOTBAR_SIZE) selectSlot(n - 1);
   }
   if (setKey(e.code, true)) e.preventDefault();
 });
@@ -660,6 +889,7 @@ function startGame(): void {
 
 overlay.addEventListener("click", startGame);
 canvas.addEventListener("click", () => {
+  if (paused) return;
   if (!started) startGame();
   else if (hasFinePointer && document.pointerLockElement !== canvas) canvas.requestPointerLock();
 });
@@ -674,8 +904,11 @@ document.addEventListener("mousemove", (e) => {
 document.addEventListener("mousedown", (e) => {
   if (document.pointerLockElement !== canvas) return;
   e.preventDefault();
-  if (e.button === 0) mine();
+  if (e.button === 0) mineHeld = true;
   else if (e.button === 2) place();
+});
+document.addEventListener("mouseup", (e) => {
+  if (e.button === 0) mineHeld = false;
 });
 canvas.addEventListener(
   "wheel",
@@ -808,8 +1041,35 @@ bindButton(
     keys.jump = false;
   },
 );
-bindButton($("btn-mine"), mine, undefined, 280);
+bindButton(
+  $("btn-mine"),
+  () => {
+    mineHeld = true;
+  },
+  () => {
+    mineHeld = false;
+  },
+);
 bindButton($("btn-place"), place);
+
+// Top-corner buttons: open the inventory / crafting overlay (tap or click).
+function bindTap(el: HTMLElement, fn: () => void): void {
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    fn();
+  });
+  el.addEventListener(
+    "touchstart",
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
+    },
+    { passive: false },
+  );
+}
+bindTap($("btn-bag"), togglePanels);
+bindTap($("btn-craft"), togglePanels);
 
 /* --------------------------------------------------------------- localize */
 
@@ -847,6 +1107,119 @@ function resize(): void {
   GLc.viewport(0, 0, canvas.width, canvas.height);
 }
 window.addEventListener("resize", resize);
+
+/* ----------------------------------------------------------- drop meshes */
+
+// Faces of a unit cube (centred on the origin) with the directional shade the
+// chunk mesher uses, so floating drops are lit like the world around them.
+const CUBE_FACES: { c: number[][]; shade: number }[] = [
+  {
+    c: [
+      [-0.5, 0.5, -0.5],
+      [0.5, 0.5, -0.5],
+      [0.5, 0.5, 0.5],
+      [-0.5, 0.5, 0.5],
+    ],
+    shade: 1.0,
+  },
+  {
+    c: [
+      [-0.5, -0.5, 0.5],
+      [0.5, -0.5, 0.5],
+      [0.5, -0.5, -0.5],
+      [-0.5, -0.5, -0.5],
+    ],
+    shade: 0.5,
+  },
+  {
+    c: [
+      [0.5, -0.5, 0.5],
+      [0.5, -0.5, -0.5],
+      [0.5, 0.5, -0.5],
+      [0.5, 0.5, 0.5],
+    ],
+    shade: 0.72,
+  },
+  {
+    c: [
+      [-0.5, -0.5, -0.5],
+      [-0.5, -0.5, 0.5],
+      [-0.5, 0.5, 0.5],
+      [-0.5, 0.5, -0.5],
+    ],
+    shade: 0.72,
+  },
+  {
+    c: [
+      [-0.5, -0.5, 0.5],
+      [0.5, -0.5, 0.5],
+      [0.5, 0.5, 0.5],
+      [-0.5, 0.5, 0.5],
+    ],
+    shade: 0.62,
+  },
+  {
+    c: [
+      [0.5, -0.5, -0.5],
+      [-0.5, -0.5, -0.5],
+      [-0.5, 0.5, -0.5],
+      [0.5, 0.5, -0.5],
+    ],
+    shade: 0.62,
+  },
+];
+const QUAD_UV = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+];
+const dropVBO = GLc.createBuffer() as WebGLBuffer;
+const dropIBO = GLc.createBuffer() as WebGLBuffer;
+const dropVerts: number[] = [];
+const dropIdx: number[] = [];
+
+/** Build a small spinning, bobbing cube for each drop and draw them in one
+ *  call (rebuilt every frame — there are only ever a handful). */
+function drawDrops(): void {
+  if (drops.length === 0) return;
+  dropVerts.length = 0;
+  dropIdx.length = 0;
+  const SIZE = 0.26;
+  for (const d of drops) {
+    const def = itemDef(d.id);
+    if (!def) continue;
+    const [u0, v0, u1, v1] = tileUV(def.icon);
+    const yaw = d.age * 1.8;
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    const bob = Math.sin(d.age * 3) * 0.05;
+    for (const f of CUBE_FACES) {
+      const base = dropVerts.length / FLOATS_PER_VERT;
+      for (let ci = 0; ci < 4; ci++) {
+        const c = f.c[ci];
+        const lx = c[0] * SIZE;
+        const lz = c[2] * SIZE;
+        const px = d.x + lx * cos - lz * sin;
+        const py = d.y + c[1] * SIZE + bob;
+        const pz = d.z + lx * sin + lz * cos;
+        const uv = QUAD_UV[ci];
+        dropVerts.push(px, py, pz, u0 + uv[0] * (u1 - u0), v0 + uv[1] * (v1 - v0), f.shade, 1);
+      }
+      dropIdx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+  }
+  if (dropIdx.length === 0) return;
+  GLc.bindBuffer(GLc.ARRAY_BUFFER, dropVBO);
+  GLc.bufferData(GLc.ARRAY_BUFFER, new Float32Array(dropVerts), GLc.DYNAMIC_DRAW);
+  GLc.bindBuffer(GLc.ELEMENT_ARRAY_BUFFER, dropIBO);
+  GLc.bufferData(GLc.ELEMENT_ARRAY_BUFFER, new Uint16Array(dropIdx), GLc.DYNAMIC_DRAW);
+  GLc.vertexAttribPointer(aPos, 3, GLc.FLOAT, false, STRIDE, 0);
+  GLc.vertexAttribPointer(aUV, 2, GLc.FLOAT, false, STRIDE, 12);
+  GLc.vertexAttribPointer(aLight, 1, GLc.FLOAT, false, STRIDE, 20);
+  GLc.vertexAttribPointer(aAlpha, 1, GLc.FLOAT, false, STRIDE, 24);
+  GLc.drawElements(GLc.TRIANGLES, dropIdx.length, GLc.UNSIGNED_SHORT, 0);
+}
 
 function render(): void {
   resize();
@@ -895,6 +1268,7 @@ function render(): void {
   GLc.disable(GLc.BLEND);
   GLc.depthMask(true);
   for (const c of drawList) if (c.opaque) drawMesh(c.opaque);
+  drawDrops();
 
   // Translucent pass (water / glass): blended, no depth writes.
   GLc.enable(GLc.BLEND);
@@ -911,7 +1285,11 @@ let posAcc = 0;
 function loop(now: number): void {
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
   last = now;
-  if (started) updatePhysics(dt);
+  if (started && !paused) {
+    updatePhysics(dt);
+    updateMining(dt);
+    updateDrops(dt);
+  }
   manageChunks();
   render();
 
@@ -924,6 +1302,7 @@ function loop(now: number): void {
 }
 
 // --- Boot ---
+panels = createPanels({ inv: inventory, atlas, onChange: refreshInventory });
 buildHotbar();
 loadOrCreate();
 localize();

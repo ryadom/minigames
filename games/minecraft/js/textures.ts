@@ -8,8 +8,11 @@
    ========================================================================== */
 
 import {
+  T_AXE,
   T_BRICK,
   T_COBBLE,
+  T_CRAFT_SIDE,
+  T_CRAFT_TOP,
   T_DIRT,
   T_GLASS,
   T_GRASS_SIDE,
@@ -17,15 +20,18 @@ import {
   T_LEAVES,
   T_LOG_SIDE,
   T_LOG_TOP,
+  T_PICKAXE,
   T_PLANKS,
   T_SAND,
+  T_STICK,
   T_STONE,
+  T_SWORD,
   T_WATER,
 } from "./blocks";
 
 export const TILE = 16;
 export const ATLAS_COLS = 4;
-const ATLAS_ROWS = 4;
+const ATLAS_ROWS = 5;
 export const ATLAS_W = TILE * ATLAS_COLS;
 export const ATLAS_H = TILE * ATLAS_ROWS;
 
@@ -58,6 +64,43 @@ type Painter = (ctx: CanvasRenderingContext2D, ox: number, oy: number, rnd: () =
 function px(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
   ctx.fillStyle = color;
   ctx.fillRect(x, y, 1, 1);
+}
+
+/** Thick pixel-art line (used to draw the tool icons). */
+function line(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  color: string,
+  w = 1,
+): void {
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  let x = x0;
+  let y = y0;
+  const half = (w - 1) >> 1;
+  for (;;) {
+    for (let oxw = -half; oxw <= half; oxw++) {
+      for (let oyw = -half; oyw <= half; oyw++) px(ctx, ox + x + oxw, oy + y + oyw, color);
+    }
+    if (x === x1 && y === y1) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y += sy;
+    }
+  }
 }
 
 // Pick one of a few shades, weighted toward the first (the base colour).
@@ -197,6 +240,55 @@ const PAINTERS: Record<number, Painter> = {
         ctx.fillRect(ox + x, oy + y, 1, 1);
       }
     }
+  },
+
+  // --- Crafting table: planks base overlaid with a tool grid. ---
+  [T_CRAFT_TOP]: (ctx, ox, oy, rnd) => {
+    PAINTERS[T_PLANKS](ctx, ox, oy, rnd);
+    // 3×3 grid etched on the top.
+    for (let i = 0; i <= 15; i += 5) {
+      const p = Math.min(i, 15);
+      line(ctx, ox, oy, p, 0, p, 15, "#5c401f");
+      line(ctx, ox, oy, 0, p, 15, p, "#5c401f");
+    }
+  },
+
+  [T_CRAFT_SIDE]: (ctx, ox, oy, rnd) => {
+    PAINTERS[T_PLANKS](ctx, ox, oy, rnd);
+    // A saw and a couple of tool marks on the side panel.
+    line(ctx, ox, oy, 2, 4, 13, 4, "#5c401f");
+    line(ctx, ox, oy, 3, 11, 12, 7, "#9c9ca1", 2); // saw blade
+    line(ctx, ox, oy, 3, 11, 5, 13, "#7a5a2c", 2); // saw handle
+  },
+
+  // --- Items (drawn on a transparent background for icon use). ---
+  [T_STICK]: (ctx, ox, oy) => {
+    line(ctx, ox, oy, 4, 12, 11, 3, "#7a5a2c", 2);
+    line(ctx, ox, oy, 4, 12, 11, 3, "#5c401f", 1);
+  },
+
+  [T_PICKAXE]: (ctx, ox, oy) => {
+    line(ctx, ox, oy, 4, 13, 11, 5, "#7a5a2c", 2); // handle
+    line(ctx, ox, oy, 2, 6, 13, 3, "#9c9ca1", 2); // head bar
+    line(ctx, ox, oy, 2, 6, 4, 3, "#cfcfd4", 1); // tip highlights
+    line(ctx, ox, oy, 11, 3, 13, 3, "#cfcfd4", 1);
+  },
+
+  [T_AXE]: (ctx, ox, oy) => {
+    line(ctx, ox, oy, 5, 13, 10, 4, "#7a5a2c", 2); // handle
+    // Axe head wedge near the top.
+    for (let y = 2; y <= 8; y++) {
+      const w = 4 - Math.abs(y - 5);
+      for (let x = 0; x <= w + 2; x++) px(ctx, ox + 9 + x, oy + y, "#9c9ca1");
+    }
+    line(ctx, ox, oy, 11, 2, 11, 8, "#cfcfd4", 1);
+  },
+
+  [T_SWORD]: (ctx, ox, oy) => {
+    line(ctx, ox, oy, 4, 12, 11, 4, "#cdd0d6", 3); // blade
+    line(ctx, ox, oy, 5, 11, 11, 4, "#eef0f4", 1); // blade shine
+    line(ctx, ox, oy, 2, 13, 5, 10, "#caa84a", 2); // guard
+    line(ctx, ox, oy, 2, 13, 4, 15, "#7a5a2c", 2); // grip
   },
 };
 
