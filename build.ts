@@ -102,6 +102,7 @@ async function main(): Promise<void> {
     "flappy-bird",
     "killer-sudoku",
     "match-three",
+    "minecraft",
     "minesweeper",
     "racing",
     "snake",

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>⛏️ Mini Craft — Minigames</title>
+  <meta name="description" content="A first-person 3D voxel sandbox — build, dig and explore a blocky world in your browser. Walk or fly, mine and place blocks. No installs." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛏️</text></svg>" />
+
+  <!-- Shared chrome: header bar + language control. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <!-- Game-specific styles. -->
+  <link rel="stylesheet" href="mc.css" />
+</head>
+<body class="mg-app">
+  <!-- Header is mounted by the shared runtime (see MG.mountHeader in js/main.js). -->
+  <div class="mg-game-area">
+    <div class="stage" id="stage">
+      <canvas id="game"></canvas>
+
+      <!-- Aiming reticle -->
+      <div class="crosshair" id="crosshair">+</div>
+
+      <!-- Hotbar (always visible; tap / 1-9 / wheel to pick a block) -->
+      <div class="hotbar" id="hotbar"></div>
+
+      <!-- On-screen touch controls (hidden when a fine pointer is present) -->
+      <div class="touch" id="touch">
+        <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
+        <div class="buttons">
+          <div class="tbtn jump" id="btn-jump" aria-label="jump">⤒</div>
+          <div class="tbtn mine" id="btn-mine" aria-label="mine">⛏️</div>
+          <div class="tbtn place" id="btn-place" aria-label="place">▥</div>
+        </div>
+      </div>
+
+      <!-- Start / title overlay -->
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <div class="title" id="ov-title">⛏️ Mini Craft</div>
+          <div class="tag" id="ov-tag"></div>
+          <div class="hint" id="ov-hint"></div>
+          <div class="play-pill" id="ov-play">▶ Play</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
