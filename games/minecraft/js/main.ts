@@ -140,6 +140,11 @@ interface ChunkGL {
 }
 
 const chunks: ChunkGL[] = new Array(CHUNKS_X * CHUNKS_Z);
+// Per-chunk visibility for the current frame (frustum + view-distance culling).
+const visible: boolean[] = new Array(CHUNKS_X * CHUNKS_Z).fill(false);
+// Chunks whose centre is farther than this (horizontally) aren't drawn; sits
+// just beyond the fog far plane so culling never pops geometry into view.
+const RENDER_DIST = 72;
 
 function uploadMesh(m: MeshArrays): GLMesh | null {
   if (m.count === 0) return null;
@@ -229,14 +234,52 @@ const player = {
 };
 let sel = 0; // hotbar index
 
+/** Highest solid block in a column, or -1 if it has none. */
+function columnTop(x: number, z: number): number {
+  for (let y = WY - 3; y >= 0; y--) {
+    if (isSolid(world.get(x, y, z))) return y;
+  }
+  return -1;
+}
+
+/** A column is a valid spawn if it has solid ground topped by two air blocks
+ *  (dry land with head-room — not underwater and not buried in a tree). */
+function standableTop(x: number, z: number): number {
+  const top = columnTop(x, z);
+  if (top < 0) return -1;
+  if (world.get(x, top + 1, z) !== AIR || world.get(x, top + 2, z) !== AIR) return -1;
+  return top;
+}
+
+/** Drop the player onto solid ground, never inside a block. Scans outward in
+ *  rings from the map centre for the nearest dry, open column. */
 function spawnPlayer(): void {
-  const x = Math.floor(WX / 2);
-  const z = Math.floor(WZ / 2);
-  let h = world.heightAt(x, z);
-  while (h < WY - 2 && isSolid(world.get(x, h + 1, z))) h++;
-  player.x = x + 0.5;
-  player.z = z + 0.5;
-  player.y = h + 1;
+  const cx = Math.floor(WX / 2);
+  const cz = Math.floor(WZ / 2);
+  let sx = cx;
+  let sz = cz;
+  let top = -1;
+  const maxR = Math.max(WX, WZ);
+  for (let r = 0; r <= maxR && top < 0; r++) {
+    for (let dz = -r; dz <= r && top < 0; dz++) {
+      for (let dx = -r; dx <= r && top < 0; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue; // ring edge only
+        const x = cx + dx;
+        const z = cz + dz;
+        if (x < 1 || x >= WX - 1 || z < 1 || z >= WZ - 1) continue;
+        const t = standableTop(x, z);
+        if (t >= 0) {
+          sx = x;
+          sz = z;
+          top = t;
+        }
+      }
+    }
+  }
+  if (top < 0) top = Math.min(world.heightAt(cx, cz), WY - 3); // fallback
+  player.x = sx + 0.5;
+  player.z = sz + 0.5;
+  player.y = top + 1; // feet on top of the ground block
   player.vx = player.vy = player.vz = 0;
   player.yaw = 0;
   player.pitch = -0.15;
@@ -782,16 +825,38 @@ function render(): void {
   GLc.uniformMatrix4fv(uMVP, false, mvp);
   GLc.uniform3f(uEye, ex, ey, ez);
 
+  // Decide which chunks to load this frame: cull anything beyond the view
+  // distance or outside the camera frustum, so we only draw what's visible.
+  const frustum = mat4.frustumPlanes(mvp);
+  for (let cz = 0; cz < CHUNKS_Z; cz++) {
+    for (let cx = 0; cx < CHUNKS_X; cx++) {
+      const x0 = cx * CHUNK;
+      const z0 = cz * CHUNK;
+      // Horizontal distance from the eye to the chunk centre.
+      const dxc = x0 + CHUNK / 2 - ex;
+      const dzc = z0 + CHUNK / 2 - ez;
+      const far = Math.hypot(dxc, dzc) - CHUNK > RENDER_DIST;
+      visible[cz * CHUNKS_X + cx] =
+        !far && mat4.aabbInFrustum(frustum, x0, 0, z0, x0 + CHUNK, WY, z0 + CHUNK);
+    }
+  }
+
   // Opaque pass.
   GLc.disable(GLc.BLEND);
   GLc.depthMask(true);
-  for (const c of chunks) if (c?.opaque) drawMesh(c.opaque);
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (visible[i] && c?.opaque) drawMesh(c.opaque);
+  }
 
   // Translucent pass (water / glass): blended, no depth writes.
   GLc.enable(GLc.BLEND);
   GLc.blendFunc(GLc.SRC_ALPHA, GLc.ONE_MINUS_SRC_ALPHA);
   GLc.depthMask(false);
-  for (const c of chunks) if (c?.trans) drawMesh(c.trans);
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (visible[i] && c?.trans) drawMesh(c.trans);
+  }
   GLc.depthMask(true);
 }
 
