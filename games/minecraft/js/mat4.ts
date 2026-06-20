@@ -92,3 +92,50 @@ export function dirFromYawPitch(yaw: number, pitch: number): Vec3 {
   const cp = Math.cos(pitch);
   return [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
 }
+
+/** A view frustum as six planes, each `[a, b, c, d]` with `a x + b y + c z + d`
+ *  ≥ 0 on the inside. */
+export type Frustum = [number, number, number, number][];
+
+/** Extract the six clipping planes from a column-major view-projection matrix
+ *  (Gribb/Hartmann). Used to skip drawing chunks outside the camera view. */
+export function frustumPlanes(m: Mat4): Frustum {
+  // Rows of the matrix: rN = (m[N], m[4+N], m[8+N], m[12+N]).
+  const planes: Frustum = [
+    [m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]], // left
+    [m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]], // right
+    [m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]], // bottom
+    [m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]], // top
+    [m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14]], // near
+    [m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]], // far
+  ];
+  for (const p of planes) {
+    const inv = 1 / (Math.hypot(p[0], p[1], p[2]) || 1);
+    p[0] *= inv;
+    p[1] *= inv;
+    p[2] *= inv;
+    p[3] *= inv;
+  }
+  return planes;
+}
+
+/** True if the axis-aligned box [min, max] is at least partly inside `f`. */
+export function aabbInFrustum(
+  f: Frustum,
+  minX: number,
+  minY: number,
+  minZ: number,
+  maxX: number,
+  maxY: number,
+  maxZ: number,
+): boolean {
+  for (const [a, b, c, d] of f) {
+    // The box corner farthest along the plane normal; if it's outside, the
+    // whole box is outside that plane and therefore the frustum.
+    const px = a >= 0 ? maxX : minX;
+    const py = b >= 0 ? maxY : minY;
+    const pz = c >= 0 ? maxZ : minZ;
+    if (a * px + b * py + c * pz + d < 0) return false;
+  }
+  return true;
+}
