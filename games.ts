@@ -141,6 +141,17 @@ export const GAMES: Game[] = [
     },
   },
   {
+    title: "Mini Craft",
+    icon: "⛏️",
+    url: "./games/minecraft/",
+    tags: ["simulation", "casual"],
+    description: {
+      en: "A first-person 3D voxel sandbox — walk or fly, mine and place blocks, and build in a blocky world.",
+      ru: "Воксельная 3D-песочница от первого лица — ходи или летай, копай и ставь блоки, строй в кубическом мире.",
+      es: "Un sandbox de vóxeles 3D en primera persona — anda o vuela, pica y coloca bloques y construye en un mundo de cubos.",
+    },
+  },
+  {
     title: "Racing",
     icon: "🏎️",
     url: "./games/racing/",
