@@ -103,6 +103,80 @@ function line(
   }
 }
 
+/** Paint a small pixel-art sprite from a row map. Each character is looked up
+ *  in `colors`; characters with no colour (e.g. "." / " ") are left
+ *  transparent. Rows may be shorter than the tile — missing cells stay clear. */
+function sprite(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  rows: string[],
+  colors: Record<string, string>,
+): void {
+  for (let y = 0; y < rows.length; y++) {
+    const row = rows[y];
+    for (let x = 0; x < row.length; x++) {
+      const c = colors[row[x]];
+      if (c) px(ctx, ox + x, oy + y, c);
+    }
+  }
+}
+
+// --- Hand-drawn 16×16 tool sprites (so the icons clearly read as tools). ---
+// '#' dark metal · 'm' mid metal · '*' light metal · 'h' light wood · 'H' dark wood
+// 'o' gold guard.
+
+// Arched head peaking in the middle and curving down to a sharp prong at each
+// end; the wooden handle hangs from the centre down to the corner.
+const PICKAXE_SPRITE = [
+  "................",
+  "................",
+  "......mmmm......",
+  "....mm****mm....",
+  "..mm*..hH..*mm..",
+  ".#m....hH....m#.",
+  "........hH......",
+  "........hH......",
+  ".........hH.....",
+  ".........hH.....",
+  "..........hH....",
+  "..........hH....",
+  "...........hH...",
+  "...........hH...",
+  "...........H....",
+  "................",
+];
+
+// Rounded blade on the left; the wooden handle is drawn over it with lines.
+const AXE_BLADE_SPRITE = [
+  "................",
+  "....###.........",
+  "...#***#........",
+  "..#****#........",
+  ".#*****#........",
+  ".#*****#........",
+  ".#****#.........",
+  "..#***#.........",
+  "..#**#..........",
+  "...##...........",
+];
+
+// Diagonal blade, gold cross-guard, short grip toward the hand.
+const SWORD_SPRITE = [
+  ".............*..",
+  "............*m..",
+  "...........*m...",
+  "..........*m....",
+  ".........*m.....",
+  "........*m......",
+  ".......*m.......",
+  "....ooo*ooo.....",
+  "......hH........",
+  ".....hH.........",
+  ".....hH.........",
+  "................",
+];
+
 // Pick one of a few shades, weighted toward the first (the base colour).
 function shade(rnd: () => number, shades: string[]): string {
   const r = rnd();
@@ -267,29 +341,29 @@ const PAINTERS: Record<number, Painter> = {
     line(ctx, ox, oy, 4, 12, 11, 3, "#5c401f", 1);
   },
 
-  [T_PICKAXE]: (ctx, ox, oy) => {
-    line(ctx, ox, oy, 4, 13, 11, 5, "#7a5a2c", 2); // handle
-    line(ctx, ox, oy, 2, 6, 13, 3, "#9c9ca1", 2); // head bar
-    line(ctx, ox, oy, 2, 6, 4, 3, "#cfcfd4", 1); // tip highlights
-    line(ctx, ox, oy, 11, 3, 13, 3, "#cfcfd4", 1);
-  },
+  [T_PICKAXE]: (ctx, ox, oy) =>
+    sprite(ctx, ox, oy, PICKAXE_SPRITE, {
+      "#": "#6f6f74",
+      m: "#9c9ca1",
+      "*": "#cfcfd4",
+      h: "#7a5a2c",
+      H: "#5c401f",
+    }),
 
   [T_AXE]: (ctx, ox, oy) => {
-    line(ctx, ox, oy, 5, 13, 10, 4, "#7a5a2c", 2); // handle
-    // Axe head wedge near the top.
-    for (let y = 2; y <= 8; y++) {
-      const w = 4 - Math.abs(y - 5);
-      for (let x = 0; x <= w + 2; x++) px(ctx, ox + 9 + x, oy + y, "#9c9ca1");
-    }
-    line(ctx, ox, oy, 11, 2, 11, 8, "#cfcfd4", 1);
+    sprite(ctx, ox, oy, AXE_BLADE_SPRITE, { "#": "#6f6f74", "*": "#cfcfd4" });
+    line(ctx, ox, oy, 13, 15, 8, 4, "#7a5a2c", 3); // handle
+    line(ctx, ox, oy, 12, 15, 8, 4, "#5c401f", 1); // handle core
   },
 
-  [T_SWORD]: (ctx, ox, oy) => {
-    line(ctx, ox, oy, 4, 12, 11, 4, "#cdd0d6", 3); // blade
-    line(ctx, ox, oy, 5, 11, 11, 4, "#eef0f4", 1); // blade shine
-    line(ctx, ox, oy, 2, 13, 5, 10, "#caa84a", 2); // guard
-    line(ctx, ox, oy, 2, 13, 4, 15, "#7a5a2c", 2); // grip
-  },
+  [T_SWORD]: (ctx, ox, oy) =>
+    sprite(ctx, ox, oy, SWORD_SPRITE, {
+      "*": "#dfe2e8",
+      m: "#a8abb2",
+      o: "#caa84a",
+      h: "#7a5a2c",
+      H: "#5c401f",
+    }),
 };
 
 /** Paint the whole atlas onto a fresh canvas and return it. */
