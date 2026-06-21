@@ -105,6 +105,7 @@ async function main(): Promise<void> {
     "minecraft",
     "minesweeper",
     "racing",
+    "slither",
     "snake",
     "solitaire",
     "sudoku",
