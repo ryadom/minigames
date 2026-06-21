@@ -98,6 +98,7 @@ async function main(): Promise<void> {
   // Games → ES module bundles (one self-contained module each).
   const GAMES = [
     "2048",
+    "agar-io",
     "farm",
     "flappy-bird",
     "killer-sudoku",
