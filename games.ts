@@ -173,6 +173,17 @@ export const GAMES: Game[] = [
     },
   },
   {
+    title: "Slither",
+    icon: "🪱",
+    url: "./games/slither/",
+    tags: ["arcade", "action"],
+    description: {
+      en: "Glide around a huge arena, eat glowing orbs to grow, and trap rival snakes — mouse, touch or keys, hold to boost.",
+      ru: "Скользи по огромной арене, ешь светящиеся шарики и подставляй соперников — мышь, касание или клавиши, удерживай для ускорения.",
+      es: "Deslízate por una arena enorme, come orbes para crecer y atrapa a otras serpientes — ratón, dedo o teclas, mantén para acelerar.",
+    },
+  },
+  {
     title: "Agar",
     icon: "🦠",
     url: "./games/agar-io/",
