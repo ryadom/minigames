@@ -173,6 +173,17 @@ export const GAMES: Game[] = [
     },
   },
   {
+    title: "Agar",
+    icon: "🦠",
+    url: "./games/agar-io/",
+    tags: ["arcade", "action"],
+    description: {
+      en: "Glide your blob around, swallow pellets and smaller cells to grow, and dodge anything bigger — mouse or touch.",
+      ru: "Веди свой шарик, глотай пыльцу и клетки поменьше, расти и убегай от больших — мышь или палец.",
+      es: "Desliza tu célula, traga bolitas y células menores para crecer, y esquiva lo más grande — ratón o táctil.",
+    },
+  },
+  {
     title: "Top Racer",
     icon: "🏁",
     url: "./games/top-racer/",
