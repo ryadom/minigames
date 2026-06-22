@@ -94,9 +94,13 @@ const SPEED = 168; // cruise speed (world units / second)
 const BOOST_SPEED = 290; // speed while boosting
 const TURN_RATE = 5.0; // max steering (radians / second)
 
+// Orbs only nudge you a little longer, so growth is a slow, steady climb
+// rather than a sudden jump every time you swallow something.
+const GROW_PER_FOOD = 0.34; // length gained per unit of orb "value"
+
 // Boost burns length and trails orbs behind you.
 const BOOST_MIN_LEN = BASE_LEN + 6; // can't boost below this
-const BOOST_DRAIN = 9; // length lost per second of boosting
+const BOOST_DRAIN = 5; // length lost per second of boosting
 
 const HUES = [140, 200, 280, 330, 30, 50, 175, 250, 0, 95];
 
@@ -107,6 +111,8 @@ interface Snake {
   hue: number;
   x: number;
   y: number;
+  px: number; // head position last frame (for swept collision)
+  py: number;
   angle: number; // current heading (radians)
   target: number; // desired heading
   len: number; // body length (float; floor = visible segments)
@@ -161,6 +167,79 @@ function angleLerp(from: number, to: number, maxStep: number): number {
   if (d > maxStep) d = maxStep;
   else if (d < -maxStep) d = -maxStep;
   return from + d;
+}
+
+// Squared distance between two line segments AB and CD. Used for collisions so
+// a fast-moving head is tested along the whole step it swept, and a snake body
+// is tested as a continuous tube (the line between sampled centres) instead of
+// a handful of points you could slip between — even when the body is very thick.
+function segSegDist2(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  dx: number,
+  dy: number,
+): number {
+  const ux = bx - ax;
+  const uy = by - ay;
+  const vx = dx - cx;
+  const vy = dy - cy;
+  const wx = ax - cx;
+  const wy = ay - cy;
+  const a = ux * ux + uy * uy;
+  const b = ux * vx + uy * vy;
+  const c = vx * vx + vy * vy;
+  const d = ux * wx + uy * wy;
+  const e = vx * wx + vy * wy;
+  const D = a * c - b * b;
+  const EPS = 1e-9;
+  let sN: number;
+  let sD = D;
+  let tN: number;
+  let tD = D;
+  if (D < EPS) {
+    sN = 0;
+    sD = 1;
+    tN = e;
+    tD = c;
+  } else {
+    sN = b * e - c * d;
+    tN = a * e - b * d;
+    if (sN < 0) {
+      sN = 0;
+      tN = e;
+      tD = c;
+    } else if (sN > sD) {
+      sN = sD;
+      tN = e + b;
+      tD = c;
+    }
+  }
+  if (tN < 0) {
+    tN = 0;
+    if (-d < 0) sN = 0;
+    else if (-d > a) sN = sD;
+    else {
+      sN = -d;
+      sD = a;
+    }
+  } else if (tN > tD) {
+    tN = tD;
+    if (-d + b < 0) sN = 0;
+    else if (-d + b > a) sN = sD;
+    else {
+      sN = -d + b;
+      sD = a;
+    }
+  }
+  const sc = Math.abs(sN) < EPS ? 0 : sN / sD;
+  const tc = Math.abs(tN) < EPS ? 0 : tN / tD;
+  const px = ax + sc * ux - (cx + tc * vx);
+  const py = ay + sc * uy - (cy + tc * vy);
+  return px * px + py * py;
 }
 
 // Walk a snake's head-history path and sample segment centres at fixed gaps.
@@ -239,6 +318,8 @@ function makeSnake(isBot: boolean, hue: number): Snake {
     hue,
     x: p.x,
     y: p.y,
+    px: p.x,
+    py: p.y,
     angle,
     target: angle,
     len: BASE_LEN,
@@ -414,6 +495,10 @@ function steer(s: Snake, dt: number): void {
   s.speed = speed;
   s.radius = radiusFor(s.len);
 
+  // Remember where the head was so collisions can test the whole step it
+  // swept through this frame, not just the final point (no tunnelling).
+  s.px = s.x;
+  s.py = s.y;
   s.x += Math.cos(s.angle) * speed * dt;
   s.y += Math.sin(s.angle) * speed * dt;
 
@@ -430,7 +515,7 @@ function eatFood(s: Snake): void {
     const dx = f.x - s.x;
     const dy = f.y - s.y;
     if (dx * dx + dy * dy < reach2) {
-      s.len += f.val;
+      s.len += f.val * GROW_PER_FOOD;
       foods[i] = foods[foods.length - 1];
       foods.pop();
       if (s === player) {
@@ -441,23 +526,41 @@ function eatFood(s: Snake): void {
   }
 }
 
-// A snake dies if its head touches another living snake's body.
+// A snake dies if its head touches another living snake's body. We test the
+// segment the head swept this frame (px,py → x,y) against the rival body taken
+// as a continuous tube, so neither a fast head nor a fat body lets you slip
+// through the gaps between sampled points.
 function checkCollisions(s: Snake): boolean {
   // Arena wall.
   if (Math.hypot(s.x, s.y) > WORLD_R - s.radius) return true;
 
+  const hx0 = s.px;
+  const hy0 = s.py;
+  const hx1 = s.x;
+  const hy1 = s.y;
+
   for (const o of snakes) {
     if (o === s || o.dead) continue;
-    const hitR = s.radius * 0.7 + o.radius;
+    const body = o.body;
+    const last = body.length - 1;
+    if (last < 3) continue;
+
+    const hitR = s.radius * 0.6 + o.radius;
     const hitR2 = hitR * hitR;
-    const step = Math.max(1, Math.floor(o.body.length / 90));
-    // Skip the first couple of segments — that's the rival's own head ball,
-    // a head-on tie shouldn't kill both unfairly on the very tip.
-    for (let i = 2; i < o.body.length; i += step) {
-      const b = o.body[i];
-      const dx = s.x - b.x;
-      const dy = s.y - b.y;
-      if (dx * dx + dy * dy < hitR2) return true;
+    const step = Math.max(1, Math.floor(body.length / 96));
+
+    // Start a few segments back from the rival's head ball, so a fair head-on
+    // tie doesn't kill on the very tip, then walk every tube segment to the
+    // tail (clamping the final index so the tail end is always covered).
+    let startIdx = Math.max(2, step);
+    if (startIdx > last) startIdx = last;
+    let prev = body[startIdx];
+    for (let i = startIdx + step; ; i += step) {
+      const idx = i < last ? i : last;
+      const b = body[idx];
+      if (segSegDist2(hx0, hy0, hx1, hy1, prev.x, prev.y, b.x, b.y) < hitR2) return true;
+      prev = b;
+      if (idx === last) break;
     }
   }
   return false;
@@ -531,9 +634,12 @@ function resize(): void {
   dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(viewW * dpr);
   canvas.height = Math.round(viewH * dpr);
-  const mdpr = dpr;
-  minimap.width = Math.round(96 * mdpr);
-  minimap.height = Math.round(96 * mdpr);
+  // Keep the radar small on phones, a touch larger on roomy screens.
+  const msize = Math.max(96, Math.min(132, Math.round(Math.min(viewW, viewH) * 0.26)));
+  minimap.style.width = `${msize}px`;
+  minimap.style.height = `${msize}px`;
+  minimap.width = Math.round(msize * dpr);
+  minimap.height = Math.round(msize * dpr);
 }
 
 function draw(): void {
@@ -654,21 +760,59 @@ function drawMinimap(): void {
   mctx.clearRect(0, 0, W, H);
   const cx = W / 2;
   const cy = H / 2;
-  const scale = W / 2 / WORLD_R;
+  const ringR = (W / 2) * 0.97;
+  const scale = ringR / WORLD_R;
 
-  mctx.fillStyle = "rgba(255,70,70,0.18)";
+  // Clip everything to the round radar face.
+  mctx.save();
   mctx.beginPath();
-  mctx.arc(cx, cy, (W / 2) * 0.98, 0, Math.PI * 2);
-  mctx.fill();
+  mctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+  mctx.clip();
 
+  // Arena face + boundary.
+  mctx.fillStyle = "rgba(20, 28, 54, 0.85)";
+  mctx.fill();
+  mctx.lineWidth = Math.max(1, W * 0.02);
+  mctx.strokeStyle = "rgba(255, 70, 70, 0.55)";
+  mctx.stroke();
+
+  // Faint scatter of orbs so you can read where the food is.
+  mctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  for (let i = 0; i < foods.length; i += 6) {
+    const f = foods[i];
+    mctx.fillRect(cx + f.x * scale, cy + f.y * scale, 1, 1);
+  }
+
+  // The slice of world currently on screen, drawn as an outlined box.
+  if (zoom > 0) {
+    const hw = (viewW / 2 / zoom) * scale;
+    const hh = (viewH / 2 / zoom) * scale;
+    mctx.lineWidth = Math.max(1, W * 0.012);
+    mctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    mctx.strokeRect(cx + player.x * scale - hw, cy + player.y * scale - hh, hw * 2, hh * 2);
+  }
+
+  // Snakes: rivals as coloured dots, the player as a ringed white dot on top.
   for (const s of snakes) {
-    if (s.dead) continue;
-    const isPlayer = s === player;
-    mctx.fillStyle = isPlayer ? "#ffffff" : `hsl(${s.hue}, 70%, 60%)`;
+    if (s.dead || s === player) continue;
+    mctx.fillStyle = `hsl(${s.hue}, 70%, 60%)`;
     mctx.beginPath();
-    mctx.arc(cx + s.x * scale, cy + s.y * scale, isPlayer ? 3.2 : 2, 0, Math.PI * 2);
+    mctx.arc(cx + s.x * scale, cy + s.y * scale, Math.max(1.6, W * 0.018), 0, Math.PI * 2);
     mctx.fill();
   }
+  if (!player.dead) {
+    const pxm = cx + player.x * scale;
+    const pym = cy + player.y * scale;
+    mctx.fillStyle = "#ffffff";
+    mctx.beginPath();
+    mctx.arc(pxm, pym, Math.max(2.4, W * 0.028), 0, Math.PI * 2);
+    mctx.fill();
+    mctx.lineWidth = Math.max(1, W * 0.012);
+    mctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+    mctx.stroke();
+  }
+
+  mctx.restore();
 }
 
 /* ============================ Loop ============================ */
