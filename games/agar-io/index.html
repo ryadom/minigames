@@ -100,6 +100,48 @@
       .board { min-width: 120px; padding: 8px 9px; font-size: 0.78rem; }
     }
 
+    /* Minimap pinned to the bottom-right of the playfield. */
+    .minimap {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      z-index: 3;
+      width: 140px;
+      height: 140px;
+      background: rgba(0, 0, 0, 0.42);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      backdrop-filter: blur(3px);
+      pointer-events: none;
+    }
+    .minimap[hidden] { display: none; }
+    @media (max-width: 480px) {
+      .minimap { width: 104px; height: 104px; bottom: 10px; right: 10px; }
+    }
+
+    /* Split control — large tap target, bottom-left, for touch + mouse. */
+    .split-btn {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      z-index: 4;
+      min-width: 84px;
+      min-height: 48px;
+      padding: 12px 20px;
+      font: inherit;
+      font-weight: 800;
+      font-size: 1rem;
+      color: #06303a;
+      background: #5ad0e0;
+      border: none;
+      border-radius: 999px;
+      box-shadow: 0 4px 0 #2691a0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .split-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #2691a0; }
+    .split-btn[hidden] { display: none; }
+
     /* Overlay screens (start / game over) */
     .overlay {
       position: absolute;
@@ -175,6 +217,10 @@
         <h4 id="board-title">Leaderboard</h4>
         <ol id="board-list"></ol>
       </div>
+
+      <canvas class="minimap" id="minimap" hidden></canvas>
+
+      <button class="split-btn" id="split-btn" type="button" hidden>Split</button>
 
       <div class="overlay" id="overlay">
         <div class="panel">
