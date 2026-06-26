@@ -42,6 +42,17 @@ export interface Game {
 
 export const GAMES: Game[] = [
   {
+    title: "Asteroid Colony",
+    icon: "🛰️",
+    url: "./games/asteroid-colony/",
+    tags: ["simulation", "survival"],
+    description: {
+      en: "Dig out an asteroid, pump oxygen, manage heat, water and power, grow food and keep your duplicants breathing — survive as many cycles as you can.",
+      ru: "Раскопай астероид, качай кислород, управляй теплом, водой и энергией, выращивай еду и не дай дюпам задохнуться — продержись как можно дольше.",
+      es: "Excava un asteroide, bombea oxígeno, gestiona calor, agua y energía, cultiva comida y mantén a tus dupes respirando — sobrevive todos los ciclos que puedas.",
+    },
+  },
+  {
     title: "Minesweeper",
     icon: "💣",
     url: "./games/minesweeper/",

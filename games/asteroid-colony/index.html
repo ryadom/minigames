@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🛰️ Asteroid Colony — Minigames</title>
+  <meta name="description" content="An Oxygen Not Included–inspired colony survival sim — dig out an asteroid, pump oxygen, manage heat, water and power, grow food and keep your duplicants breathing across the cycles. Plays in your browser." />
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>" />
+
+  <!-- Shared chrome: header bar + language control. -->
+  <link rel="stylesheet" href="../../shared/mg.css" />
+  <!-- Game-specific styles. -->
+  <link rel="stylesheet" href="colony.css" />
+</head>
+<body class="mg-app">
+  <!-- Header is mounted by the shared runtime (see MG.mountHeader in js/main.js). -->
+  <div class="mg-game-area">
+    <canvas id="game"></canvas>
+    <div id="hud"></div>
+    <div id="toolbar"></div>
+    <div id="overlay" class="hidden"><div id="panel" class="panel"></div></div>
+    <div id="toast"></div>
+  </div>
+
+  <!--
+    ES module graph rooted at js/main.ts (bundled to js/main.js):
+      config  — tuning constants + content tables
+      types   — shared TypeScript interfaces
+      i18n    — translations (en/ru/es)
+      state   — canonical state + versioned save/load + offline catch-up
+      fields  — gas / liquid / heat cellular automata
+      sim     — fixed-step simulation: buildings, dupes, task scheduling, cycles
+      render  — canvas camera + world drawing
+      input   — pointer pan/zoom + tap actions
+      view    — DOM header, HUD, toolbar, info panel, overlays
+      main    — boot, tick loop, lifecycle
+  -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

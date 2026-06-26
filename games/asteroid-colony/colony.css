@@ -1,0 +1,338 @@
+/* Asteroid Colony — game-specific styles. Shared chrome lives in shared/mg.css;
+   theme tokens (--mg-*) come from there. The world is a full-area canvas with
+   the HUD floating on top and the toolbar pinned to the bottom. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+.mg-game-area {
+  background: #05070c;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---- HUD (top strip of resource bars) ---- */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  pointer-events: none;
+  flex-wrap: wrap;
+}
+
+.hud-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(12, 16, 22, 0.82);
+  border: 1px solid var(--mg-line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--mg-txt);
+}
+
+.hud-label {
+  color: var(--mg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+
+.hud-bar {
+  position: relative;
+  width: 54px;
+  height: 7px;
+  background: #1c2530;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hud-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 4px;
+  transition: width 0.25s ease;
+}
+
+.hud-val {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- toolbar (bottom) ---- */
+#toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-row,
+.chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tool-row::-webkit-scrollbar,
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.tool-btn {
+  flex: 1 0 auto;
+  min-width: 64px;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  background: rgba(16, 20, 25, 0.92);
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+  color: var(--mg-txt);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.tool-btn .t-ico {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.tool-btn .t-lbl {
+  font-size: 10px;
+  color: var(--mg-dim);
+}
+
+.tool-btn.active {
+  border-color: var(--mg-accent);
+  background: rgba(0, 230, 200, 0.14);
+}
+
+.tool-btn.active .t-lbl {
+  color: var(--mg-accent);
+}
+
+.view-btn {
+  flex: 0 0 auto;
+}
+
+.chip {
+  flex: 0 0 auto;
+  min-width: 58px;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(16, 20, 25, 0.92);
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+  color: var(--mg-txt);
+  cursor: pointer;
+}
+
+.chip-ico {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.chip-cost {
+  font-size: 9px;
+  color: var(--mg-dim);
+  white-space: nowrap;
+}
+
+.chip.sel {
+  border-color: var(--mg-accent);
+  background: rgba(0, 230, 200, 0.16);
+}
+
+/* ---- overlay (start / game over / info) ---- */
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 6, 11, 0.78);
+  padding: 16px;
+  z-index: 5;
+}
+
+#overlay.hidden {
+  display: none;
+}
+
+#overlay.info-mode {
+  align-items: flex-end;
+  background: transparent;
+  pointer-events: none;
+}
+
+.panel {
+  width: min(420px, 100%);
+  background: var(--mg-panel);
+  border: 1px solid var(--mg-line);
+  border-radius: 14px;
+  padding: 20px;
+  color: var(--mg-txt);
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+#overlay.info-mode .panel {
+  pointer-events: auto;
+  text-align: left;
+  margin-bottom: 80px;
+}
+
+.ov-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--mg-accent);
+  margin-bottom: 10px;
+}
+
+.ov-hint {
+  font-size: 13px;
+  color: var(--mg-dim);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.ov-line {
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+.pill {
+  background: var(--mg-panel);
+  border: 1px solid var(--mg-line);
+  border-radius: 999px;
+  color: var(--mg-txt);
+  padding: 10px 18px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pill.big {
+  margin-top: 14px;
+  background: var(--mg-accent);
+  border-color: var(--mg-accent);
+  color: #04201c;
+  font-weight: 700;
+  padding: 12px 26px;
+}
+
+.pill.danger {
+  border-color: var(--mg-err);
+  color: var(--mg-err);
+}
+
+/* info panel */
+.info-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.info-ico {
+  font-size: 26px;
+}
+
+.info-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--mg-accent);
+}
+
+.info-desc {
+  font-size: 13px;
+  color: var(--mg-dim);
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.info-status,
+.info-cost {
+  font-size: 12px;
+  margin: 3px 0;
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+
+.info-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.info-actions .pill {
+  flex: 1;
+}
+
+/* ---- toast ---- */
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(16, 20, 25, 0.96);
+  border: 1px solid var(--mg-line);
+  border-radius: 10px;
+  padding: 9px 16px;
+  color: var(--mg-txt);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 6;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 560px) {
+  .hud-bar {
+    width: 40px;
+  }
+  .hud-item {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}
