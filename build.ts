@@ -99,6 +99,7 @@ async function main(): Promise<void> {
   const GAMES = [
     "2048",
     "agar-io",
+    "asteroid-colony",
     "farm",
     "flappy-bird",
     "killer-sudoku",
