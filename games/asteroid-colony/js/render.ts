@@ -7,7 +7,6 @@
  *  range is drawn (culling), so the dense grid stays cheap.
  * ========================================================================== */
 import {
-  BUILD_BY_ID,
   CELL,
   CELL_WATER_CAP,
   COLS,
@@ -19,8 +18,9 @@ import {
   SPACE_ROWS,
   TILE_BY_ID,
 } from "./config";
+import { drawBuilding as drawBuildingSprite, drawDupe, drawTile, dupeColor } from "./sprites";
 import { state } from "./state";
-import type { JobKind } from "./types";
+import type { BuildingId, JobKind } from "./types";
 
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
@@ -38,6 +38,7 @@ const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 3;
 
 let hoverCell = -1;
+let animTime = 0; // free-running clock (ms) for sprite animation
 
 const JOB_ICON: Record<JobKind, string> = { dig: "⛏️", build: "🔨", sleep: "💤", eat: "🍽️" };
 
@@ -118,6 +119,7 @@ function heatColor(temp: number): string {
 
 export function draw(): void {
   if (!ctx) return;
+  animTime = performance.now();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#05070c";
   ctx.fillRect(0, 0, W, H);
@@ -130,7 +132,6 @@ export function draw(): void {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const glyph = Math.min(cellPx * 0.7, 30);
 
   for (let r = r0; r < r1; r++) {
     for (let c = c0; c < c1; c++) {
@@ -141,14 +142,7 @@ export function draw(): void {
 
       if (t.solid !== null) {
         const def = TILE_BY_ID[t.solid];
-        ctx.fillStyle = def.color;
-        ctx.fillRect(x, y, cellPx + 0.5, cellPx + 0.5);
-        if (def.ico && cellPx > 14) {
-          ctx.globalAlpha = 0.5;
-          ctx.font = `${glyph}px system-ui`;
-          ctx.fillText(def.ico, x + cellPx / 2, y + cellPx / 2);
-          ctx.globalAlpha = 1;
-        }
+        drawTile(ctx, def, x, y, cellPx, i);
         if (t.marked) drawDigMark(x, y, cellPx, (t.digProgress || 0) / def.hardness);
         continue;
       }
@@ -157,8 +151,8 @@ export function draw(): void {
       ctx.fillStyle = r < SPACE_ROWS ? "#04060b" : "#0b0e16";
       ctx.fillRect(x, y, cellPx + 0.5, cellPx + 0.5);
       drawFields(t, x, y, cellPx);
-      if (t.build) drawBuilding(t.build, t.on === true, x, y, cellPx, glyph);
-      else if (t.blueprint) drawBlueprint(t.blueprint, t.buildProgress || 0, x, y, cellPx, glyph);
+      if (t.build) drawBuilding(t.build, t.on === true, x, y, cellPx);
+      else if (t.blueprint) drawBlueprint(t.blueprint, t.buildProgress || 0, x, y, cellPx);
     }
   }
 
@@ -168,15 +162,14 @@ export function draw(): void {
     const x = tx + colOf(hoverCell) * cellPx;
     const y = ty + rowOf(hoverCell) * cellPx;
     const ok = t.solid === null && !t.build && !t.blueprint;
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = ok ? "rgba(0,230,200,0.25)" : "rgba(255,71,87,0.3)";
+    ctx.fillStyle = ok ? "rgba(0,230,200,0.22)" : "rgba(255,71,87,0.28)";
     ctx.fillRect(x, y, cellPx, cellPx);
-    ctx.font = `${glyph}px system-ui`;
-    ctx.fillText(BUILD_BY_ID[state.buildSel].ico, x + cellPx / 2, y + cellPx / 2);
+    ctx.globalAlpha = 0.6;
+    drawBuildingSprite(ctx, state.buildSel, x, y, cellPx, ok, ok ? 1 : 0.45, animTime);
     ctx.globalAlpha = 1;
   }
 
-  drawDupes(cellPx, glyph);
+  drawDupes(cellPx);
 }
 
 function drawFields(
@@ -238,36 +231,28 @@ function drawDigMark(x: number, y: number, cellPx: number, progress: number): vo
   }
 }
 
-function drawBuilding(
-  id: string,
-  on: boolean,
-  x: number,
-  y: number,
-  cellPx: number,
-  glyph: number,
-): void {
-  ctx.fillStyle = on ? "rgba(0,230,200,0.16)" : "rgba(120,90,60,0.14)";
-  ctx.fillRect(x, y, cellPx, cellPx);
-  ctx.font = `${glyph}px system-ui`;
-  ctx.globalAlpha = on ? 1 : 0.6;
-  ctx.fillText(BUILD_BY_ID[id].ico, x + cellPx / 2, y + cellPx / 2);
-  ctx.globalAlpha = 1;
+/** Mealwood shows wilted when off (out of power / too hot); machines ignore grow. */
+function growFor(id: string, on: boolean): number {
+  if (id !== "mealwood") return 0;
+  return on ? 1 : 0.45;
 }
 
-function drawBlueprint(
-  id: string,
-  progress: number,
-  x: number,
-  y: number,
-  cellPx: number,
-  glyph: number,
-): void {
-  ctx.globalAlpha = 0.4;
-  ctx.fillStyle = "rgba(0,230,200,0.12)";
+function drawBuilding(id: string, on: boolean, x: number, y: number, cellPx: number): void {
+  drawBuildingSprite(ctx, id as BuildingId, x, y, cellPx, on, growFor(id, on), animTime);
+}
+
+function drawBlueprint(id: string, progress: number, x: number, y: number, cellPx: number): void {
+  // Faint ghost of the finished machine inside a dashed "to build" outline.
+  ctx.fillStyle = "rgba(0,230,200,0.10)";
   ctx.fillRect(x, y, cellPx, cellPx);
-  ctx.font = `${glyph}px system-ui`;
-  ctx.fillText(BUILD_BY_ID[id].ico, x + cellPx / 2, y + cellPx / 2);
+  ctx.globalAlpha = 0.4;
+  drawBuildingSprite(ctx, id as BuildingId, x, y, cellPx, false, growFor(id, false), animTime);
   ctx.globalAlpha = 1;
+  ctx.strokeStyle = "rgba(0,230,200,0.55)";
+  ctx.lineWidth = Math.max(1, cellPx * 0.04);
+  ctx.setLineDash([cellPx * 0.14, cellPx * 0.1]);
+  ctx.strokeRect(x + cellPx * 0.08, y + cellPx * 0.08, cellPx * 0.84, cellPx * 0.84);
+  ctx.setLineDash([]);
   const frac = Math.min(1, progress / 3000);
   if (frac > 0) {
     ctx.strokeStyle = "#00e6c8";
@@ -284,25 +269,47 @@ function drawBlueprint(
   }
 }
 
-function drawDupes(cellPx: number, glyph: number): void {
-  ctx.font = `${Math.min(cellPx * 0.8, 32)}px system-ui`;
-  for (const d of state.dupes) {
+// Transient per-dupe animation state (facing + accumulated walk phase), keyed by
+// dupe index. Runtime-only — derived from movement, never saved.
+const dupeAnim: { cx: number; cy: number; facing: number; walk: number }[] = [];
+
+function drawDupes(cellPx: number): void {
+  const s = Math.min(cellPx * 1.15, 42);
+  for (let i = 0; i < state.dupes.length; i++) {
+    const d = state.dupes[i];
     if (!d.alive) continue;
+    let a = dupeAnim[i];
+    if (!a) {
+      a = { cx: d.cx, cy: d.cy, facing: 1, walk: 0 };
+      dupeAnim[i] = a;
+    }
+    const dx = d.cx - a.cx;
+    const dy = d.cy - a.cy;
+    const dist = Math.hypot(dx, dy);
+    if (Math.abs(dx) > 0.001) a.facing = dx < 0 ? -1 : 1;
+    a.walk += dist * 16; // a few leg cycles per cell travelled
+    a.cx = d.cx;
+    a.cy = d.cy;
+    const speed = Math.min(1, dist / 0.05);
+
     const x = tx + d.cx * cellPx;
     const y = ty + d.cy * cellPx;
     const distress = d.o2Debt > 1 || d.heatDebt > 1 || d.foodDebt > 1;
-    if (distress) {
-      ctx.fillStyle = "rgba(255,71,87,0.35)";
-      ctx.beginPath();
-      ctx.arc(x, y, cellPx * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillText(d.glyph, x, y);
-    if (d.job && cellPx > 16) {
+    const sleeping = d.job?.kind === "sleep" && speed < 0.05;
+
+    drawDupe(ctx, x, y, s, {
+      color: dupeColor(d.glyph),
+      facing: a.facing,
+      walk: a.walk,
+      speed,
+      distress,
+      sleeping,
+      time: animTime,
+    });
+
+    if (d.job && !sleeping && cellPx > 16) {
       ctx.font = `${Math.min(cellPx * 0.42, 16)}px system-ui`;
-      ctx.fillText(JOB_ICON[d.job.kind], x + cellPx * 0.34, y - cellPx * 0.4);
-      ctx.font = `${Math.min(cellPx * 0.8, 32)}px system-ui`;
+      ctx.fillText(JOB_ICON[d.job.kind], x + cellPx * 0.4, y - cellPx * 0.62);
     }
   }
-  void glyph;
 }
