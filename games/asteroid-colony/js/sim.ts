@@ -274,8 +274,13 @@ function assignJob(d: Duplicant, claimed: Set<number>, wantEat: boolean, wantSle
     setJob(d, "sleep", bed >= 0 ? bed : cellIndexAt(d.cx, d.cy), claimed);
     return;
   }
-  // Colony work: build blueprints first, then dig.
-  const bp = nearestCell(d, claimed, (t) => !!t.blueprint);
+  // Colony work: build blueprints we can afford first, then dig. Skipping
+  // un-affordable blueprints is important: build is preferred over digging, and
+  // a dupe that reaches a blueprint it can't pay for drops the job the same step
+  // (freeing its claim). Without this guard every idle dupe keeps re-targeting
+  // that one blueprint and bails, so the whole colony churns on it and nothing —
+  // not even the digging that would gather the missing materials — gets done.
+  const bp = nearestCell(d, claimed, (t) => !!t.blueprint && affordBuild(BUILD_BY_ID[t.blueprint]));
   if (bp >= 0) {
     setJob(d, "build", bp, claimed);
     return;
