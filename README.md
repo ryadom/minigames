@@ -8,7 +8,7 @@ A collection of free browser minigames. No installs, no sign-ups — just play.
 > automatically.
 >
 > **Games:** 💣 [Minesweeper](./games/minesweeper/) · 🐤 [Flappy
-> Bird](./games/flappy-bird/) · 🚜 [Farm](./games/farm/) · 🐍
+> Bird](./games/flappy-bird/) · 🌱 [Farm 2: Meadow Days](./games/farm-2/) · 🚜 [Farm](./games/farm/) · 🐍
 > [Snake](./games/snake/) · 🃏 [Solitaire](./games/solitaire/) … and more.
 
 ## How it works
@@ -44,6 +44,19 @@ A small shared runtime gives every page consistent chrome:
 | `scripts/`                      | Dev server + structure validator                     |
 | `CNAME`                         | Custom domain (`minigames.ryadom.me`)                |
 | `.github/workflows/`            | `ci.yml` (checks) + `deploy.yml` (build & deploy)    |
+
+## Farm 2: Meadow Days
+
+A separate farming sequel at `games/farm-2/`, with its own `mg.save.farm-2`
+save; the original Farm and its saves remain available. Plant, water and
+harvest with touch or keyboard (1 / 2 / 3 to select tools). **End day** advances
+watered crops and restores energy; there is no real-time or offline penalty.
+Eight-day seasons change market bonuses, rain waters the garden, village
+orders earn coins and XP, and workshop upgrades add plots, energy and hens.
+Hens eat stored wheat overnight to produce eggs. Free wheat seeds keep the
+farm playable even when coins run out. English, Russian and Spanish are
+supported throughout. Pure game rules and save validation live in
+`games/farm-2/js/model.ts`, covered by `tests/farm-2.test.ts`.
 
 ## Language control
 
