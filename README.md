@@ -8,7 +8,7 @@ A collection of free browser minigames. No installs, no sign-ups — just play.
 > automatically.
 >
 > **Games:** 💣 [Minesweeper](./games/minesweeper/) · 🐤 [Flappy
-> Bird](./games/flappy-bird/) · 🌱 [Farm 2: Meadow Days](./games/farm-2/) · 🚜 [Farm](./games/farm/) · 🐍
+> Bird](./games/flappy-bird/) · 🌱 [Farm 2](./games/farm-2/) · 🚜 [Farm](./games/farm/) · 🐍
 > [Snake](./games/snake/) · 🃏 [Solitaire](./games/solitaire/) … and more.
 
 ## How it works
@@ -45,18 +45,23 @@ A small shared runtime gives every page consistent chrome:
 | `CNAME`                         | Custom domain (`minigames.ryadom.me`)                |
 | `.github/workflows/`            | `ci.yml` (checks) + `deploy.yml` (build & deploy)    |
 
-## Farm 2: Meadow Days
+## Farm 2
 
-A separate farming sequel at `games/farm-2/`, with its own `mg.save.farm-2`
-save; the original Farm and its saves remain available. Plant, water and
-harvest with touch or keyboard (1 / 2 / 3 to select tools). **End day** advances
-watered crops and restores energy; there is no real-time or offline penalty.
-Eight-day seasons change market bonuses, rain waters the garden, village
-orders earn coins and XP, and workshop upgrades add plots, energy and hens.
-Hens eat stored wheat overnight to produce eggs. Free wheat seeds keep the
-farm playable even when coins run out. English, Russian and Spanish are
-supported throughout. Pure game rules and save validation live in
-`games/farm-2/js/model.ts`, covered by `tests/farm-2.test.ts`.
+A farm-building game at `games/farm-2/`. Place buildings and soil on a 12×12
+map, then drag them in **Move** mode or tap an object and its destination.
+Moving keeps growing crops, cooking queues, animals and automation intact.
+Crops grow in real time, watering accelerates growth, kitchens turn ingredients
+into dishes, and chickens, cows, sheep and pigs produce goods when fed. Build
+greenhouses and apiaries, fill orders, sell goods and research automation.
+The starter farm includes a kitchen, a chicken, ingredients and construction
+funds. Wheat seeds are free. There is no energy limit or end-day action.
+
+Controls: **B** Build, **M** Move, **Escape** Farm, **+ / −** zoom, **0** fit map;
+all controls also support touch. English, Russian and Spanish are supported.
+The separate `mg.save.farm-2` save migrates the earlier prototype's crops and
+inventory. The original Farm stays available. Farm 2 shares its static content,
+sprites and base styles with Farm, while its state, rules, input and UI live
+in `games/farm-2/js/`. Regression tests are in `tests/farm-2.test.ts`.
 
 ## Language control
 

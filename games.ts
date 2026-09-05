@@ -131,17 +131,17 @@ export const GAMES: Game[] = [
   },
   {
     title: {
-      en: "Farm 2: Meadow Days",
-      ru: "Ферма 2: Луговые дни",
-      es: "Granja 2: Días de pradera",
+      en: "Farm 2",
+      ru: "Ферма 2",
+      es: "Granja 2",
     },
     icon: "🌱",
     url: "./games/farm-2/",
     tags: ["simulation", "casual"],
     description: {
-      en: "A cozy farming sequel, one day at a time. Grow seasonal crops, fill village orders, raise chickens and make yourself at home.",
-      ru: "Уютная ферма день за днём. Выращивай сезонные культуры, выполняй заказы соседей, заведи кур и обустрой свой уголок.",
-      es: "Una acogedora secuela agrícola, un día a la vez. Cultiva, completa pedidos del pueblo, cría gallinas y siéntete en casa.",
+      en: "Build your own farm: place and move buildings and soil, grow crops, cook dishes, raise animals and automate production.",
+      ru: "Обустрой ферму: строй и перемещай здания и грядки, выращивай урожай, готовь блюда, разводи животных и автоматизируй производство.",
+      es: "Construye tu granja: coloca y mueve edificios y parcelas, cultiva, cocina, cría animales y automatiza la producción.",
     },
   },
   {
