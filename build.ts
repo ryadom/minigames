@@ -101,6 +101,7 @@ async function main(): Promise<void> {
     "agar-io",
     "asteroid-colony",
     "farm",
+    "farm-2",
     "flappy-bird",
     "killer-sudoku",
     "match-three",

@@ -130,6 +130,21 @@ export const GAMES: Game[] = [
     },
   },
   {
+    title: {
+      en: "Farm 2 · Quiet Valley",
+      ru: "Ферма 2 · Тихая долина",
+      es: "Granja 2 · Valle tranquilo",
+    },
+    icon: "🌱",
+    url: "./games/farm-2/",
+    tags: ["simulation", "casual"],
+    description: {
+      en: "A peaceful isometric valley to make your own. Build and move your homestead, grow crops, raise animals, mill flour, cook and trade with neighbours.",
+      ru: "Уютная изометрическая долина: стройте и переносите здания и грядки, выращивайте урожай, разводите животных, мелите муку, готовьте и торгуйте с соседями.",
+      es: "Un tranquilo valle isométrico. Construye y mueve tu granja, cultiva, cría animales, muele harina, cocina y comercia con los vecinos.",
+    },
+  },
+  {
     title: "Farm",
     icon: "🚜",
     url: "./games/farm/",
