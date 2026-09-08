@@ -45,23 +45,41 @@ A small shared runtime gives every page consistent chrome:
 | `CNAME`                         | Custom domain (`minigames.ryadom.me`)                |
 | `.github/workflows/`            | `ci.yml` (checks) + `deploy.yml` (build & deploy)    |
 
-## Farm 2
+## Farm 2 — Quiet Valley
 
-A farm-building game at `games/farm-2/`. Place buildings and soil on a 12×12
-map, then drag them in **Move** mode or tap an object and its destination.
-Moving keeps growing crops, cooking queues, animals and automation intact.
-Crops grow in real time, watering accelerates growth, kitchens turn ingredients
-into dishes, and chickens, cows, sheep and pigs produce goods when fed. Build
-greenhouses and apiaries, fill orders, sell goods and research automation.
-The starter farm includes a kitchen, a chicken, ingredients and construction
-funds. Wheat seeds are free. There is no energy limit or end-day action.
+A new isometric farming game at `games/farm-2/`, implemented independently of
+Farm. Its canvas renderer paints a riverside island, dimensional buildings,
+growing plants, wandering chickens, cows and sheep, and an animated windmill.
+The sidebar combines a construction catalog, selected-object controls, pantry
+and neighbours' orders; phones use compact bottom controls and a folding panel.
 
-Controls: **B** Build, **M** Move, **Escape** Farm, **+ / −** zoom, **0** fit map;
-all controls also support touch. English, Russian and Spanish are supported.
-The separate `mg.save.farm-2` save migrates the earlier prototype's crops and
-inventory. The original Farm stays available. Farm 2 shares its static content,
-sprites and base styles with Farm, while its state, rules, input and UI live
-in `games/farm-2/js/`. Regression tests are in `tests/farm-2.test.ts`.
+Place and rotate buildings, beds, paths, trees, wells and fences. Move a building
+or planted bed by dragging it, or select Move and tap its destination. Previews
+cost nothing; confirmation validates the complete footprint. Moves preserve
+plants, animal food, stored produce and workshop jobs. Multiple workshops and
+pens have independent production.
+
+Six crops grow in real time. Watering is free and speeds growth by 70%; wheat
+seeds are free. Feed animals wheat to produce eggs, milk and wool. Process wheat
+into flour at a windmill, cook bread, salad and pie in kitchens, and make cheese
+in dairies. Sell surplus or deliver orders, earn XP, unlock seeds and claim
+introductory goals. There is no energy or end-day system.
+
+Controls: **B** build, **M** move, **W** water, **R** rotate, **Escape** cancel,
+**+ / −** zoom, **0** overview. With the map focused, arrow keys move a tile
+cursor and **Enter** acts. Touch supports tapping, dragging and pinch zoom.
+English, Russian and Spanish follow the shared language setting.
+
+This rewrite starts a fresh valley in the separate `mg.save.farm-2-valley` save;
+older Farm/Farm 2 saves are left intact. Loading validates layouts and production
+state, and advances up to two hours of offline time. No art, styles or gameplay
+modules are imported from `games/farm/`.
+
+Source modules: `data.ts` (content), `model.ts` (simulation and save validation),
+`art.ts` (original procedural artwork), `world.ts` (isometric camera/rendering),
+`panels.ts` (UI), `i18n.ts` (text/icons), and `main.ts` (input and lifecycle).
+`tests/farm-2.test.ts` covers placement, movement, projection, production chains,
+animal care, transactions and persistence.
 
 ## Language control
 
